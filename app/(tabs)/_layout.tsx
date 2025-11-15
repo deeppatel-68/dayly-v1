@@ -1,33 +1,54 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import FloatingBar from "@/components/FloatingBar";
+import { Tabs } from "expo-router";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
+      tabBar={(props) => <FloatingBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarStyle: {
+          position: "absolute",
+          height: 0,
+          width: 0,
+          opacity: 0,
+          pointerEvents: "none",
+          elevation: -1,
+          zIndex: -1,
+        },
+        tabBarShowLabel: false,
+        tabBarButton: () => null,
+      }}
+    >
       <Tabs.Screen
-        name="index"
+        name="myspace"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: "My Space",
+        }}
+      />
+
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: "Stats",
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="index"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: "Home",
+        }}
+      />
+      <Tabs.Screen
+        name="habits"
+        options={{
+          title: "Habits",
+        }}
+      />
+      <Tabs.Screen
+        name="social"
+        options={{
+          title: "Social",
         }}
       />
     </Tabs>

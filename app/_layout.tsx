@@ -1,24 +1,37 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { ThemeProvider } from "@/context/ThemeContext";
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import React, { useEffect } from "react";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+// Prevent the splash screen from auto-hiding before fonts are loaded
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  // Load fonts from assets
+  const [fontsLoaded, fontError] = useFonts({
+    "Outfit-Regular": require("@/assets/fonts/Outfit-Regular.ttf"),
+    "Outfit-Bold": require("@/assets/fonts/Outfit-Bold.ttf"),
+    "Outfit-Medium": require("@/assets/fonts/Outfit-Medium.ttf"),
+    "Outfit-Light": require("@/assets/fonts/Outfit-Light.ttf"),
+    "Outfit-SemiBold": require("@/assets/fonts/Outfit-SemiBold.ttf"),
+    "Outfit-Thin": require("@/assets/fonts/Outfit-Thin.ttf"),
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync(); // Hide the splash screen after fonts are loaded
+    }
+  }, [fontsLoaded, fontError]);
+
+  // Don't render anything until fonts are loaded
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
+    <ThemeProvider>
+      <Stack />
     </ThemeProvider>
   );
 }
