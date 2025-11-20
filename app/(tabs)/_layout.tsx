@@ -1,4 +1,4 @@
-import FloatingBar from "@/components/FloatingBar";
+import FloatingBar from "@/components/common/FloatingBar";
 import { Tabs } from "expo-router";
 
 export default function TabLayout() {
@@ -21,28 +21,27 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="myspace"
-        options={{
-          title: "My Space",
-        }}
-      />
-
-      <Tabs.Screen
         name="stats"
         options={{
-          title: "Stats",
-        }}
-      />
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
+          title: "Analytics",
         }}
       />
       <Tabs.Screen
         name="habits"
         options={{
           title: "Habits",
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Dashboard",
+        }}
+      />
+      <Tabs.Screen
+        name="study"
+        options={{
+          title: "Study",
         }}
       />
       <Tabs.Screen

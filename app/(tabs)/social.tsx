@@ -1,4 +1,4 @@
-import TopBar from "@/components/TopBar";
+import TopBar from "@/components/common/TopBar";
 import { useTheme } from "@/context/ThemeContext";
 import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";

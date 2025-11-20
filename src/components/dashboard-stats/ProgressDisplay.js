@@ -1,6 +1,6 @@
+import { useTheme } from "@/context/ThemeContext";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { FontSizes } from "@/constants/Typography";
-import { useTheme } from "@/context/ThemeContext";
 import { StyleSheet, Text, View } from "react-native";
 
 function ProgressDisplay() {

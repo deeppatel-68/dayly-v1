@@ -25,26 +25,29 @@ function ShortcutButtons() {
     },
   ];
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {buttons.map((button) => (
-        <Pressable
-          key={button.label}
-          style={({ pressed }) => [
-            styles.button,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              opacity: pressed ? 0.7 : 1,
-            },
-          ]}
-          onPress={button.onPress}
-        >
-          <Ionicons name={button.icon} size={28} color={colors.text} />
-          <Text style={[styles.buttonText, { color: colors.text }]}>
-            {button.label}
-          </Text>
-        </Pressable>
-      ))}
+    <View>
+      <Text style={[styles.title, { color: colors.text }]}>Quick Launch</Text>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {buttons.map((button) => (
+          <Pressable
+            key={button.label}
+            style={({ pressed }) => [
+              styles.button,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+            onPress={button.onPress}
+          >
+            <Ionicons name={button.icon} size={28} color={colors.text} />
+            <Text style={[styles.buttonText, { color: colors.text }]}>
+              {button.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -73,5 +76,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: FontSizes.base,
     fontFamily: "Outfit-Regular",
+  },
+  title: {
+    fontSize: FontSizes["2xl"],
+    fontFamily: "Outfit-SemiBold",
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.md,
+    marginLeft: Spacing.sm,
+    letterSpacing: 0.5,
   },
 });

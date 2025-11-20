@@ -1,3 +1,4 @@
+import { Spacing } from "@/constants/Spacing";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -10,7 +11,9 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { bottom: Math.max(insets.bottom, 25) }]}>
+    <View
+      style={[styles.container, { bottom: Math.max(insets.bottom - 12, 15) }]}
+    >
       <BlurView
         intensity={80}
         tint="dark"
@@ -40,6 +43,8 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
                 return isFocused
                   ? "checkmark-circle"
                   : "checkmark-circle-outline";
+              case "study":
+                return isFocused ? "book" : "book-outline";
               case "social":
                 return isFocused ? "people" : "people-outline";
               default:
@@ -106,8 +111,8 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 20,
-    right: 20,
+    left: Spacing.sm,
+    right: Spacing.sm,
     alignItems: "center",
     zIndex: 1000,
     pointerEvents: "box-none",
@@ -124,7 +129,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
-    overflow: "hidden", // ✅ Added - helps with border radius on BlurView
+    overflow: "hidden",
   },
   tab: {
     flex: 1,

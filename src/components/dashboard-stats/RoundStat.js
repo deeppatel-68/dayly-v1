@@ -107,7 +107,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 255, 157, 0.1)",
     borderColor: "#00ff9d",
   },
-
   coinsValue: {
     fontFamily: "Outfit-Regular",
     fontSize: 16,

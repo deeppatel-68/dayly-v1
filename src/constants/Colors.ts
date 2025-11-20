@@ -14,7 +14,7 @@ export const Colors = {
 
     // Text
     text: "#1a1a1a",
-    textSecondary: "#666666",
+    textSecondary: "#B0B8C4",
     textTertiary: "#999999",
 
     // Accent
@@ -22,7 +22,7 @@ export const Colors = {
     accentLight: "#ff8a5c",
 
     // Borders
-    border: "#e0e0e0",
+    border: "rgba(255, 255, 255, 0.15)", // More visible borders
     borderLight: "#f0f0f0",
 
     // Task completion
