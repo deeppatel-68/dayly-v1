@@ -2,13 +2,7 @@ import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  Dimensions,
-} from "react-native";
+import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 const { width } = Dimensions.get("window");
@@ -61,8 +55,7 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
             style={[
               styles.modeButton,
               {
-                backgroundColor:
-                  mode === m ? colors.accent : "transparent",
+                backgroundColor: mode === m ? colors.accent : "transparent",
                 borderColor: mode === m ? colors.accent : colors.border,
               },
             ]}
@@ -84,8 +77,7 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
               style={[
                 styles.modeText,
                 {
-                  color:
-                    mode === m ? colors.background : colors.textSecondary,
+                  color: mode === m ? colors.background : colors.textSecondary,
                 },
               ]}
             >
@@ -130,9 +122,7 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
           <Text style={[styles.timerText, { color: colors.text }]}>
             {formatTime(time)}
           </Text>
-          <Text
-            style={[styles.phaseText, { color: colors.textSecondary }]}
-          >
+          <Text style={[styles.phaseText, { color: colors.textSecondary }]}>
             FOCUS PHASE
           </Text>
           <Text style={[styles.xpText, { color: colors.accent }]}>
@@ -231,4 +221,3 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 });
-

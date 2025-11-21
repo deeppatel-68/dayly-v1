@@ -2,26 +2,38 @@ import { Spacing } from "@/constants/Spacing";
 import { FontSizes } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 function ShortcutButtons() {
   const { colors } = useTheme();
+  const router = useRouter();
   const buttons = [
     {
       icon: "book-outline",
       label: "Study",
-      onPress: () => console.log("Study"),
+      onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push("/study");
+      },
     },
     {
-      icon: "person-outline",
-      label: "My Space",
-      onPress: () => console.log("My Space"),
+      icon: "checkmark-circle-outline",
+      label: "Habits",
+      onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push("/habits");
+      },
     },
     {
       icon: "stats-chart-outline",
       label: "Stats",
-      onPress: () => console.log("Stats"),
+      onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push("/stats");
+      },
     },
   ];
   return (
