@@ -1,9 +1,12 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { FontFamilies, FontSizes } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
+  Alert,
   Image,
   Modal,
   Pressable,
@@ -16,6 +19,8 @@ import {
 
 function TopBar() {
   const { colors } = useTheme();
+  const { user, signOut } = useAuth();
+  const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const profileIconRef = useRef(null);
@@ -26,21 +31,46 @@ function TopBar() {
     height: 0,
   });
 
-  // Mock user data - replace with actual user context/data
-  const userName = "Tirth Shah";
-  const userEmail = "tshahindia@gmail.com";
-  const userInitial = "T";
+  // Get user data from auth context
+  const userEmail = user?.email || "";
+  const userName = user?.email?.split("@")[0] || "User";
+  const userInitial = userName.charAt(0).toUpperCase();
+
+  const handleSignOut = () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              Alert.alert("Error", "Failed to sign out. Please try again.");
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
 
   const menuItems = [
     {
       icon: "person-outline",
       label: "PROFILE",
-      onPress: () => console.log("Profile"),
+      onPress: () => router.push("/(tabs)/profile"),
     },
     {
       icon: "settings-outline",
       label: "SETTINGS",
-      onPress: () => console.log("Settings"),
+      onPress: () => router.push("/(tabs)/profile"),
     },
     {
       icon: "help-circle-outline",
@@ -50,7 +80,7 @@ function TopBar() {
     {
       icon: "log-out-outline",
       label: "LOGOUT",
-      onPress: () => console.log("Logout"),
+      onPress: handleSignOut,
       isLogout: true,
     },
   ];

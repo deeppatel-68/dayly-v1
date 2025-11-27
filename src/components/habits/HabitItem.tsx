@@ -5,13 +5,21 @@ import { useTheme } from "@/context/ThemeContext";
 import { Habit } from "@/types/habits";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useMemo, useState } from "react";
+import {
+  Alert,
+  ColorValue,
+  GestureResponderEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSequence,
   withSpring,
 } from "react-native-reanimated";
 import EditHabitModel from "./EditHabitModel";
@@ -20,23 +28,27 @@ interface HabitItemProps {
   habit: Habit;
 }
 
+const hexToRgba = (color: string, alpha = 1) => {
+  if (!color.startsWith("#")) return color;
+  const hex = color.replace("#", "");
+  if (hex.length !== 6) return color;
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 const HabitItem = ({ habit }: HabitItemProps) => {
-  const { colors } = useTheme();
+  const { colors, colorScheme } = useTheme();
   const { toggleHabit, deleteHabit, updateHabit } = useHabits();
 
   //modal states
   const [showEditModal, setShowEditModal] = useState(false);
 
   //Animation Value
-  const scale = useSharedValue(1);
+  const cardScale = useSharedValue(1);
 
   const handleToggle = () => {
-    // Animate checkbox
-    scale.value = withSequence(
-      withSpring(1.3, { damping: 2 }),
-      withSpring(1, { damping: 2 })
-    );
-
     Haptics.impactAsync(
       habit.completed
         ? Haptics.ImpactFeedbackStyle.Light
@@ -82,91 +94,149 @@ const HabitItem = ({ habit }: HabitItemProps) => {
     setShowEditModal(false);
   };
 
-  // Animated style
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+  const gradientColors = useMemo<[ColorValue, ColorValue]>(() => {
+    const primary = hexToRgba(colors.card, 0.98);
+    const secondaryOpacity = colorScheme === "dark" ? 0.8 : 0.9;
+    return [primary, hexToRgba(colors.card, secondaryOpacity)];
+  }, [colorScheme, colors.card]);
+
+  const handleCardPressIn = () => {
+    cardScale.value = withSpring(0.97, { damping: 12, stiffness: 200 });
+  };
+
+  const handleCardPressOut = () => {
+    cardScale.value = withSpring(1, { damping: 12, stiffness: 200 });
+  };
+
+  const preventPropagation =
+    (callback: () => void) => (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      callback();
+    };
+
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: cardScale.value }],
   }));
 
+  const subtleBorder =
+    colorScheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)";
+  const shadowBase = colorScheme === "dark" ? "#000000" : "#0f0f0f";
+
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.card, borderColor: colors.border },
-      ]}
-    >
-      <Pressable onPress={handleToggle} style={styles.checkboxContainer}>
-        <Animated.View
-          style={[
-            styles.checkbox,
+    <>
+      <Animated.View
+        style={[
+          styles.cardWrapper,
+          { shadowColor: shadowBase },
+          cardAnimatedStyle,
+        ]}
+      >
+        <Pressable
+          onPress={handleToggle}
+          onPressIn={handleCardPressIn}
+          onPressOut={handleCardPressOut}
+          style={({ pressed }) => [
+            styles.pressableContainer,
             {
-              borderColor: habit.completed ? colors.completed : colors.border,
-              backgroundColor: habit.completed
-                ? colors.completed
-                : colors.checkboxEmpty,
+              borderColor: subtleBorder,
+              opacity: pressed ? 0.98 : 1,
             },
           ]}
         >
-          {habit.completed && (
-            <Ionicons name="checkmark-circle" size={20} color={colors.text} />
-          )}
-        </Animated.View>
-      </Pressable>
-      <View style={styles.content}>
-        <Text
-          style={[
-            styles.title,
-            {
-              color: colors.text,
-              textDecorationLine: habit.completed ? "line-through" : "none",
-              opacity: habit.completed ? 0.6 : 1,
-            },
-          ]}
-        >
-          {habit.title}
-        </Text>
-        {habit.description && habit.description.trim() !== "" && (
-          <Text
+          <LinearGradient
+            colors={gradientColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={[
-              styles.description,
-              {
-                color: colors.textSecondary,
-                opacity: habit.completed ? 0.5 : 0.8,
-              },
+              styles.gradientBackground,
+              { backgroundColor: colors.card },
             ]}
-            numberOfLines={2}
           >
-            {habit.description}
-          </Text>
-        )}
-      </View>
-      <View style={styles.actionButtons}>
-        <Pressable
-          onPress={handleEdit}
-          style={({ pressed }) => [
-            styles.actionButton,
-            styles.editButton,
-            {
-              backgroundColor: colors.backgroundSecondary,
-              opacity: pressed ? 0.7 : 1,
-            },
-          ]}
-        >
-          <Ionicons name="create-outline" size={18} color={colors.text} />
+            <Pressable
+              onPress={preventPropagation(handleToggle)}
+              style={styles.checkboxContainer}
+            >
+              <Animated.View
+                style={[
+                  styles.checkbox,
+                  {
+                    borderColor: habit.completed
+                      ? colors.completed
+                      : colors.border,
+                    backgroundColor: habit.completed
+                      ? colors.completed
+                      : colors.checkboxEmpty,
+                  },
+                ]}
+              >
+                {habit.completed && (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={colors.text}
+                  />
+                )}
+              </Animated.View>
+            </Pressable>
+            <View style={styles.content}>
+              <Text
+                style={[
+                  styles.title,
+                  {
+                    color: colors.text,
+                    textDecorationLine: habit.completed
+                      ? "line-through"
+                      : "none",
+                    opacity: habit.completed ? 0.6 : 1,
+                  },
+                ]}
+              >
+                {habit.title}
+              </Text>
+              {habit.description && habit.description.trim() !== "" && (
+                <Text
+                  style={[
+                    styles.description,
+                    {
+                      color: colors.textSecondary,
+                      opacity: habit.completed ? 0.5 : 0.85,
+                    },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {habit.description}
+                </Text>
+              )}
+            </View>
+            <View style={styles.actionButtons}>
+              <Pressable
+                onPress={preventPropagation(handleEdit)}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  {
+                    backgroundColor: colors.backgroundSecondary,
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="create-outline" size={18} color={colors.text} />
+              </Pressable>
+              <Pressable
+                onPress={preventPropagation(handleDelete)}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  {
+                    backgroundColor: "rgba(239, 68, 68, 0.15)",
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              </Pressable>
+            </View>
+          </LinearGradient>
         </Pressable>
-        <Pressable
-          onPress={handleDelete}
-          style={({ pressed }) => [
-            styles.actionButton,
-            styles.deleteButton,
-            {
-              backgroundColor: "rgba(239, 68, 68, 0.15)",
-              opacity: pressed ? 0.7 : 1,
-            },
-          ]}
-        >
-          <Ionicons name="trash-outline" size={18} color="#EF4444" />
-        </Pressable>
-      </View>
+      </Animated.View>
       <EditHabitModel
         isVisible={showEditModal}
         habitTitle={habit.title}
@@ -174,28 +244,32 @@ const HabitItem = ({ habit }: HabitItemProps) => {
         onClose={() => setShowEditModal(false)}
         onSave={handleSaveEdit}
       />
-    </View>
+    </>
   );
 };
 
 export default HabitItem;
 
 const styles = StyleSheet.create({
-  // UPDATE container style (around line 85):
-  container: {
+  cardWrapper: {
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.lg,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  pressableContainer: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  gradientBackground: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     gap: Spacing.md,
-    // ADD THESE:
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
   },
   checkboxContainer: {
     padding: Spacing.xs,
@@ -213,19 +287,15 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   title: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Outfit-SemiBold",
+    letterSpacing: 0.3,
   },
   description: {
     fontSize: 13,
     fontFamily: "Outfit-Regular",
     marginTop: 2,
     lineHeight: 18,
-  },
-  label: {
-    fontSize: 10,
-    fontFamily: "Outfit-Medium",
-    letterSpacing: 1,
   },
   actionButtons: {
     flexDirection: "row",
@@ -239,21 +309,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  editButton: {
-    // Styled via backgroundColor in component
-  },
-  deleteButton: {
-    // Styled via backgroundColor in component
-  },
   deleteAction: {
-    backgroundColor: "#EF4444", // Red color
+    backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
-    width: 80, // Delete button is 80px wide
+    width: 80,
     height: "85%",
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
-    gap: 4, // Space between icon and text
+    gap: 4,
     padding: Spacing.md,
   },
   deleteText: {

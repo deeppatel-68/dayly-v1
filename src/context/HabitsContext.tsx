@@ -1,5 +1,5 @@
+import { supabase } from "@/lib/supabase";
 import { Habit } from "@/types/habits";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   createContext,
   ReactNode,
@@ -7,188 +7,454 @@ import {
   useEffect,
   useState,
 } from "react";
+import { useAuth } from "./AuthContext";
 
 interface HabitsContextType {
-  habits: Habit[]; // Array of all habits
+  habits: Habit[];
+  loading: boolean;
 
-  //Actions
-  addHabit: (title: string, description?: string) => void; // Function to add a new habit
-  toggleHabit: (id: string, dateKey?: string) => void; // Function to toggle a habit
-  deleteHabit: (id: string) => void; // Function to delete a habit
-  updateHabit: (id: string, title: string, description?: string) => void; // Function to update a habit
+  // Actions
+  addHabit: (title: string, description?: string) => Promise<void>;
+  toggleHabit: (id: string, dateKey?: string) => Promise<void>;
+  deleteHabit: (id: string) => Promise<void>;
+  updateHabit: (
+    id: string,
+    title: string,
+    description?: string
+  ) => Promise<void>;
 
-  //Statistics
-  completedCount: number; // Number of completed habits
-  totalCount: number; // Total number of habits
-  percentage: number; // Percentage of completed habits
-  currentStreak: number; // Current streak of completed habits
+  // Statistics
+  completedCount: number;
+  totalCount: number;
+  percentage: number;
+  currentStreak: number;
 }
 
-const defaultHabits: Habit[] = [
+const defaultHabits = [
   {
-    id: "1",
     title: "Drink Water",
-    completed: false,
-    createdAt: new Date().toISOString(),
-    completionHistory: {},
+    target_count: 8,
+    icon: "water",
+    color: "blue",
+    frequency: "daily",
+    description: "Stay hydrated throughout the day",
   },
   {
-    id: "2",
     title: "Exercise",
-    completed: false,
-    createdAt: new Date().toISOString(),
-    completionHistory: {},
+    target_count: 3,
+    icon: "walk",
+    color: "green",
+    frequency: "daily",
+    description: "Move your body",
   },
   {
-    id: "3",
     title: "Read",
-    completed: false,
-    createdAt: new Date().toISOString(),
-    completionHistory: {},
+    target_count: 1,
+    icon: "book",
+    color: "purple",
+    frequency: "daily",
+    description: "Read for personal growth",
   },
 ];
 
-//Context
+// Context
 export const HabitsContext = createContext<HabitsContextType | undefined>(
   undefined
 );
 
-//Storage Keys
-const HABITS_STORAGE_KEY = "@habits"; // Key to store the habits array
-const LAST_RESET_DATE_STORAGE_KEY = "@lastResetDate"; // Key to store the last reset date
-
 export const HabitsProvider = ({ children }: { children: ReactNode }) => {
-  const [habits, setHabits] = useState<Habit[]>([]); // State to store the habits array <Habit[]> is a generic type arguement that means the state is an array of Habit objects and starts off empty
+  const { user } = useAuth();
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [completions, setCompletions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  //Load habits from storage when the component mounts
+  // Load habits and completions when user logs in
   useEffect(() => {
-    loadHabits();
-    checkAndResetDaily();
-  }, []);
+    if (user) {
+      loadHabits();
+      loadCompletions();
+      checkAndResetDaily();
+    } else {
+      setHabits([]);
+      setCompletions([]);
+      setLoading(false);
+    }
+  }, [user]);
 
-  //Save habits to storage when they change
-  useEffect(() => {
-    saveHabits();
-  }, [habits]);
-
-  //Load Habits function
+  // Load habits from Supabase
   const loadHabits = async () => {
+    if (!user) return;
+
     try {
-      const storedHabits = await AsyncStorage.getItem(HABITS_STORAGE_KEY); // Get the habits from storage
-      if (storedHabits) {
-        setHabits(JSON.parse(storedHabits)); // Parse the habits from storage and set the state
-      } else {
-        setHabits(defaultHabits);
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("habits")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        // First time user - create default habits
+        await createDefaultHabits();
+        return;
       }
+
+      // Map Supabase data to your Habit type
+      const habitsWithHistory = await Promise.all(
+        data.map(async (habit: any) => {
+          // Get completion history for this habit
+          const { data: completionData } = await supabase
+            .from("habit_completions")
+            .select("completed_at")
+            .eq("habit_id", habit.id)
+            .eq("user_id", user.id);
+
+          // Convert array to completionHistory object
+          // Presence of a row indicates completion (completed_at is a date type)
+          const completionHistory: { [key: string]: boolean } = {};
+          completionData?.forEach((c: any) => {
+            if (c.completed_at) completionHistory[c.completed_at] = true;
+          });
+
+          // Check if completed today
+          const today = new Date().toISOString().split("T")[0];
+          const completedToday = completionHistory[today] === true;
+
+          return {
+            id: habit.id,
+            user_id: habit.user_id,
+            title: habit.title,
+            description: habit.description,
+            target_count: habit.target_count,
+            icon: habit.icon,
+            color: habit.color,
+            frequency: habit.frequency,
+            completed: completedToday,
+            completedAt: completedToday ? habit.completed_at : undefined,
+            createdAt: habit.created_at,
+            completionHistory,
+          };
+        })
+      );
+
+      setHabits(habitsWithHistory);
     } catch (error) {
       console.error("Error loading habits:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  //Save Habits function
-  const saveHabits = async () => {
+  // Load all completions
+  const loadCompletions = async () => {
+    if (!user) return;
+
     try {
-      await AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(habits)); // Save the habits to storage
+      const { data, error } = await supabase
+        .from("habit_completions")
+        .select("*")
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+      setCompletions(data || []);
     } catch (error) {
-      console.error("Error saving habits:", error);
+      console.error("Error loading completions:", error);
     }
   };
 
-  //Check and Reset Daily function
-  const checkAndResetDaily = async () => {
+  // Create default habits for new users
+  const createDefaultHabits = async () => {
+    if (!user) return;
+
     try {
-      const lastReset = await AsyncStorage.getItem(LAST_RESET_DATE_STORAGE_KEY); // Get the last reset date from storage
+      const habitsToCreate = defaultHabits.map((habit) => ({
+        ...habit,
+        user_id: user.id,
+      }));
+
+      const { data, error } = await supabase
+        .from("habits")
+        .insert(habitsToCreate)
+        .select();
+
+      if (error) throw error;
+
+      // Map to Habit type with empty completion history
+      const newHabits: Habit[] = data.map((h: any) => ({
+        id: h.id,
+        user_id: h.user_id,
+        title: h.title,
+        description: h.description,
+        target_count: h.target_count,
+        icon: h.icon,
+        color: h.color,
+        frequency: h.frequency,
+        completed: false,
+        completedAt: undefined,
+        createdAt: h.created_at,
+        completionHistory: {},
+      }));
+
+      setHabits(newHabits);
+    } catch (error) {
+      console.error("Error creating default habits:", error);
+    }
+  };
+
+  // Check and reset daily
+  const checkAndResetDaily = async () => {
+    if (!user) return;
+
+    try {
       const today = new Date().toDateString();
 
+      // Get last reset date from Supabase profiles table
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("last_reset_date")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError && profileError.code !== "PGRST116") {
+        // PGRST116 is "not found" - we'll handle that below
+        throw profileError;
+      }
+
+      const lastReset = profile?.last_reset_date || null;
+
       if (lastReset !== today) {
-        // Its a new day, reset the habits
-        console.log("Resetting habits for new day");
+        console.log("New day detected - resetting completion status");
+
+        // Reset local state (completion status is derived from habit_completions table)
         setHabits((prev) =>
-          prev.map((habit) => {
-            // Map through the habits and reset the completed and completedAt properties to false and undefined respectively
-            return {
-              ...habit,
-              completed: false,
-              completedAt: undefined,
-            };
-          })
+          prev.map((habit) => ({
+            ...habit,
+            completed: false,
+            completedAt: undefined,
+          }))
         );
-        await AsyncStorage.setItem(LAST_RESET_DATE_STORAGE_KEY, today);
+
+        // Update last reset date in profiles table
+        const { error: updateError } = await supabase.from("profiles").upsert(
+          {
+            id: user.id,
+            last_reset_date: today,
+          },
+          {
+            onConflict: "id",
+          }
+        );
+
+        if (updateError) {
+          if (
+            updateError.code === "42501" &&
+            updateError.message &&
+            updateError.message.includes("row-level security")
+          ) {
+            console.error(
+              "Failed to update last reset date due to row-level security (RLS) on the 'profiles' table. Ensure your Supabase RLS policies allow authenticated users to upsert their own profile records. Update your Supabase policy for table 'profiles' to allow upserts for authenticated users where user id = auth.uid().",
+              updateError
+            );
+          } else {
+            console.error("Error updating last reset date:", updateError);
+          }
+        }
       }
     } catch (error) {
       console.error("Error checking and resetting daily:", error);
     }
   };
-  //Add Habits function
-  const addHabit = (title: string, description?: string) => {
-    // Check if we've reached the maximum limit of 5 habits
+
+  // Add Habit
+  const addHabit = async (title: string, description?: string) => {
+    if (!user) {
+      console.error("No user logged in");
+      return;
+    }
+
+    // Check limit
     if (habits.length >= 5) {
       console.warn("Maximum habit limit reached (5 habits)");
       return;
     }
 
-    const newHabit: Habit = {
-      id: Date.now().toString(), // Generate a unique id for the new habit
-      title: title.trim(), // Trim the title to remove any leading or trailing whitespace
-      completed: false, // Set the completed property to false
-      createdAt: new Date().toISOString(), // Set the createdAt property to the current date and time
-      completionHistory: {}, // Set the completionHistory property to an empty object
-      description: description?.trim() || undefined, // Set description if provided
-    };
-    setHabits((prev) => [...prev, newHabit]); // Add the new habit to the state
+    try {
+      const newHabitData = {
+        user_id: user.id,
+        title: title.trim(),
+        description: description?.trim() || null,
+        target_count: 1,
+        icon: "book",
+        color: "purple",
+        frequency: "daily",
+      };
+
+      const { data, error } = await supabase
+        .from("habits")
+        .insert([newHabitData])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add to local state
+      const newHabit: Habit = {
+        id: data.id,
+        user_id: data.user_id,
+        title: data.title,
+        description: data.description,
+        target_count: data.target_count,
+        icon: data.icon,
+        color: data.color,
+        frequency: data.frequency,
+        completed: false,
+        completedAt: undefined,
+        createdAt: data.created_at,
+        completionHistory: {},
+      };
+
+      setHabits((prev) => [...prev, newHabit]);
+    } catch (error) {
+      console.error("Error adding habit:", error);
+      throw error;
+    }
   };
 
-  //Toggle Habit function
-  const toggleHabit = (id: string, dateKey?: string) => {
+  // Toggle Habit
+  const toggleHabit = async (id: string, dateKey?: string) => {
+    if (!user) return;
+
     const targetDate = dateKey || new Date().toISOString().split("T")[0];
 
-    setHabits((prev) =>
-      prev.map((habit) => {
-        if (habit.id !== id) return habit;
+    try {
+      // Find the habit
+      const habit = habits.find((h) => h.id === id);
+      if (!habit) return;
 
-        const isCompleted = habit.completionHistory?.[targetDate] === true;
-        const newCompletedState = !isCompleted;
+      const isCompleted = habit.completionHistory?.[targetDate] === true;
+      const newCompletedState = !isCompleted;
 
-        return {
-          ...habit,
-          completed: newCompletedState,
-          completedAt: newCompletedState ? new Date().toISOString() : undefined,
-          completionHistory: {
-            ...habit.completionHistory,
-            [targetDate]: newCompletedState,
+      // Update or insert completion record (completed_at is a date type)
+      if (newCompletedState) {
+        // Add completion (upsert to handle existing records)
+        const { error } = await supabase.from("habit_completions").upsert(
+          {
+            habit_id: id,
+            user_id: user.id,
+            completed_at: targetDate,
           },
-        };
-      })
-    );
+          {
+            onConflict: "habit_id,completed_at",
+          }
+        );
+
+        if (error) throw error;
+      } else {
+        // Remove completion
+        const { error } = await supabase
+          .from("habit_completions")
+          .delete()
+          .eq("habit_id", id)
+          .eq("user_id", user.id)
+          .eq("completed_at", targetDate);
+
+        if (error) throw error;
+      }
+
+      // Update local state
+      setHabits((prev) =>
+        prev.map((h) => {
+          if (h.id !== id) return h;
+
+          const isToday = targetDate === new Date().toISOString().split("T")[0];
+
+          return {
+            ...h,
+            completed: isToday ? newCompletedState : h.completed,
+            completedAt:
+              isToday && newCompletedState
+                ? new Date().toISOString()
+                : h.completedAt,
+            completionHistory: {
+              ...h.completionHistory,
+              [targetDate]: newCompletedState,
+            },
+          };
+        })
+      );
+    } catch (error) {
+      console.error("Error toggling habit:", error);
+      throw error;
+    }
   };
 
-  //Delete Habit function
-  const deleteHabit = (id: string) => {
-    setHabits((prev) => prev.filter((habit) => habit.id !== id));
+  // Delete Habit
+  const deleteHabit = async (id: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from("habits")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setHabits((prev) => prev.filter((habit) => habit.id !== id));
+    } catch (error) {
+      console.error("Error deleting habit:", error);
+      throw error;
+    }
   };
 
-  //Update Habit function
-  const updateHabit = (id: string, title: string, description?: string) => {
-    setHabits((prev) =>
-      prev.map((habit) =>
-        habit.id === id
-          ? {
-              ...habit,
-              title: title.trim(),
-              description: description?.trim() || undefined,
-            }
-          : habit
-      )
-    );
+  // Update Habit
+  const updateHabit = async (
+    id: string,
+    title: string,
+    description?: string
+  ) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from("habits")
+        .update({
+          title: title.trim(),
+          description: description?.trim() || null,
+        })
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setHabits((prev) =>
+        prev.map((habit) =>
+          habit.id === id
+            ? {
+                ...habit,
+                title: title.trim(),
+                description: description?.trim() || undefined,
+              }
+            : habit
+        )
+      );
+    } catch (error) {
+      console.error("Error updating habit:", error);
+      throw error;
+    }
   };
 
-  //Calculate Statistics function
-  const completedCount = habits.filter((habit) => habit.completed).length; // Number of completed habits
-  const totalCount = habits.length; // Total number of habits
-  const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0; // Percentage of completed habits
+  // Calculate Statistics
+  const completedCount = habits.filter((habit) => habit.completed).length;
+  const totalCount = habits.length;
+  const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
-  //Calculate Current Streak function
-  // Calculate current streak
+  // Calculate Current Streak
   const currentStreak = (() => {
     if (habits.length === 0) return 0;
 
@@ -209,7 +475,7 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
       if (allCompleted) {
         streak++;
       } else {
-        break; // Streak is broken
+        break;
       }
     }
 
@@ -218,6 +484,7 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
 
   const value = {
     habits,
+    loading,
     addHabit,
     toggleHabit,
     deleteHabit,
@@ -233,7 +500,6 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-//Custom hook to easily access habits data in any component
 export function useHabits() {
   const context = useContext(HabitsContext);
   if (context === undefined) {

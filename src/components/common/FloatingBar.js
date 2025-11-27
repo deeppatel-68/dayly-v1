@@ -26,83 +26,91 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
           },
         ]}
       >
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
+        {state.routes
+          .filter((route) => {
+            const { options } = descriptors[route.key];
+            // Filter out hidden tabs (profile)
+            return options.href !== null && route.name !== "profile";
+          })
+          .map((route, index) => {
+            const { options } = descriptors[route.key];
+            const isFocused =
+              state.index ===
+              state.routes.findIndex((r) => r.key === route.key);
 
-          // Get icon name based on route and focus state
-          const iconName = (() => {
-            switch (route.name) {
-              case "index":
-                return isFocused ? "home" : "home-outline";
-              case "myspace":
-                return isFocused ? "person" : "person-outline";
-              case "stats":
-                return isFocused ? "stats-chart" : "stats-chart-outline";
-              case "habits":
-                return isFocused
-                  ? "checkmark-circle"
-                  : "checkmark-circle-outline";
-              case "study":
-                return isFocused ? "book" : "book-outline";
-              case "social":
-                return isFocused ? "people" : "people-outline";
-              default:
-                return "help-circle-outline";
-            }
-          })();
+            // Get icon name based on route and focus state
+            const iconName = (() => {
+              switch (route.name) {
+                case "index":
+                  return isFocused ? "home" : "home-outline";
+                case "myspace":
+                  return isFocused ? "person" : "person-outline";
+                case "stats":
+                  return isFocused ? "stats-chart" : "stats-chart-outline";
+                case "habits":
+                  return isFocused
+                    ? "checkmark-circle"
+                    : "checkmark-circle-outline";
+                case "study":
+                  return isFocused ? "book" : "book-outline";
+                case "social":
+                  return isFocused ? "people" : "people-outline";
+                default:
+                  return "help-circle-outline";
+              }
+            })();
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
+            const onPress = () => {
+              const event = navigation.emit({
+                type: "tabPress",
+                target: route.key,
+                canPreventDefault: true,
+              });
 
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name);
+              }
+            };
 
-          const onLongPress = () => {
-            navigation.emit({
-              type: "tabLongPress",
-              target: route.key,
-            });
-          };
+            const onLongPress = () => {
+              navigation.emit({
+                type: "tabLongPress",
+                target: route.key,
+              });
+            };
 
-          return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              onPress={onPress}
-              onLongPress={onLongPress}
-              style={styles.tab}
-            >
-              {/* Active indicator - glowing circle */}
-              {isFocused && (
-                <View
-                  style={[
-                    styles.activeBackground,
-                    {
-                      backgroundColor: colors.accent,
-                      shadowColor: colors.accent,
-                    },
-                  ]}
+            return (
+              <Pressable
+                key={route.key}
+                accessibilityRole="button"
+                accessibilityState={isFocused ? { selected: true } : {}}
+                onPress={onPress}
+                onLongPress={onLongPress}
+                style={styles.tab}
+              >
+                {/* Active indicator - glowing circle */}
+                {isFocused && (
+                  <View
+                    style={[
+                      styles.activeBackground,
+                      {
+                        backgroundColor: colors.accent,
+                        shadowColor: colors.accent,
+                      },
+                    ]}
+                  />
+                )}
+
+                {/* Icon */}
+                <Ionicons
+                  name={iconName}
+                  size={24}
+                  color={isFocused ? colors.background : colors.textSecondary}
+                  style={styles.icon}
                 />
-              )}
-
-              {/* Icon */}
-              <Ionicons
-                name={iconName}
-                size={24}
-                color={isFocused ? colors.background : colors.textSecondary}
-                style={styles.icon}
-              />
-            </Pressable>
-          );
-        })}
+              </Pressable>
+            );
+          })}
       </BlurView>
     </View>
   );

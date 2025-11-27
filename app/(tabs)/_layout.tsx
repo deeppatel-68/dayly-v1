@@ -50,6 +50,13 @@ export default function TabLayout() {
           title: "Social",
         }}
       />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
