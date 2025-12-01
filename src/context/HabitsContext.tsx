@@ -35,7 +35,7 @@ const defaultHabits = [
     title: "Drink Water",
     target_count: 8,
     icon: "water",
-    color: "blue",
+    color: "#3B82F6", // blue
     frequency: "daily",
     description: "Stay hydrated throughout the day",
   },
@@ -43,7 +43,7 @@ const defaultHabits = [
     title: "Exercise",
     target_count: 3,
     icon: "walk",
-    color: "green",
+    color: "#22C55E", // green
     frequency: "daily",
     description: "Move your body",
   },
@@ -51,7 +51,7 @@ const defaultHabits = [
     title: "Read",
     target_count: 1,
     icon: "book",
-    color: "purple",
+    color: "#A855F7", // purple
     frequency: "daily",
     description: "Read for personal growth",
   },
@@ -287,7 +287,7 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
         description: description?.trim() || null,
         target_count: 1,
         icon: "book",
-        color: "purple",
+        color: "#FF6B35", // orange
         frequency: "daily",
       };
 

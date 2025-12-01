@@ -2,6 +2,7 @@ import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { FontFamilies, FontSizes } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { supabase } from "@/lib/supabase";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -22,6 +23,7 @@ export const AuthScreen = () => {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -81,7 +83,7 @@ export const AuthScreen = () => {
       } else if (errorMessage.includes("Invalid login credentials")) {
         Alert.alert(
           "Invalid Credentials",
-          "Please check your email and password and try again.\n\nMake sure you've confirmed your email first."
+          'Please check your email and password and try again.\n\nForgot your password? Use the "Forgot Password?" link below.'
         );
       } else {
         Alert.alert("Error", errorMessage);
@@ -91,6 +93,97 @@ export const AuthScreen = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert("Email Required", "Please enter your email address first.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "exp://127.0.0.1:8081/auth/reset-password",
+      });
+
+      if (error) throw error;
+
+      Alert.alert(
+        "Check Your Email! 📧",
+        `We've sent a password reset link to:\n${email}\n\nClick the link in the email to reset your password.\n\nThe link will expire in 1 hour.`,
+        [{ text: "OK", onPress: () => setShowForgotPassword(false) }]
+      );
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      Alert.alert("Error", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Forgot Password Screen
+  if (showForgotPassword) {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: colors.accent }]}>
+            Reset Password
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Enter your email to receive a reset link
+          </Text>
+
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.card,
+                color: colors.text,
+                borderColor: colors.border,
+              },
+            ]}
+            placeholder="Email"
+            placeholderTextColor={colors.textTertiary}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            editable={!loading}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              { backgroundColor: colors.accent },
+              loading && styles.buttonDisabled,
+            ]}
+            onPress={handleForgotPassword}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Send Reset Link</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setShowForgotPassword(false)}
+            disabled={loading}
+            style={styles.switchButton}
+          >
+            <Text style={[styles.switchText, { color: colors.textSecondary }]}>
+              Back to Sign In
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // Main Auth Screen
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -140,6 +233,18 @@ export const AuthScreen = () => {
           secureTextEntry
           editable={!loading}
         />
+
+        {!isSignUp && (
+          <TouchableOpacity
+            onPress={() => setShowForgotPassword(true)}
+            style={styles.forgotPassword}
+            disabled={loading}
+          >
+            <Text style={[styles.forgotPasswordText, { color: colors.accent }]}>
+              Forgot Password?
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[
@@ -211,6 +316,15 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.base,
     fontFamily: FontFamilies.regular,
     borderWidth: 1,
+  },
+  forgotPassword: {
+    alignSelf: "flex-end",
+    marginTop: -Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  forgotPasswordText: {
+    fontSize: FontSizes.sm,
+    fontFamily: FontFamilies.semibold,
   },
   button: {
     padding: Spacing.md,
