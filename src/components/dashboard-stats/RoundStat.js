@@ -84,16 +84,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#fff",
   },
-  coinsTitle: {
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 16,
-    color: "#fff",
-  },
-  streakTitle: {
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 16,
-    color: "#fff",
-  },
   xpBadge: {
     backgroundColor: "rgba(0, 212, 255, 0.1)",
     borderColor: "#00d4ff",

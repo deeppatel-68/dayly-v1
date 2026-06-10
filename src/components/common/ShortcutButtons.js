@@ -53,7 +53,7 @@ function ShortcutButtons() {
             ]}
             onPress={button.onPress}
           >
-            <Ionicons name={button.icon} size={28} color={colors.text} />
+            <Ionicons name={button.icon} size={22} color={colors.text} />
             <Text style={[styles.buttonText, { color: colors.text }]}>
               {button.label}
             </Text>
@@ -81,20 +81,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 12,
   },
   buttonText: {
-    marginTop: 10,
-    fontSize: FontSizes.base,
+    marginTop: 6,
+    fontSize: FontSizes.sm,
     fontFamily: "Outfit-Regular",
   },
   title: {
-    fontSize: FontSizes["2xl"],
+    fontSize: FontSizes.lg,
     fontFamily: "Outfit-SemiBold",
-    marginBottom: Spacing.sm,
-    marginTop: Spacing.md,
-    marginLeft: Spacing.sm,
+    marginBottom: Spacing.xs,
+    marginTop: Spacing.sm,
+    marginLeft: Spacing.md,
     letterSpacing: 0.5,
   },
 });

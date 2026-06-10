@@ -278,7 +278,7 @@ export const AuthScreen = () => {
 
         {isSignUp && (
           <Text style={[styles.noteText, { color: colors.textTertiary }]}>
-            📧 You'll receive a confirmation email after signing up
+            {"You'll be signed in automatically after creating your account"}
           </Text>
         )}
       </View>

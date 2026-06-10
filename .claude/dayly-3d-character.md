@@ -15,6 +15,42 @@ The character should feel:
 - customisable
 - premium, not childish
 
+## Product Importance
+
+The 3D character is Dayly's key differentiator.
+
+It should not be treated as decoration.
+
+Every major productivity action should eventually affect the character:
+
+- habits increase XP/streak aura
+
+- study sessions trigger focus/reward states
+
+- coins unlock visible cosmetics
+
+- levels evolve the character
+
+- streaks intensify glow/flame effects
+
+Prioritise making the character feel alive, reactive, and personal.
+
+## Avatar Growth Philosophy
+
+The avatar represents the user's personal growth.
+
+It should:
+
+- feel alive
+- react to progress
+- visibly evolve with level
+- show streak energy
+- reflect equipped cosmetics
+- celebrate wins
+- become the emotional anchor of the app
+
+Avoid treating the avatar as a static 3D decoration.
+
 ## Existing Dependencies
 
 Prefer existing packages:
@@ -98,3 +134,91 @@ After implementation:
 - test shop preview
 - test equipped items
 - test fallback behaviour
+
+Read CLAUDE.md and the relevant .claude skill files.
+
+Current task:
+Redesign the 3D avatar into a premium digital pet.
+
+Context:
+The current avatar works technically and reacts to XP, streaks, study, and shop items, but the style still feels too generic/robot-like. I want the avatar to be the standout differentiator of Dayly.
+
+Product north star:
+Dayly is a gamified productivity companion where your avatar grows as you do.
+
+New art direction:
+Premium digital pet / modern Tamagotchi / productivity companion.
+
+Goal:
+Redesign the avatar so it feels like a memorable, ownable digital companion that users want to grow, customise, and return to daily.
+
+Style target:
+
+- premium digital pet
+- modern Tamagotchi feel
+- minimal and collectible
+- cute but not childish
+- dark/charcoal base
+- soft glowing eyes or visor
+- subtle orange energy core/accent
+- small arms/flippers
+- simple antenna/halo/charm
+- clean platform/pod
+- smooth idle bounce
+- expressive reward/focus states
+
+Avoid:
+
+- generic robot
+- chess pawn/blob
+- random orange dots
+- childish cartoon animal
+- complex realistic body
+- external GLB/GLTF models
+- heavy 3D dependencies
+
+Requirements:
+
+- Keep using lightweight Three.js primitives.
+- Do not add external 3D models.
+- Do not add new dependencies.
+- Preserve existing state connections:
+    - idle
+    - focus
+    - reward
+    - levelUp
+    - level aura/evolution
+    - streak glow
+    - equipped accessories/decorations
+- Make the silhouette more pet-like:
+    - rounded compact body
+    - bigger expressive eyes/visor
+    - small side arms/flippers
+    - less humanoid/robot
+    - more collectible mascot feel
+- Make orange feel intentional:
+    - energy core
+    - platform glow
+    - aura
+    - tiny accent details
+- Add simple expression changes if practical:
+    - idle: soft eyes
+    - focus: concentrated/brighter eyes
+    - reward: happy bounce/glow
+    - levelUp: bigger pulse/evolution glow
+- Keep performance safe on mobile.
+- Keep fallback UI.
+- Do not rewrite the whole app.
+
+Before coding:
+
+1. Inspect CharacterScene and where it is used.
+2. Explain what currently makes the avatar feel too generic/robot-like.
+3. Propose the minimal visual redesign plan.
+4. Then implement the premium digital pet direction.
+
+After coding:
+
+- List files changed.
+- Explain how to test idle, focus, reward, levelUp, level progression, and equipped items.
+- Mention limitations.

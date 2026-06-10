@@ -15,6 +15,9 @@ import { useCharacter } from "@/context/CharacterContext";
 import { useCoins } from "@/context/CoinsContext";
 import { useShop } from "@/context/ShopContext";
 import { Ionicons } from "@expo/vector-icons";
+import CharacterScene, {
+  CharacterState,
+} from "@/components/character/CharacterScene";
 import FocusTimer from "@/components/study/FocusTimer";
 import { Spacing, BorderRadius, Shadows } from "@/constants/Spacing";
 import { shopItems } from "@/data/shopItems";
@@ -155,6 +158,7 @@ export default function StudySpacePlaceholder({
 }: StudySpacePlaceholderProps) {
   const { colors } = useTheme();
   const [showShop, setShowShop] = useState(false);
+  const [characterState, setCharacterState] = useState<CharacterState>("idle");
 
   return (
     <Modal
@@ -164,7 +168,7 @@ export default function StudySpacePlaceholder({
       onRequestClose={onClose}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Placeholder Study Space */}
+        {/* Study Space avatar scene */}
         <View style={[styles.placeholderArea, { backgroundColor: colors.card }]}>
           <View
             style={[
@@ -172,16 +176,7 @@ export default function StudySpacePlaceholder({
               { backgroundColor: colors.background, borderColor: colors.border },
             ]}
           >
-            <Text
-              style={[styles.placeholderText, { color: colors.textSecondary }]}
-            >
-              3D Study Space
-            </Text>
-            <Text
-              style={[styles.comingSoonText, { color: colors.textSecondary }]}
-            >
-              Coming Soon
-            </Text>
+            <CharacterScene state={characterState} />
           </View>
         </View>
 
@@ -206,7 +201,7 @@ export default function StudySpacePlaceholder({
           {/* Timer in center - only show if showTimer is true */}
           {showTimer && (
             <View style={styles.timerContainer}>
-              <FocusTimer />
+              <FocusTimer onStateChange={setCharacterState} />
             </View>
           )}
         </View>
@@ -375,7 +370,7 @@ function ShopModal({
               </Text>
 
               <View style={styles.characterContent}>
-                {/* 3D Character Placeholder */}
+                {/* 3D Character preview */}
                 <View style={styles.characterPreview}>
                   <View
                     style={[
@@ -389,25 +384,7 @@ function ShopModal({
                         { backgroundColor: colors.background },
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.gradientOverlay,
-                          { backgroundColor: colors.accent + "15" },
-                        ]}
-                      />
-                      <Text
-                        style={[styles.placeholderText, { color: colors.text }]}
-                      >
-                        3D Character
-                      </Text>
-                      <Text
-                        style={[
-                          styles.comingSoonText,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        Coming Soon
-                      </Text>
+                      <CharacterScene variant="preview" />
                     </View>
                   </View>
                 </View>
@@ -661,10 +638,8 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     aspectRatio: 1,
     borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    alignItems: "center",
-    justifyContent: "center",
+    borderWidth: 1,
+    overflow: "hidden",
   },
   placeholderText: {
     fontSize: 12,
@@ -785,12 +760,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   character3DPlaceholder: {
-    width: "100%",
-    maxWidth: 120,
+    width: 120,
     aspectRatio: 1,
     borderRadius: BorderRadius.md,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.xs,

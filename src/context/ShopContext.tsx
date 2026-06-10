@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { ShopItem, OwnedItem } from "@/types/shop";
+import { shopItems } from "@/data/shopItems";
 
 interface ShopContextType {
   ownedItems: OwnedItem[];
@@ -66,10 +67,15 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   };
 
   const equipItem = (itemId: string) => {
+    // Equipping replaces only items of the same category, so e.g. a head
+    // accessory and a platform decoration can be worn together
+    const category = shopItems.find((i) => i.id === itemId)?.category;
     setOwnedItems((prev) =>
-      prev.map((item) =>
-        item.itemId === itemId ? { ...item, equipped: true } : { ...item, equipped: false }
-      )
+      prev.map((item) => {
+        if (item.itemId === itemId) return { ...item, equipped: true };
+        const itemCategory = shopItems.find((i) => i.id === item.itemId)?.category;
+        return itemCategory === category ? { ...item, equipped: false } : item;
+      })
     );
   };
 

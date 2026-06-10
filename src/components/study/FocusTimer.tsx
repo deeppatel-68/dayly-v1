@@ -27,6 +27,8 @@ type FocusMode = "SOLO" | "GROUP" | "CAMPUS";
 
 interface FocusTimerProps {
   onStart?: () => void;
+  // Lets a surrounding scene mirror the session (character focus/reward states)
+  onStateChange?: (state: "idle" | "focus" | "reward" | "levelUp") => void;
 }
 
 interface SessionResult {
@@ -36,7 +38,7 @@ interface SessionResult {
   leveledUp: boolean;
 }
 
-export default function FocusTimer({ onStart }: FocusTimerProps) {
+export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { xp, addXp } = useXp();
@@ -68,6 +70,7 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
     setIsRunning(false);
 
     if (rewards.minutes < 1) {
+      onStateChange?.("idle");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       Alert.alert(
         "Session Too Short",
@@ -89,6 +92,7 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
       });
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onStateChange?.(leveledUp ? "levelUp" : "reward");
 
     setSummary({
       minutes: rewards.minutes,
@@ -196,6 +200,7 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
           onPress={() => {
             const wasRunning = isRunning;
             setIsRunning(!isRunning);
+            onStateChange?.(wasRunning ? "idle" : "focus");
             // If starting the timer (wasn't running, now will be), trigger callback
             if (!wasRunning && onStart) {
               onStart();
@@ -231,7 +236,10 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
         xp={summary?.xp ?? 0}
         coins={summary?.coins ?? 0}
         leveledUp={summary?.leveledUp ?? false}
-        onClose={() => setSummary(null)}
+        onClose={() => {
+          setSummary(null);
+          onStateChange?.("idle");
+        }}
       />
     </View>
   );

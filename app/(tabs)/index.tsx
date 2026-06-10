@@ -8,12 +8,26 @@ import StudySpacePlaceholder from "@/components/study/StudySpacePlaceholder";
 import { Spacing } from "@/constants/Spacing";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
-import React, { useState } from "react";
+import { CharacterState } from "@/components/character/CharacterScene";
+import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 export default function Index() {
   const { colors } = useTheme();
-  const { habits } = useHabits();
+  const { habits, completedCount } = useHabits();
   const [showStudySpace, setShowStudySpace] = useState(false);
+  const [characterState, setCharacterState] = useState<CharacterState>("idle");
+  const prevCompleted = useRef(completedCount);
+
+  // Celebrate on the dashboard avatar when a habit gets completed
+  useEffect(() => {
+    const increased = completedCount > prevCompleted.current;
+    prevCompleted.current = completedCount;
+    if (!increased) return;
+
+    setCharacterState("reward");
+    const timeout = setTimeout(() => setCharacterState("idle"), 2600);
+    return () => clearTimeout(timeout);
+  }, [completedCount]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -24,7 +38,10 @@ export default function Index() {
       >
         <TopBar />
         <View style={styles.arenaContainer}>
-          <ArenaPlaceholder onPress={() => setShowStudySpace(true)} />
+          <ArenaPlaceholder
+            onPress={() => setShowStudySpace(true)}
+            state={characterState}
+          />
         </View>
         {/* <View>
         <RoundStat />
@@ -38,7 +55,7 @@ export default function Index() {
           <View style={styles.habitsSection}>
             <View style={styles.habitsHeader}>
               <Text style={[styles.habitsTitle, { color: colors.text }]}>
-                Today's Habits
+                {"Today's Habits"}
               </Text>
               <Text
                 style={[styles.habitsSubtitle, { color: colors.textSecondary }]}
@@ -71,17 +88,14 @@ const styles = StyleSheet.create({
     backgroundColor: "black",
   },
   arenaContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.md,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 140,
   },
   habitsSection: {
     marginTop: Spacing.lg,

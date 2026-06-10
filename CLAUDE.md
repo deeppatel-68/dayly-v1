@@ -2,6 +2,23 @@
 
 Dayly is a gamified habit + study productivity app built with Expo, React Native, TypeScript, Expo Router, Supabase, and AsyncStorage.
 
+## Product North Star
+
+Dayly is a gamified productivity companion where your avatar grows as you do.
+
+The 3D avatar is the core differentiator, not decoration.
+
+Every major product loop should connect back to the avatar:
+
+- completing habits gives XP and strengthens the avatar
+- study sessions give XP/coins and trigger focus/reward states
+- streaks increase aura/glow/intensity
+- coins unlock visible cosmetics
+- levels evolve the avatar visually
+- the dashboard should make the avatar feel alive and personal
+
+Do not build generic productivity features unless they support the avatar growth loop.
+
 ## Use These Skills
 
 When working on Dayly, use the relevant files in `.claude/skills/`:

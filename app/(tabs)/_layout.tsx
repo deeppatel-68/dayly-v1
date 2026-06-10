@@ -1,9 +1,22 @@
 import FloatingBar from "@/components/common/FloatingBar";
+import { useTheme } from "@/context/ThemeContext";
 import { Tabs } from "expo-router";
+import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+
   return (
-    <Tabs
+    <View
+      style={{
+        flex: 1,
+        paddingTop: insets.top,
+        backgroundColor: colors.background,
+      }}
+    >
+      <Tabs
       tabBar={(props) => <FloatingBar {...props} />}
       screenOptions={{
         headerShown: false,
@@ -57,6 +70,7 @@ export default function TabLayout() {
           href: null,
         }}
       />
-    </Tabs>
+      </Tabs>
+    </View>
   );
 }

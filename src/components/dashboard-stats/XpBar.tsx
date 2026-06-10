@@ -42,7 +42,8 @@ function XpBar() {
               styles.fill,
               {
                 backgroundColor: colors.accent,
-                width: `${Math.min(100, Math.round(progress * 100))}%`,
+                // Keep a small visible nub at 0 progress so the bar reads as intentional
+                width: `${Math.min(100, Math.max(3, Math.round(progress * 100)))}%`,
               },
             ]}
           />

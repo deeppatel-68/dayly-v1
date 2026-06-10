@@ -41,7 +41,7 @@ function AppContent() {
         <HabitsProvider>
           <CharacterProvider>
             <ShopProvider>
-              <Stack />
+              <Stack screenOptions={{ headerShown: false }} />
             </ShopProvider>
           </CharacterProvider>
         </HabitsProvider>
