@@ -1,8 +1,22 @@
+import SessionSummary from "@/components/study/SessionSummary";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { useAuth } from "@/context/AuthContext";
+import { useCoins } from "@/context/CoinsContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useXp } from "@/context/XpContext";
+import { recordStudySession } from "@/utils/studySessions";
+import { getLevelProgress, getStudyRewards } from "@/utils/xp";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
-import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Dimensions,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 const { width } = Dimensions.get("window");
@@ -15,14 +29,25 @@ interface FocusTimerProps {
   onStart?: () => void;
 }
 
+interface SessionResult {
+  minutes: number;
+  xp: number;
+  coins: number;
+  leveledUp: boolean;
+}
+
 export default function FocusTimer({ onStart }: FocusTimerProps) {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const { xp, addXp } = useXp();
+  const { addCoins } = useCoins();
   const [isRunning, setIsRunning] = useState(false);
   const [time, setTime] = useState(0); // Time in seconds
   const [mode, setMode] = useState<FocusMode>("SOLO");
+  const [summary, setSummary] = useState<SessionResult | null>(null);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (isRunning) {
       interval = setInterval(() => {
         setTime((prev) => prev + 1);
@@ -37,9 +62,41 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
-  const calculateXP = () => {
-    // +1 XP per minute
-    return Math.floor(time / 60);
+  const rewards = getStudyRewards(time);
+
+  const handleFinish = () => {
+    setIsRunning(false);
+
+    if (rewards.minutes < 1) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        "Session Too Short",
+        "Study for at least 1 minute to earn rewards."
+      );
+      return;
+    }
+
+    const leveledUp =
+      getLevelProgress(xp + rewards.xp).level > getLevelProgress(xp).level;
+
+    addXp(rewards.xp);
+    if (rewards.coins > 0) addCoins(rewards.coins);
+    if (user) {
+      recordStudySession(user.id, {
+        duration: time,
+        xp: rewards.xp,
+        coins: rewards.coins,
+      });
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    setSummary({
+      minutes: rewards.minutes,
+      xp: rewards.xp,
+      coins: rewards.coins,
+      leveledUp,
+    });
+    setTime(0);
   };
 
   const radius = (TIMER_SIZE - STROKE_WIDTH) / 2;
@@ -126,30 +183,56 @@ export default function FocusTimer({ onStart }: FocusTimerProps) {
             FOCUS PHASE
           </Text>
           <Text style={[styles.xpText, { color: colors.accent }]}>
-            +{calculateXP()} XP
+            +{rewards.xp} XP{rewards.coins > 0 ? `  •  +${rewards.coins}` : ""}
+            {rewards.coins > 0 ? " coins" : ""}
           </Text>
         </View>
       </View>
 
-      {/* Play/Pause Button */}
-      <Pressable
-        style={[styles.playButton, { backgroundColor: colors.accent }]}
-        onPress={() => {
-          const wasRunning = isRunning;
-          setIsRunning(!isRunning);
-          // If starting the timer (wasn't running, now will be), trigger callback
-          if (!wasRunning && onStart) {
-            onStart();
-          }
-        }}
-      >
-        <Ionicons
-          name={isRunning ? "pause" : "play"}
-          size={40}
-          color={colors.background}
-          style={isRunning ? {} : { marginLeft: 4 }}
-        />
-      </Pressable>
+      {/* Controls */}
+      <View style={styles.controls}>
+        <Pressable
+          style={[styles.playButton, { backgroundColor: colors.accent }]}
+          onPress={() => {
+            const wasRunning = isRunning;
+            setIsRunning(!isRunning);
+            // If starting the timer (wasn't running, now will be), trigger callback
+            if (!wasRunning && onStart) {
+              onStart();
+            }
+          }}
+        >
+          <Ionicons
+            name={isRunning ? "pause" : "play"}
+            size={40}
+            color={colors.background}
+            style={isRunning ? {} : { marginLeft: 4 }}
+          />
+        </Pressable>
+        {time > 0 && (
+          <Pressable
+            style={[
+              styles.finishButton,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={handleFinish}
+          >
+            <Ionicons name="stop" size={24} color={colors.accent} />
+            <Text style={[styles.finishText, { color: colors.text }]}>
+              Finish
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      <SessionSummary
+        visible={summary !== null}
+        minutes={summary?.minutes ?? 0}
+        xp={summary?.xp ?? 0}
+        coins={summary?.coins ?? 0}
+        leveledUp={summary?.leveledUp ?? false}
+        onClose={() => setSummary(null)}
+      />
     </View>
   );
 }
@@ -207,6 +290,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Outfit-SemiBold",
     marginTop: Spacing.xs,
+  },
+  controls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.lg,
+  },
+  finishButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  finishText: {
+    fontSize: 14,
+    fontFamily: "Outfit-SemiBold",
+    letterSpacing: 0.5,
   },
   playButton: {
     width: 80,

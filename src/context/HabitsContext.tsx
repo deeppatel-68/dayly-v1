@@ -7,7 +7,10 @@ import {
   useEffect,
   useState,
 } from "react";
+import { COINS_PER_HABIT_COMPLETION } from "@/utils/xp";
 import { useAuth } from "./AuthContext";
+import { useCoins } from "./CoinsContext";
+import { useXp } from "./XpContext";
 
 interface HabitsContextType {
   habits: Habit[];
@@ -64,6 +67,8 @@ export const HabitsContext = createContext<HabitsContextType | undefined>(
 
 export const HabitsProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
+  const { awardHabitXp } = useXp();
+  const { addCoins } = useCoins();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completions, setCompletions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -351,6 +356,11 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
         );
 
         if (error) throw error;
+
+        // Rewards are granted at most once per habit per date
+        if (awardHabitXp(id, targetDate)) {
+          addCoins(COINS_PER_HABIT_COMPLETION);
+        }
       } else {
         // Remove completion
         const { error } = await supabase

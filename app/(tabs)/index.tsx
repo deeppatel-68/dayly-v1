@@ -2,6 +2,7 @@ import ShortcutButton from "@/components/common/ShortcutButtons";
 import TopBar from "@/components/common/TopBar";
 import ArenaPlaceholder from "@/components/dashboard-stats/ArenaPlaceholder";
 import ProgressDisplay from "@/components/dashboard-stats/ProgressDisplay";
+import XpBar from "@/components/dashboard-stats/XpBar";
 import HabitItem from "@/components/habits/HabitItem";
 import StudySpacePlaceholder from "@/components/study/StudySpacePlaceholder";
 import { Spacing } from "@/constants/Spacing";
@@ -31,6 +32,7 @@ export default function Index() {
         <View>
           <ShortcutButton />
         </View>
+        <XpBar />
         <ProgressDisplay />
         {habits.length > 0 && (
           <View style={styles.habitsSection}>

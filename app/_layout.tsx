@@ -4,6 +4,7 @@ import { CharacterProvider } from "@/context/CharacterContext";
 import { CoinsProvider } from "@/context/CoinsContext";
 import { ShopProvider } from "@/context/ShopContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { XpProvider } from "@/context/XpContext";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
@@ -35,15 +36,17 @@ function AppContent() {
 
   // Show main app if authenticated
   return (
-    <HabitsProvider>
-      <CharacterProvider>
-        <CoinsProvider>
-          <ShopProvider>
-            <Stack />
-          </ShopProvider>
-        </CoinsProvider>
-      </CharacterProvider>
-    </HabitsProvider>
+    <XpProvider>
+      <CoinsProvider>
+        <HabitsProvider>
+          <CharacterProvider>
+            <ShopProvider>
+              <Stack />
+            </ShopProvider>
+          </CharacterProvider>
+        </HabitsProvider>
+      </CoinsProvider>
+    </XpProvider>
   );
 }
 

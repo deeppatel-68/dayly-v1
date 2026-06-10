@@ -2,6 +2,7 @@ import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useAuth } from "@/context/AuthContext";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useXp } from "@/context/XpContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -25,6 +26,7 @@ export default function ProfileScreen() {
   const { user, profile, signOut, updateUsername } = useAuth();
   const { habits, completedCount, totalCount, percentage, currentStreak } =
     useHabits();
+  const { xp, level } = useXp();
 
   const [showEditModal, setShowEditModal] = React.useState(false);
   const [usernameInput, setUsernameInput] = React.useState("");
@@ -159,6 +161,9 @@ export default function ProfileScreen() {
           </View>
           <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
             {userEmail}
+          </Text>
+          <Text style={[styles.userLevel, { color: colors.accent }]}>
+            Level {level} • {xp} XP
           </Text>
         </View>
 
@@ -505,6 +510,12 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 14,
     fontFamily: "Outfit-Regular",
+  },
+  userLevel: {
+    fontSize: 14,
+    fontFamily: "Outfit-SemiBold",
+    letterSpacing: 0.5,
+    marginTop: Spacing.xs,
   },
   section: {
     paddingHorizontal: Spacing.md,
