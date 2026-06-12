@@ -1,11 +1,15 @@
-import { getLevelProgress, XP_PER_HABIT_COMPLETION } from "@/utils/xp";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getLevelProgress } from "@/utils/xp";
+import {
+  addXp as addSupabaseXp,
+  awardXpOnce,
+  getUserProgress,
+  subscribeToProgress,
+} from "@/services/progressService";
 import React, {
   createContext,
   ReactNode,
   useContext,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import { useAuth } from "./AuthContext";
@@ -18,89 +22,65 @@ interface XpContextType {
   progress: number;
 
   // Awards XP once per habit per date. Returns false if already awarded.
-  awardHabitXp: (habitId: string, dateKey: string) => boolean;
+  awardHabitXp: (habitId: string, dateKey: string) => Promise<boolean>;
 
-  // Adds XP unconditionally (e.g. study sessions, which can repeat).
-  addXp: (amount: number) => void;
-}
-
-interface StoredXp {
-  xp: number;
-  awards: { [habitIdDateKey: string]: true };
+  // Adds XP unconditionally (e.g. admin adjustments or non-study rewards).
+  addXp: (amount: number) => Promise<void>;
 }
 
 const XpContext = createContext<XpContextType | undefined>(undefined);
 
-const storageKey = (userId: string) => `@xp:${userId}`;
-
 export function XpProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [xp, setXp] = useState(0);
-  const [awards, setAwards] = useState<StoredXp["awards"]>({});
   const [loaded, setLoaded] = useState(false);
-  // Ref mirror so awardHabitXp can check synchronously without stale closures
-  const awardsRef = useRef(awards);
 
   useEffect(() => {
     if (!user) {
       setXp(0);
-      awardsRef.current = {};
-      setAwards({});
       setLoaded(false);
       return;
     }
 
     let cancelled = false;
 
-    const loadXp = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(storageKey(user.id));
-        if (cancelled) return;
+    const unsubscribe = subscribeToProgress((progress) => {
+      if (progress.user_id === user.id) setXp(progress.xp);
+    });
 
-        const parsed: StoredXp = stored
-          ? JSON.parse(stored)
-          : { xp: 0, awards: {} };
-        setXp(parsed.xp || 0);
-        awardsRef.current = parsed.awards || {};
-        setAwards(awardsRef.current);
-      } catch (error) {
+    getUserProgress(user.id)
+      .then((progress) => {
+        if (!cancelled) {
+          setXp(progress.xp);
+          setLoaded(true);
+        }
+      })
+      .catch((error) => {
         console.error("Error loading XP:", error);
-      } finally {
         if (!cancelled) setLoaded(true);
-      }
-    };
-
-    loadXp();
+      });
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [user]);
 
-  useEffect(() => {
-    if (!user || !loaded) return;
+  const awardHabitXp = async (habitId: string, dateKey: string): Promise<boolean> => {
+    if (!user || !loaded) return false;
 
-    AsyncStorage.setItem(
-      storageKey(user.id),
-      JSON.stringify({ xp, awards })
-    ).catch((error) => console.error("Error saving XP:", error));
-  }, [xp, awards, user, loaded]);
+    const { awarded } = await awardXpOnce(user.id, {
+      sourceType: "habit",
+      sourceId: habitId,
+      awardDate: dateKey,
+    });
 
-  const awardHabitXp = (habitId: string, dateKey: string): boolean => {
-    if (!loaded) return false;
-
-    const key = `${habitId}:${dateKey}`;
-    if (awardsRef.current[key]) return false;
-
-    awardsRef.current = { ...awardsRef.current, [key]: true };
-    setAwards(awardsRef.current);
-    setXp((prev) => prev + XP_PER_HABIT_COMPLETION);
-    return true;
+    return awarded;
   };
 
-  const addXp = (amount: number) => {
-    if (!loaded || amount <= 0) return;
-    setXp((prev) => prev + amount);
+  const addXp = async (amount: number) => {
+    if (!user || !loaded || amount <= 0) return;
+    await addSupabaseXp(user.id, amount);
   };
 
   const { level, xpIntoLevel, xpForNextLevel, progress } =

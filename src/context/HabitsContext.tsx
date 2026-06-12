@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
+import { incrementUserProgress } from "@/services/progressService";
 import { Habit } from "@/types/habits";
+import { calculateStreaks } from "@/utils/analytics";
 import {
   createContext,
   ReactNode,
@@ -7,9 +9,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { COINS_PER_HABIT_COMPLETION } from "@/utils/xp";
 import { useAuth } from "./AuthContext";
-import { useCoins } from "./CoinsContext";
 import { useXp } from "./XpContext";
 
 interface HabitsContextType {
@@ -68,7 +68,6 @@ export const HabitsContext = createContext<HabitsContextType | undefined>(
 export const HabitsProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const { awardHabitXp } = useXp();
-  const { addCoins } = useCoins();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completions, setCompletions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +84,15 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!user || loading) return;
+    const { currentStreak, longestStreak } = calculateStreaks(habits);
+    incrementUserProgress(user.id, {
+      currentStreak,
+      bestStreak: longestStreak,
+    }).catch((error) => console.error("Error syncing streak progress:", error));
+  }, [habits, loading, user]);
 
   // Load habits from Supabase
   const loadHabits = async () => {
@@ -351,16 +359,14 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
             completed_at: targetDate,
           },
           {
-            onConflict: "habit_id,completed_at",
+            onConflict: "user_id,habit_id,completed_at",
           }
         );
 
         if (error) throw error;
 
         // Rewards are granted at most once per habit per date
-        if (awardHabitXp(id, targetDate)) {
-          addCoins(COINS_PER_HABIT_COMPLETION);
-        }
+        await awardHabitXp(id, targetDate);
       } else {
         // Remove completion
         const { error } = await supabase

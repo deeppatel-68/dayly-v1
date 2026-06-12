@@ -1,7 +1,6 @@
 import SessionSummary from "@/components/study/SessionSummary";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useAuth } from "@/context/AuthContext";
-import { useCoins } from "@/context/CoinsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
 import { recordStudySession } from "@/utils/studySessions";
@@ -41,8 +40,7 @@ interface SessionResult {
 export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { xp, addXp } = useXp();
-  const { addCoins } = useCoins();
+  const { xp } = useXp();
   const [isRunning, setIsRunning] = useState(false);
   const [time, setTime] = useState(0); // Time in seconds
   const [mode, setMode] = useState<FocusMode>("SOLO");
@@ -66,7 +64,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
 
   const rewards = getStudyRewards(time);
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     setIsRunning(false);
 
     if (rewards.minutes < 1) {
@@ -82,15 +80,23 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
     const leveledUp =
       getLevelProgress(xp + rewards.xp).level > getLevelProgress(xp).level;
 
-    addXp(rewards.xp);
-    if (rewards.coins > 0) addCoins(rewards.coins);
-    if (user) {
-      recordStudySession(user.id, {
+    try {
+      if (!user) throw new Error("No user logged in");
+      await recordStudySession(user.id, {
         duration: time,
         xp: rewards.xp,
         coins: rewards.coins,
       });
+    } catch (error) {
+      console.error("Error recording study session:", error);
+      onStateChange?.("idle");
+      Alert.alert(
+        "Session Save Failed",
+        "Your focus time could not be saved. Please try again."
+      );
+      return;
     }
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onStateChange?.(leveledUp ? "levelUp" : "reward");
 

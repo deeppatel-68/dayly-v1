@@ -1,4 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  addCoins as addSupabaseCoins,
+  getUserProgress,
+  spendCoins as spendSupabaseCoins,
+  subscribeToProgress,
+} from "@/services/progressService";
 import React, {
   createContext,
   ReactNode,
@@ -6,63 +11,75 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { useAuth } from "./AuthContext";
 
 interface CoinsContextType {
   coins: number;
-  addCoins: (amount: number) => void;
-  spendCoins: (amount: number) => boolean;
+  addCoins: (amount: number) => Promise<void>;
+  spendCoins: (amount: number) => Promise<boolean>;
+  refreshCoins: () => Promise<void>;
 }
 
 const CoinsContext = createContext<CoinsContextType | undefined>(undefined);
 
-const COINS_STORAGE_KEY = "@coins";
-
 export function CoinsProvider({ children }: { children: ReactNode }) {
-  const [coins, setCoins] = useState<number>(100); // Start with 100 coins
+  const { user } = useAuth();
+  const [coins, setCoins] = useState<number>(100);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    loadCoins();
-  }, []);
-
-  useEffect(() => {
-    saveCoins();
-  }, [coins]);
-
-  const loadCoins = async () => {
-    try {
-      const storedCoins = await AsyncStorage.getItem(COINS_STORAGE_KEY);
-      if (storedCoins !== null) {
-        setCoins(parseInt(storedCoins, 10));
-      }
-    } catch (error) {
-      console.error("Error loading coins:", error);
+    if (!user) {
+      setCoins(100);
+      setLoaded(false);
+      return;
     }
+
+    let cancelled = false;
+
+    const unsubscribe = subscribeToProgress((progress) => {
+      if (progress.user_id === user.id) setCoins(progress.coins);
+    });
+
+    getUserProgress(user.id)
+      .then((progress) => {
+        if (!cancelled) {
+          setCoins(progress.coins);
+          setLoaded(true);
+        }
+      })
+      .catch((error) => {
+        console.error("Error loading coins:", error);
+        if (!cancelled) setLoaded(true);
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [user]);
+
+  const refreshCoins = async () => {
+    if (!user) return;
+    const progress = await getUserProgress(user.id);
+    setCoins(progress.coins);
+    setLoaded(true);
   };
 
-  const saveCoins = async () => {
-    try {
-      await AsyncStorage.setItem(COINS_STORAGE_KEY, coins.toString());
-    } catch (error) {
-      console.error("Error saving coins:", error);
-    }
+  const addCoins = async (amount: number) => {
+    if (!user || !loaded || amount <= 0) return;
+    await addSupabaseCoins(user.id, amount);
   };
 
-  const addCoins = (amount: number) => {
-    setCoins((prev) => prev + amount);
-  };
-
-  const spendCoins = (amount: number): boolean => {
-    if (coins >= amount) {
-      setCoins((prev) => prev - amount);
-      return true;
-    }
-    return false;
+  const spendCoins = async (amount: number): Promise<boolean> => {
+    if (!user || !loaded) return false;
+    return spendSupabaseCoins(user.id, amount);
   };
 
   const value = {
     coins,
     addCoins,
     spendCoins,
+    refreshCoins,
   };
 
   return (
@@ -77,4 +94,3 @@ export function useCoins() {
   }
   return context;
 }
-

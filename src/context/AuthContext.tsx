@@ -1,6 +1,13 @@
 import { supabase } from "@/lib/supabase";
+import { migrateLegacyUserData } from "@/services/settingsService";
 import { Session, User } from "@supabase/supabase-js";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 interface UserProfile {
   id: string;
@@ -31,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
 
   // Load profile from Supabase
-  const loadProfile = async (userId: string) => {
+  const loadProfile = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -50,43 +57,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error("Error loading profile:", error);
       return null;
     }
-  };
+  }, []);
+
+  const applySession = useCallback(async (nextSession: Session | null) => {
+    setLoading(true);
+    setSession(nextSession);
+
+    if (nextSession?.user) {
+      const profileData = await loadProfile(nextSession.user.id);
+      try {
+        await migrateLegacyUserData(nextSession.user.id);
+      } catch (error) {
+        console.error("Error migrating legacy user data:", error);
+      }
+      setUser(nextSession.user);
+      setProfile(profileData);
+    } else {
+      setUser(null);
+      setProfile(null);
+    }
+
+    setLoading(false);
+  }, [loadProfile]);
 
   useEffect(() => {
     // Check active session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        const profileData = await loadProfile(session.user.id);
-        setProfile(profileData);
-      } else {
-        setProfile(null);
-      }
-
-      setLoading(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      applySession(session);
     });
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        const profileData = await loadProfile(session.user.id);
-        setProfile(profileData);
-      } else {
-        setProfile(null);
-      }
-
-      setLoading(false);
+      await applySession(session);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [applySession]);
 
   const signUp = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signUp({
@@ -135,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       );
     }
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("profiles")
       .update({ username })
       .eq("id", user.id)

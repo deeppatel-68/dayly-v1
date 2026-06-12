@@ -226,7 +226,7 @@ function ShopModal({
 }) {
   const { colors } = useTheme();
   const { character } = useCharacter();
-  const { coins, spendCoins } = useCoins();
+  const { coins } = useCoins();
   const { isOwned, isEquipped, buyItem, equipItem, ownedItems } = useShop();
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -279,14 +279,12 @@ function ShopModal({
     });
   }, [filteredItems]);
 
-  const handleBuy = (itemId: string, cost: number) => {
-    if (spendCoins(cost)) {
-      buyItem(itemId);
-    }
+  const handleBuy = async (itemId: string) => {
+    await buyItem(itemId);
   };
 
-  const handleEquip = (itemId: string) => {
-    equipItem(itemId);
+  const handleEquip = async (itemId: string) => {
+    await equipItem(itemId);
   };
 
   const getRarityColor = (rarity?: ItemRarity): string => {
@@ -603,7 +601,7 @@ function ShopModal({
                             if (owned) {
                               handleEquip(item.id);
                             } else if (coins >= item.cost) {
-                              handleBuy(item.id, item.cost);
+                              handleBuy(item.id);
                             }
                           }}
                         />

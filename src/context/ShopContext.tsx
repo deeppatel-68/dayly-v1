@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   ReactNode,
@@ -6,85 +5,91 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import { ShopItem, OwnedItem } from "@/types/shop";
 import { shopItems } from "@/data/shopItems";
+import {
+  buyShopItem,
+  equipShopItem,
+  loadUserShopItems,
+  unequipShopItem,
+} from "@/services/shopService";
+import { OwnedItem } from "@/types/shop";
+import { useAuth } from "./AuthContext";
+import { useCoins } from "./CoinsContext";
 
 interface ShopContextType {
   ownedItems: OwnedItem[];
-  buyItem: (itemId: string) => boolean;
-  equipItem: (itemId: string) => void;
-  unequipItem: (itemId: string) => void;
+  loading: boolean;
+  buyItem: (itemId: string) => Promise<boolean>;
+  equipItem: (itemId: string) => Promise<void>;
+  unequipItem: (itemId: string) => Promise<void>;
   isOwned: (itemId: string) => boolean;
   isEquipped: (itemId: string) => boolean;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
-const OWNED_ITEMS_STORAGE_KEY = "@owned_items";
+const starterItems: OwnedItem[] = [{ itemId: "study-plant", equipped: true }];
 
 export function ShopProvider({ children }: { children: ReactNode }) {
-  // Default: User starts with Study Plant owned and equipped
-  const [ownedItems, setOwnedItems] = useState<OwnedItem[]>([
-    { itemId: "study-plant", equipped: true },
-  ]);
+  const { user } = useAuth();
+  const { refreshCoins } = useCoins();
+  const [ownedItems, setOwnedItems] = useState<OwnedItem[]>(starterItems);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadOwnedItems();
-  }, []);
-
-  useEffect(() => {
-    saveOwnedItems();
-  }, [ownedItems]);
-
-  const loadOwnedItems = async () => {
-    try {
-      const storedItems = await AsyncStorage.getItem(OWNED_ITEMS_STORAGE_KEY);
-      if (storedItems) {
-        setOwnedItems(JSON.parse(storedItems));
-      }
-    } catch (error) {
-      console.error("Error loading owned items:", error);
+    if (!user) {
+      setOwnedItems(starterItems);
+      setLoading(false);
+      return;
     }
-  };
 
-  const saveOwnedItems = async () => {
-    try {
-      await AsyncStorage.setItem(
-        OWNED_ITEMS_STORAGE_KEY,
-        JSON.stringify(ownedItems)
-      );
-    } catch (error) {
-      console.error("Error saving owned items:", error);
-    }
-  };
+    let cancelled = false;
+    setLoading(true);
 
-  const buyItem = (itemId: string): boolean => {
-    if (!isOwned(itemId)) {
-      setOwnedItems((prev) => [...prev, { itemId, equipped: false }]);
-      return true;
-    }
-    return false;
-  };
-
-  const equipItem = (itemId: string) => {
-    // Equipping replaces only items of the same category, so e.g. a head
-    // accessory and a platform decoration can be worn together
-    const category = shopItems.find((i) => i.id === itemId)?.category;
-    setOwnedItems((prev) =>
-      prev.map((item) => {
-        if (item.itemId === itemId) return { ...item, equipped: true };
-        const itemCategory = shopItems.find((i) => i.id === item.itemId)?.category;
-        return itemCategory === category ? { ...item, equipped: false } : item;
+    loadUserShopItems(user.id)
+      .then((items) => {
+        if (!cancelled) setOwnedItems(items);
       })
-    );
+      .catch((error) => console.error("Error loading owned items:", error))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const buyItem = async (itemId: string): Promise<boolean> => {
+    if (!user || loading || isOwned(itemId)) return false;
+
+    const item = shopItems.find((shopItem) => shopItem.id === itemId);
+    if (!item) return false;
+
+    const result = await buyShopItem(user.id, item);
+    if (!result.success) return false;
+
+    const items = await loadUserShopItems(user.id);
+    setOwnedItems(items);
+    await refreshCoins();
+    return true;
   };
 
-  const unequipItem = (itemId: string) => {
-    setOwnedItems((prev) =>
-      prev.map((item) =>
-        item.itemId === itemId ? { ...item, equipped: false } : item
-      )
-    );
+  const equipItem = async (itemId: string) => {
+    if (!user || loading) return;
+
+    const item = shopItems.find((shopItem) => shopItem.id === itemId);
+    if (!item) return;
+
+    const items = await equipShopItem(user.id, item);
+    setOwnedItems(items);
+  };
+
+  const unequipItem = async (itemId: string) => {
+    if (!user || loading) return;
+
+    const items = await unequipShopItem(user.id, itemId);
+    setOwnedItems(items);
   };
 
   const isOwned = (itemId: string): boolean => {
@@ -99,6 +104,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
   const value = {
     ownedItems,
+    loading,
     buyItem,
     equipItem,
     unequipItem,
@@ -118,4 +124,3 @@ export function useShop() {
   }
   return context;
 }
-
