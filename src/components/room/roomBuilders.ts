@@ -1,0 +1,292 @@
+import * as THREE from "three";
+
+// Builders for the cozy study-nook scene: a stylised desk corner, not a
+// world. All primitives, shared materials, mobile-safe mesh budget (~70).
+// Coordinate frame: floor at y=0, back wall z≈-2, side wall x≈-2.6; the
+// companion's pod sits front-right at the ROOM_PET_POSITION.
+
+export const ROOM_PET_POSITION = new THREE.Vector3(1.05, 0, 0.1);
+
+// Room anchors for "room"-slot equipment (see components/3d/equipment.ts)
+export const ROOM_ANCHORS: Record<
+  string,
+  { position: [number, number, number]; rotationY: number }
+> = {
+  "motivational-poster": { position: [0.05, 1.62, -1.96], rotationY: 0 },
+  bookshelf: { position: [-2.42, 0, 0.75], rotationY: Math.PI / 2 },
+  "gaming-desk": { position: [-0.85, 0.77, -1.45], rotationY: 0 },
+};
+
+interface RoomPalette {
+  wall: THREE.MeshStandardMaterial;
+  floor: THREE.MeshStandardMaterial;
+  rug: THREE.MeshStandardMaterial;
+  wood: THREE.MeshStandardMaterial;
+  darkWood: THREE.MeshStandardMaterial;
+  fabric: THREE.MeshStandardMaterial;
+  metal: THREE.MeshStandardMaterial;
+  paper: THREE.MeshStandardMaterial;
+  leaf: THREE.MeshStandardMaterial;
+  screen: THREE.MeshStandardMaterial;
+  night: THREE.MeshStandardMaterial;
+  string: THREE.MeshStandardMaterial;
+  lampGlow: THREE.MeshStandardMaterial;
+  accentGlow: THREE.MeshStandardMaterial;
+}
+
+function createPalette(accent: THREE.Color): RoomPalette {
+  const std = (
+    color: number | THREE.Color,
+    roughness = 0.85,
+    extra: Partial<THREE.MeshStandardMaterialParameters> = {}
+  ) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
+
+  return {
+    wall: std(0x2a2723, 0.95),
+    floor: std(0x211d19, 0.9),
+    rug: std(0x35302a, 0.95),
+    wood: std(0x584434, 0.7),
+    darkWood: std(0x3b2f26, 0.75),
+    fabric: std(0x433d35, 0.9),
+    metal: std(0x1f1f23, 0.45, { metalness: 0.3 }),
+    paper: std(0xe8dcc8, 0.9),
+    leaf: std(0x4a7c59, 0.75, { flatShading: true }),
+    screen: std(0x0d0d10, 0.3, {
+      emissive: 0x9db8c9,
+      emissiveIntensity: 0.4,
+    }),
+    night: std(0x0e1420, 0.6, {
+      emissive: 0x24344d,
+      emissiveIntensity: 0.7,
+    }),
+    string: std(0xf0b36a, 0.5, {
+      emissive: 0xf0b36a,
+      emissiveIntensity: 0.8,
+    }),
+    lampGlow: std(0xf5d9a8, 0.5, {
+      emissive: 0xf5d9a8,
+      emissiveIntensity: 1.1,
+    }),
+    accentGlow: std(accent, 0.5, {
+      emissive: accent,
+      emissiveIntensity: 0.9,
+    }),
+  };
+}
+
+const box = (
+  m: THREE.Material,
+  w: number,
+  h: number,
+  d: number,
+  x = 0,
+  y = 0,
+  z = 0
+) => {
+  const out = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+  out.position.set(x, y, z);
+  return out;
+};
+
+const cylinder = (
+  m: THREE.Material,
+  rTop: number,
+  rBottom: number,
+  h: number,
+  x = 0,
+  y = 0,
+  z = 0,
+  segments = 14
+) => {
+  const out = new THREE.Mesh(
+    new THREE.CylinderGeometry(rTop, rBottom, h, segments),
+    m
+  );
+  out.position.set(x, y, z);
+  return out;
+};
+
+function buildShell(p: RoomPalette): THREE.Group {
+  const shell = new THREE.Group();
+  shell.add(
+    box(p.floor, 7, 0.1, 6, 0.4, -0.05, 0.6), // floor
+    box(p.wall, 7, 3.4, 0.12, 0.4, 1.7, -2.06), // back wall
+    box(p.wall, 0.12, 3.4, 6, -2.66, 1.7, 0.6), // side wall
+    box(p.darkWood, 7, 0.14, 0.05, 0.4, 0.07, -1.99), // baseboards
+    box(p.darkWood, 0.05, 0.14, 6, -2.59, 0.07, 0.6)
+  );
+
+  // Rug under the companion
+  const rug = cylinder(p.rug, 1.25, 1.25, 0.03, 1.0, 0.015, 0.2, 28);
+  shell.add(rug);
+
+  // Window with a quiet night outside
+  const win = new THREE.Group();
+  win.add(
+    box(p.darkWood, 1.15, 1.45, 0.06, 0, 0, 0),
+    box(p.night, 1.0, 1.3, 0.04, 0, 0, 0.02),
+    box(p.darkWood, 1.0, 0.05, 0.05, 0, 0, 0.035),
+    box(p.darkWood, 0.05, 1.3, 0.05, 0, 0, 0.035)
+  );
+  win.position.set(1.25, 1.7, -2.0);
+  shell.add(win);
+
+  return shell;
+}
+
+function buildDesk(p: RoomPalette): THREE.Group {
+  const desk = new THREE.Group();
+  const topY = 0.74;
+
+  desk.add(box(p.wood, 1.7, 0.06, 0.7, 0, topY, 0));
+  for (const [lx, lz] of [
+    [-0.78, -0.28],
+    [0.78, -0.28],
+    [-0.78, 0.28],
+    [0.78, 0.28],
+  ]) {
+    desk.add(box(p.metal, 0.05, topY, 0.05, lx, topY / 2, lz));
+  }
+
+  // Laptop
+  const laptop = new THREE.Group();
+  laptop.add(box(p.metal, 0.52, 0.02, 0.36, 0, 0.01, 0));
+  const lid = new THREE.Group();
+  lid.add(
+    box(p.metal, 0.52, 0.34, 0.015, 0, 0.17, 0),
+    box(p.screen, 0.47, 0.29, 0.017, 0, 0.17, 0.002)
+  );
+  lid.position.set(0, 0.02, -0.17);
+  lid.rotation.x = 0.28;
+  laptop.add(lid);
+  laptop.position.set(-0.25, topY + 0.03, 0.05);
+  laptop.rotation.y = 0.12;
+  desk.add(laptop);
+
+  // Mug, stacked books, desk plant
+  desk.add(
+    cylinder(p.paper, 0.05, 0.045, 0.09, 0.28, topY + 0.075, 0.16),
+    box(p.fabric, 0.24, 0.035, 0.17, 0.5, topY + 0.05, -0.12),
+    box(p.leaf, 0.2, 0.03, 0.15, 0.51, topY + 0.082, -0.11),
+    cylinder(p.darkWood, 0.045, 0.038, 0.07, 0.7, topY + 0.065, 0.14, 10)
+  );
+  const deskPlant = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.14, 8), p.leaf);
+  deskPlant.position.set(0.7, topY + 0.17, 0.14);
+  desk.add(deskPlant);
+
+  return desk;
+}
+
+// Desk lamp with a real light the scene can dim/brighten by focus state
+function buildDeskLamp(p: RoomPalette): {
+  group: THREE.Group;
+  light: THREE.PointLight;
+} {
+  const group = new THREE.Group();
+  group.add(
+    cylinder(p.metal, 0.07, 0.09, 0.03, 0, 0.015, 0),
+    cylinder(p.metal, 0.015, 0.015, 0.34, 0, 0.19, 0)
+  );
+  const arm = box(p.metal, 0.02, 0.02, 0.22, 0, 0.37, 0.09);
+  arm.rotation.x = 0.35;
+  const head = new THREE.Mesh(
+    new THREE.ConeGeometry(0.07, 0.1, 12, 1, true),
+    p.metal
+  );
+  head.position.set(0, 0.42, 0.2);
+  head.rotation.x = 2.5;
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 8), p.lampGlow);
+  bulb.position.set(0, 0.4, 0.21);
+  const light = new THREE.PointLight(0xf5d9a8, 0.9, 4.5, 1.6);
+  light.position.set(0, 0.38, 0.24);
+  group.add(arm, head, bulb, light);
+  return { group, light };
+}
+
+function buildChair(p: RoomPalette): THREE.Group {
+  const chair = new THREE.Group();
+  chair.add(
+    box(p.fabric, 0.46, 0.07, 0.44, 0, 0.46, 0),
+    box(p.fabric, 0.44, 0.52, 0.07, 0, 0.78, -0.2),
+    cylinder(p.metal, 0.03, 0.03, 0.42, 0, 0.24, 0),
+    cylinder(p.metal, 0.24, 0.26, 0.03, 0, 0.03, 0, 10)
+  );
+  return chair;
+}
+
+function buildShelf(p: RoomPalette): THREE.Group {
+  const shelf = new THREE.Group();
+  for (const y of [1.45, 1.85]) {
+    shelf.add(box(p.wood, 0.06, 0.04, 1.1, 0, y, 0));
+  }
+  // Books + trophy on top plank, plant below
+  const bookMats = [p.fabric, p.leaf, p.paper, p.darkWood];
+  for (let i = 0; i < 4; i++) {
+    const book = box(bookMats[i % bookMats.length], 0.045, 0.2, 0.14, 0.02, 1.97, -0.38 + i * 0.13);
+    if (i === 3) book.rotation.x = -0.18;
+    shelf.add(book);
+  }
+  shelf.add(
+    cylinder(p.accentGlow, 0.03, 0.045, 0.1, 0.02, 1.94, 0.32, 10),
+    cylinder(p.darkWood, 0.05, 0.045, 0.08, 0.02, 1.51, 0.25, 10)
+  );
+  const shelfPlant = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.16, 8), p.leaf);
+  shelfPlant.position.set(0.02, 1.63, 0.25);
+  shelf.add(shelfPlant);
+  return shelf;
+}
+
+// Warm string lights along the back wall; the scene flashes them on rewards
+function buildStringLights(p: RoomPalette): THREE.Group {
+  const lights = new THREE.Group();
+  const bulbGeo = new THREE.SphereGeometry(0.024, 8, 6);
+  for (let i = 0; i < 9; i++) {
+    const x = -2.2 + i * 0.55;
+    const droop = Math.sin((i / 8) * Math.PI * 2) * 0.06;
+    const bulb = new THREE.Mesh(bulbGeo, p.string);
+    bulb.position.set(x, 2.45 + droop, -1.94);
+    lights.add(bulb);
+  }
+  return lights;
+}
+
+export interface StudyRoom {
+  group: THREE.Group;
+  lampLight: THREE.PointLight;
+  stringMat: THREE.MeshStandardMaterial;
+  anchorFor: (id: string) => { position: [number, number, number]; rotationY: number } | undefined;
+  dispose: () => void;
+}
+
+export function buildStudyRoom(accent: THREE.Color): StudyRoom {
+  const p = createPalette(accent);
+  const group = new THREE.Group();
+
+  const shell = buildShell(p);
+  const desk = buildDesk(p);
+  desk.position.set(-0.85, 0, -1.45);
+  const lamp = buildDeskLamp(p);
+  lamp.group.position.set(-0.15, 0.77, -1.55);
+  lamp.group.rotation.y = -0.5;
+  const chair = buildChair(p);
+  chair.position.set(-0.9, 0, -0.7);
+  chair.rotation.y = 0.35;
+  const shelf = buildShelf(p);
+  shelf.position.set(-2.56, 0, -0.6);
+  const strings = buildStringLights(p);
+
+  group.add(shell, desk, lamp.group, chair, shelf, strings);
+
+  return {
+    group,
+    lampLight: lamp.light,
+    stringMat: p.string,
+    anchorFor: (id) => ROOM_ANCHORS[id],
+    dispose: () => {
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) child.geometry.dispose();
+      });
+      Object.values(p).forEach((mat) => mat.dispose());
+    },
+  };
+}
