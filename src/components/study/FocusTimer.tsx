@@ -35,6 +35,10 @@ interface SessionResult {
   xp: number;
   coins: number;
   leveledUp: boolean;
+  totalFocusSeconds: number;
+  totalXp: number;
+  coinBalance: number;
+  endedAt: string;
 }
 
 export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) {
@@ -79,10 +83,9 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
       return;
     }
 
-    let leveledUp =
-      getLevelProgress(xp + rewards.xp).level > getLevelProgress(xp).level;
-
     setIsFinishing(true);
+    let leveledUp = false;
+
     try {
       if (!user) throw new Error("No user logged in");
       const result = await recordStudySession(user.id, {
@@ -92,6 +95,17 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
       });
       leveledUp =
         getLevelProgress(result.progress.xp).level > getLevelProgress(xp).level;
+
+      setSummary({
+        minutes: rewards.minutes,
+        xp: result.xp,
+        coins: result.coins,
+        leveledUp,
+        totalFocusSeconds: result.progress.total_focus_seconds,
+        totalXp: result.progress.xp,
+        coinBalance: result.progress.coins,
+        endedAt: result.session.endedAt,
+      });
     } catch (error) {
       console.error("Error recording study session:", error);
       onStateChange?.("idle");
@@ -106,13 +120,6 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onStateChange?.(leveledUp ? "levelUp" : "reward");
-
-    setSummary({
-      minutes: rewards.minutes,
-      xp: rewards.xp,
-      coins: rewards.coins,
-      leveledUp,
-    });
     setTime(0);
   };
 
@@ -254,6 +261,10 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
         xp={summary?.xp ?? 0}
         coins={summary?.coins ?? 0}
         leveledUp={summary?.leveledUp ?? false}
+        totalFocusSeconds={summary?.totalFocusSeconds ?? 0}
+        totalXp={summary?.totalXp ?? xp}
+        coinBalance={summary?.coinBalance ?? 0}
+        endedAt={summary?.endedAt}
         onClose={() => {
           setSummary(null);
           onStateChange?.("idle");

@@ -1,9 +1,17 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useTheme } from "@/context/ThemeContext";
-import { useXp } from "@/context/XpContext";
+import { getLevelProgress } from "@/utils/xp";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import {
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 interface SessionSummaryProps {
   visible: boolean;
@@ -11,6 +19,10 @@ interface SessionSummaryProps {
   xp: number;
   coins: number;
   leveledUp: boolean;
+  totalFocusSeconds: number;
+  totalXp: number;
+  coinBalance: number;
+  endedAt?: string;
   onClose: () => void;
 }
 
@@ -20,11 +32,44 @@ export default function SessionSummary({
   xp,
   coins,
   leveledUp,
+  totalFocusSeconds,
+  totalXp,
+  coinBalance,
+  endedAt,
   onClose,
 }: SessionSummaryProps) {
   const { colors } = useTheme();
-  // Live values — already include this session's XP when the modal shows
-  const { level, xpIntoLevel, xpForNextLevel, progress } = useXp();
+  const { level, xpIntoLevel, xpForNextLevel, progress } =
+    getLevelProgress(totalXp);
+  const cardScale = useRef(new Animated.Value(0.92)).current;
+  const fillAnim = useRef(new Animated.Value(0)).current;
+  const totalFocusMinutes = Math.floor(totalFocusSeconds / 60);
+  const savedAt = endedAt
+    ? new Date(endedAt).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null;
+
+  // Spring the card in, then sweep the XP bar to its new progress
+  useEffect(() => {
+    if (!visible) return;
+    cardScale.setValue(0.95);
+    fillAnim.setValue(0);
+    Animated.spring(cardScale, {
+      toValue: 1,
+      speed: 18,
+      bounciness: 7,
+      useNativeDriver: true,
+    }).start();
+    Animated.timing(fillAnim, {
+      toValue: progress,
+      duration: 600,
+      delay: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // width animation
+    }).start();
+  }, [visible, progress, cardScale, fillAnim]);
 
   return (
     <Modal
@@ -34,10 +79,14 @@ export default function SessionSummary({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View
+        <Animated.View
           style={[
             styles.card,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              transform: [{ scale: cardScale }],
+            },
           ]}
         >
           {leveledUp && (
@@ -57,6 +106,12 @@ export default function SessionSummary({
           <Text style={[styles.durationLabel, { color: colors.textSecondary }]}>
             FOCUSED
           </Text>
+
+          {savedAt && (
+            <Text style={[styles.savedText, { color: colors.textSecondary }]}>
+              Saved at {savedAt}
+            </Text>
+          )}
 
           <View style={styles.rewardsRow}>
             <View
@@ -82,9 +137,60 @@ export default function SessionSummary({
                 },
               ]}
             >
-              <Ionicons name="star" size={18} color="#ffd700" />
+              <Ionicons name="star" size={18} color="#D4A27F" />
               <Text style={[styles.rewardText, { color: colors.text }]}>
                 +{coins}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.totalsGrid}>
+            <View
+              style={[
+                styles.totalTile,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.totalValue, { color: colors.text }]}>
+                {totalFocusMinutes}m
+              </Text>
+              <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
+                Total focus
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.totalTile,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.totalValue, { color: colors.text }]}>
+                {coinBalance}
+              </Text>
+              <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
+                Coins
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.totalTile,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.totalValue, { color: colors.text }]}>
+                {totalXp}
+              </Text>
+              <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
+                Total XP
               </Text>
             </View>
           </View>
@@ -104,12 +210,15 @@ export default function SessionSummary({
                 { backgroundColor: colors.backgroundSecondary },
               ]}
             >
-              <View
+              <Animated.View
                 style={[
                   styles.fill,
                   {
                     backgroundColor: colors.accent,
-                    width: `${Math.min(100, Math.round(progress * 100))}%`,
+                    width: fillAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ["0%", "100%"],
+                    }),
                   },
                 ]}
               />
@@ -125,7 +234,7 @@ export default function SessionSummary({
           >
             <Text style={styles.continueText}>Continue</Text>
           </Pressable>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -178,12 +287,17 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit-Medium",
     letterSpacing: 2,
     marginTop: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  savedText: {
+    fontSize: 12,
+    fontFamily: "Outfit-Regular",
     marginBottom: Spacing.lg,
   },
   rewardsRow: {
     flexDirection: "row",
     gap: Spacing.md,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   rewardChip: {
     flexDirection: "row",
@@ -197,6 +311,29 @@ const styles = StyleSheet.create({
   rewardText: {
     fontSize: 16,
     fontFamily: "Outfit-SemiBold",
+  },
+  totalsGrid: {
+    width: "100%",
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  totalTile: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    alignItems: "center",
+  },
+  totalValue: {
+    fontSize: 16,
+    fontFamily: "Outfit-Bold",
+  },
+  totalLabel: {
+    fontSize: 10,
+    fontFamily: "Outfit-Medium",
+    marginTop: 2,
   },
   levelSection: {
     width: "100%",
