@@ -44,18 +44,29 @@ const HabitItem = ({ habit }: HabitItemProps) => {
 
   //modal states
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
 
   //Animation Value
   const cardScale = useSharedValue(1);
 
-  const handleToggle = () => {
+  const handleToggle = async () => {
+    if (isToggling) return;
+
     Haptics.impactAsync(
       habit.completed
         ? Haptics.ImpactFeedbackStyle.Light
         : Haptics.ImpactFeedbackStyle.Medium
     );
 
-    toggleHabit(habit.id);
+    try {
+      setIsToggling(true);
+      const reward = await toggleHabit(habit.id);
+      if (reward?.awarded) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } finally {
+      setIsToggling(false);
+    }
   };
 
   const handleDelete = () => {
@@ -135,11 +146,12 @@ const HabitItem = ({ habit }: HabitItemProps) => {
           onPress={handleToggle}
           onPressIn={handleCardPressIn}
           onPressOut={handleCardPressOut}
+          disabled={isToggling}
           style={({ pressed }) => [
             styles.pressableContainer,
             {
               borderColor: subtleBorder,
-              opacity: pressed ? 0.98 : 1,
+              opacity: isToggling ? 0.72 : pressed ? 0.98 : 1,
             },
           ]}
         >

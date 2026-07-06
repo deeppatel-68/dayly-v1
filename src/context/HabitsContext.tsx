@@ -1,5 +1,9 @@
 import { supabase } from "@/lib/supabase";
-import { incrementUserProgress } from "@/services/progressService";
+import {
+  completeHabitWithReward,
+  HabitRewardResult,
+  incrementUserProgress,
+} from "@/services/progressService";
 import { Habit } from "@/types/habits";
 import { calculateStreaks } from "@/utils/analytics";
 import {
@@ -10,7 +14,6 @@ import {
   useState,
 } from "react";
 import { useAuth } from "./AuthContext";
-import { useXp } from "./XpContext";
 
 interface HabitsContextType {
   habits: Habit[];
@@ -18,7 +21,7 @@ interface HabitsContextType {
 
   // Actions
   addHabit: (title: string, description?: string) => Promise<void>;
-  toggleHabit: (id: string, dateKey?: string) => Promise<void>;
+  toggleHabit: (id: string, dateKey?: string) => Promise<HabitRewardResult | void>;
   deleteHabit: (id: string) => Promise<void>;
   updateHabit: (
     id: string,
@@ -67,7 +70,6 @@ export const HabitsContext = createContext<HabitsContextType | undefined>(
 
 export const HabitsProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
-  const { awardHabitXp } = useXp();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completions, setCompletions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -350,23 +352,9 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
       const newCompletedState = !isCompleted;
 
       // Update or insert completion record (completed_at is a date type)
+      let rewardResult: HabitRewardResult | undefined;
       if (newCompletedState) {
-        // Add completion (upsert to handle existing records)
-        const { error } = await supabase.from("habit_completions").upsert(
-          {
-            habit_id: id,
-            user_id: user.id,
-            completed_at: targetDate,
-          },
-          {
-            onConflict: "user_id,habit_id,completed_at",
-          }
-        );
-
-        if (error) throw error;
-
-        // Rewards are granted at most once per habit per date
-        await awardHabitXp(id, targetDate);
+        rewardResult = await completeHabitWithReward(user.id, id, targetDate);
       } else {
         // Remove completion
         const { error } = await supabase
@@ -400,6 +388,8 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
           };
         })
       );
+
+      return rewardResult;
     } catch (error) {
       console.error("Error toggling habit:", error);
       throw error;

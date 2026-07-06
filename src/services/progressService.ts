@@ -31,6 +31,17 @@ export interface XpAwardInput {
   coins?: number;
 }
 
+export interface RewardResult {
+  awarded: boolean;
+  xp: number;
+  coins: number;
+  progress: UserProgress | null;
+}
+
+export interface HabitRewardResult extends RewardResult {
+  completionId: string;
+}
+
 const PROGRESS_COLUMNS =
   "user_id,xp,coins,current_streak,best_streak,total_focus_seconds,total_completed_habits,created_at,updated_at";
 
@@ -49,7 +60,7 @@ function publishProgress(progress: UserProgress) {
   listeners.forEach((listener) => listener(progress));
 }
 
-function normalizeProgress(row: Partial<UserProgress> & { user_id: string }): UserProgress {
+export function normalizeUserProgress(row: Partial<UserProgress> & { user_id: string }): UserProgress {
   return {
     user_id: row.user_id,
     xp: row.xp ?? 0,
@@ -74,7 +85,7 @@ async function cacheProgress(progress: UserProgress) {
 async function loadCachedProgress(userId: string): Promise<UserProgress | null> {
   try {
     const cached = await AsyncStorage.getItem(progressCacheKey(userId));
-    return cached ? normalizeProgress(JSON.parse(cached)) : null;
+    return cached ? normalizeUserProgress(JSON.parse(cached)) : null;
   } catch (error) {
     console.error("Error loading cached progress:", error);
     return null;
@@ -85,6 +96,10 @@ async function persistAndPublish(progress: UserProgress): Promise<UserProgress> 
   await cacheProgress(progress);
   publishProgress(progress);
   return progress;
+}
+
+export async function syncUserProgress(progress: UserProgress): Promise<UserProgress> {
+  return persistAndPublish(progress);
 }
 
 export async function getUserProgress(userId: string): Promise<UserProgress> {
@@ -100,7 +115,7 @@ export async function getUserProgress(userId: string): Promise<UserProgress> {
     throw error;
   }
 
-  return persistAndPublish(normalizeProgress(data as UserProgress));
+  return persistAndPublish(normalizeUserProgress(data as UserProgress));
 }
 
 export async function incrementUserProgress(
@@ -121,7 +136,7 @@ export async function incrementUserProgress(
 
   if (error) throw error;
 
-  return persistAndPublish(normalizeProgress(data as UserProgress));
+  return persistAndPublish(normalizeUserProgress(data as UserProgress));
 }
 
 export async function addXp(userId: string, amount: number): Promise<UserProgress | null> {
@@ -152,18 +167,82 @@ export async function spendCoins(userId: string, amount: number): Promise<boolea
     throw error;
   }
 
-  await persistAndPublish(normalizeProgress(data as UserProgress));
+  await persistAndPublish(normalizeUserProgress(data as UserProgress));
   return true;
+}
+
+function normalizeRpcProgress(row: {
+  progress_user_id: string;
+  progress_xp: number;
+  progress_coins: number;
+  progress_current_streak: number;
+  progress_best_streak: number;
+  progress_total_focus_seconds: number;
+  progress_total_completed_habits: number;
+  progress_updated_at?: string;
+}): UserProgress {
+  return normalizeUserProgress({
+    user_id: row.progress_user_id,
+    xp: row.progress_xp,
+    coins: row.progress_coins,
+    current_streak: row.progress_current_streak,
+    best_streak: row.progress_best_streak,
+    total_focus_seconds: row.progress_total_focus_seconds,
+    total_completed_habits: row.progress_total_completed_habits,
+    updated_at: row.progress_updated_at,
+  });
+}
+
+export async function completeHabitWithReward(
+  userId: string,
+  habitId: string,
+  dateKey: string,
+  amount = XP_PER_HABIT_COMPLETION,
+  coins = COINS_PER_HABIT_COMPLETION
+): Promise<HabitRewardResult> {
+  const { data, error } = await supabase
+    .rpc("complete_habit_with_reward", {
+      p_user_id: userId,
+      p_habit_id: habitId,
+      p_completed_at: dateKey,
+      p_xp: amount,
+      p_coins: coins,
+    })
+    .single();
+
+  if (error) throw error;
+
+  const row = data as {
+    completion_id: string;
+    awarded: boolean;
+    progress_user_id: string;
+    progress_xp: number;
+    progress_coins: number;
+    progress_current_streak: number;
+    progress_best_streak: number;
+    progress_total_focus_seconds: number;
+    progress_total_completed_habits: number;
+    progress_updated_at?: string;
+  };
+  const progress = await persistAndPublish(normalizeRpcProgress(row));
+
+  return {
+    completionId: row.completion_id,
+    awarded: row.awarded,
+    xp: row.awarded ? amount : 0,
+    coins: row.awarded ? coins : 0,
+    progress,
+  };
 }
 
 export async function awardXpOnce(
   userId: string,
   input: XpAwardInput
-): Promise<{ awarded: boolean; progress: UserProgress | null }> {
+): Promise<RewardResult> {
   const amount = input.amount ?? XP_PER_HABIT_COMPLETION;
   const coins = input.coins ?? COINS_PER_HABIT_COMPLETION;
 
-  if (amount <= 0) return { awarded: false, progress: null };
+  if (amount <= 0) return { awarded: false, xp: 0, coins: 0, progress: null };
 
   const { error } = await supabase.from("xp_awards").insert({
     user_id: userId,
@@ -175,7 +254,7 @@ export async function awardXpOnce(
 
   if (error) {
     if (error.code === "23505") {
-      return { awarded: false, progress: null };
+      return { awarded: false, xp: 0, coins: 0, progress: null };
     }
     throw error;
   }
@@ -186,5 +265,5 @@ export async function awardXpOnce(
     completedHabits: input.sourceType === "habit" ? 1 : 0,
   });
 
-  return { awarded: true, progress };
+  return { awarded: true, xp: amount, coins, progress };
 }

@@ -42,6 +42,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
   const { user } = useAuth();
   const { xp } = useXp();
   const [isRunning, setIsRunning] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
   const [time, setTime] = useState(0); // Time in seconds
   const [mode, setMode] = useState<FocusMode>("SOLO");
   const [summary, setSummary] = useState<SessionResult | null>(null);
@@ -65,6 +66,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
   const rewards = getStudyRewards(time);
 
   const handleFinish = async () => {
+    if (isFinishing) return;
     setIsRunning(false);
 
     if (rewards.minutes < 1) {
@@ -77,25 +79,30 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
       return;
     }
 
-    const leveledUp =
+    let leveledUp =
       getLevelProgress(xp + rewards.xp).level > getLevelProgress(xp).level;
 
+    setIsFinishing(true);
     try {
       if (!user) throw new Error("No user logged in");
-      await recordStudySession(user.id, {
+      const result = await recordStudySession(user.id, {
         duration: time,
         xp: rewards.xp,
         coins: rewards.coins,
       });
+      leveledUp =
+        getLevelProgress(result.progress.xp).level > getLevelProgress(xp).level;
     } catch (error) {
       console.error("Error recording study session:", error);
       onStateChange?.("idle");
+      setIsFinishing(false);
       Alert.alert(
         "Session Save Failed",
         "Your focus time could not be saved. Please try again."
       );
       return;
     }
+    setIsFinishing(false);
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onStateChange?.(leveledUp ? "levelUp" : "reward");
@@ -224,8 +231,13 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
           <Pressable
             style={[
               styles.finishButton,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                opacity: isFinishing ? 0.6 : 1,
+              },
             ]}
+            disabled={isFinishing}
             onPress={handleFinish}
           >
             <Ionicons name="stop" size={24} color={colors.accent} />

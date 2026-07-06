@@ -1,6 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
-import { incrementUserProgress } from "@/services/progressService";
+import {
+  normalizeUserProgress,
+  syncUserProgress,
+  UserProgress,
+} from "@/services/progressService";
 import { FocusSession } from "@/utils/analytics";
 
 export interface StudySession extends FocusSession {
@@ -13,6 +17,13 @@ export interface StudySessionInput {
   xp: number;
   coins: number;
   endedAt?: string;
+}
+
+export interface StudySessionRewardResult {
+  session: StudySession;
+  progress: UserProgress;
+  xp: number;
+  coins: number;
 }
 
 const SESSION_COLUMNS = "id,user_id,duration_seconds,xp,coins,ended_at,created_at,updated_at";
@@ -75,31 +86,63 @@ export async function loadStudySessions(userId: string): Promise<StudySession[]>
 export async function recordStudySession(
   userId: string,
   session: StudySessionInput
-): Promise<StudySession> {
+): Promise<StudySessionRewardResult> {
   const endedAt = session.endedAt ?? new Date().toISOString();
   const { data, error } = await supabase
-    .from("study_sessions")
-    .insert({
-      user_id: userId,
-      duration_seconds: session.duration,
-      xp: session.xp,
-      coins: session.coins,
-      ended_at: endedAt,
+    .rpc("record_study_session_with_reward", {
+      p_user_id: userId,
+      p_duration_seconds: session.duration,
+      p_xp: session.xp,
+      p_coins: session.coins,
+      p_ended_at: endedAt,
     })
-    .select(SESSION_COLUMNS)
     .single();
 
   if (error) throw error;
 
-  const savedSession = normalizeSession(data);
-  await incrementUserProgress(userId, {
-    xp: session.xp,
-    coins: session.coins,
-    focusSeconds: session.duration,
+  const row = data as {
+    session_id: string;
+    session_duration_seconds: number;
+    session_xp: number;
+    session_coins: number;
+    session_ended_at: string;
+    progress_user_id: string;
+    progress_xp: number;
+    progress_coins: number;
+    progress_current_streak: number;
+    progress_best_streak: number;
+    progress_total_focus_seconds: number;
+    progress_total_completed_habits: number;
+    progress_updated_at?: string;
+  };
+
+  const savedSession = normalizeSession({
+    id: row.session_id,
+    duration_seconds: row.session_duration_seconds,
+    xp: row.session_xp,
+    coins: row.session_coins,
+    ended_at: row.session_ended_at,
   });
+  const progress = await syncUserProgress(
+    normalizeUserProgress({
+      user_id: row.progress_user_id,
+      xp: row.progress_xp,
+      coins: row.progress_coins,
+      current_streak: row.progress_current_streak,
+      best_streak: row.progress_best_streak,
+      total_focus_seconds: row.progress_total_focus_seconds,
+      total_completed_habits: row.progress_total_completed_habits,
+      updated_at: row.progress_updated_at,
+    })
+  );
 
   const cached = await loadCachedSessions(userId);
   await cacheSessions(userId, [savedSession, ...cached].slice(0, 200));
 
-  return savedSession;
+  return {
+    session: savedSession,
+    progress,
+    xp: row.session_xp,
+    coins: row.session_coins,
+  };
 }
