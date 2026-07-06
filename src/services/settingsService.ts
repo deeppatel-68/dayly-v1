@@ -101,6 +101,24 @@ export async function setUserTheme(
   return updateUserSettings(userId, { theme });
 }
 
+export async function getUserCharacterData(
+  userId: string
+): Promise<Record<string, unknown> | null> {
+  const settings = await getUserSettings(userId);
+  return settings.character_data;
+}
+
+export async function setUserCharacterData(
+  userId: string,
+  characterData: Record<string, unknown>
+): Promise<UserSettings> {
+  await AsyncStorage.setItem(
+    CHARACTER_STORAGE_KEY,
+    JSON.stringify(characterData)
+  );
+  return updateUserSettings(userId, { character_data: characterData });
+}
+
 export async function migrateLegacyUserData(userId: string): Promise<void> {
   const settings = await getUserSettings(userId);
   if (settings.migration_flags?.[LEGACY_MIGRATION_FLAG]) return;
