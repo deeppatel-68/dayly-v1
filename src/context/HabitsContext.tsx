@@ -2,7 +2,7 @@ import * as habitsService from "@/services/habitsService";
 import { HabitRewardResult } from "@/services/habitsService";
 import { incrementUserProgress } from "@/services/progressService";
 import { Habit } from "@/types/habits";
-import { calculateStreaks } from "@/utils/analytics";
+import { calculateStreaks } from "@/utils/progression";
 import {
   calculateCompletedCount,
   calculateCompletionPercentage,

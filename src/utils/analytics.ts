@@ -1,4 +1,5 @@
 import { Habit } from "@/types/habits";
+import { calculateStreaks } from "./progression";
 
 // Define FocusSession interface locally if not available in types
 export interface FocusSession {
@@ -156,54 +157,9 @@ export function calculatePeriodStats(
 }
 
 // Calculate streaks for habits
-export function calculateStreaks(habits: Habit[]): {
-  currentStreak: number;
-  longestStreak: number;
-} {
-  if (habits.length === 0) return { currentStreak: 0, longestStreak: 0 };
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  let currentStreak = 0;
-  let longestStreak = 0;
-  let tempStreak = 0;
-  let checkingCurrent = true;
-
-  // Check last 365 days for streaks
-  for (let i = 0; i < 365; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const dateKey = date.toISOString().split("T")[0];
-
-    // A day is part of the streak if ALL habits are completed
-    // Or maybe just > 0? The user prompt logic was:
-    // const completedAll = habits.every(h => (h.logs[dateKey] || 0) >= h.target);
-    // Let's stick to "All habits completed" for a perfect streak,
-    // or maybe relaxed to > 50%? Let's stick to strict "all" for now as per prompt logic.
-    const completedAll = habits.every(
-      (h) => h.completionHistory && h.completionHistory[dateKey] === true
-    );
-
-    if (completedAll) {
-      tempStreak++;
-      if (checkingCurrent) currentStreak++;
-      longestStreak = Math.max(longestStreak, tempStreak);
-    } else {
-      // If today isn't over yet, maybe don't break streak?
-      // For simplicity, if not all done, streak breaks.
-      if (checkingCurrent && i > 0) checkingCurrent = false;
-      // If i==0 (today) and not done, we don't increment currentStreak but we don't necessarily stop checking previous days if we consider "streak active until broken by yesterday"
-      // But the prompt logic: if (checkingCurrent && i > 0) checkingCurrent = false;
-      // implies if today is not done, currentStreak doesn't include today, but we stop checking.
-      // Actually, usually current streak includes today if done, or is based on yesterday if today not done.
-      // Let's keep prompt logic: strict sequence.
-      tempStreak = 0;
-    }
-  }
-
-  return { currentStreak, longestStreak };
-}
+// calculateStreaks moved to utils/progression (single owner of streak
+// semantics); imported above and re-exported for existing callers.
+export { calculateStreaks };
 
 // Calculate individual habit statistics
 export function calculateHabitStats(habit: Habit): HabitStats {

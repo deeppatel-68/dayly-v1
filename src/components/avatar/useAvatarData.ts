@@ -4,13 +4,9 @@ import { useShop } from "@/context/ShopContext";
 import { useXp } from "@/context/XpContext";
 import { DEFAULT_BODY_COLOR } from "@/data/avatarColors";
 import { shopItems } from "@/data/shopItems";
+import { toLevelTier, toStreakTier } from "@/utils/progression";
 import { useMemo } from "react";
-import {
-  AvatarData,
-  AvatarRendererProps,
-  toLevelTier,
-  toStreakTier,
-} from "./avatarTypes";
+import { AvatarData, AvatarRendererProps } from "./avatarTypes";
 
 // Resolves the avatar's progression data: explicit props win, the app
 // contexts fill in the rest. Keeps every renderer reacting to the same

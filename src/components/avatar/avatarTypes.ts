@@ -31,8 +31,5 @@ export interface AvatarData {
   equippedItems: string[];
 }
 
-export const toLevelTier = (level: number) =>
-  Math.min(3, Math.floor((level - 1) / 3));
-
-export const toStreakTier = (streak: number) =>
-  streak >= 14 ? 3 : streak >= 7 ? 2 : streak >= 3 ? 1 : 0;
+// Tier derivation lives in utils/progression (the single owner of
+// progression maths); import it from there.

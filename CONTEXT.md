@@ -49,6 +49,10 @@ Each is a module with a small interface hiding real behaviour.
 - **`lib/supabase`** — the Supabase **adapter**. The only module that knows the
   backend shape; services depend on it, UI never does.
 
+- **`utils/progression`** — the single owner of progression derivation:
+  level tiers, streak tiers, and the streak walk (`calculateStreaks`).
+  `habitStats` and `analytics` re-export from it; nothing else re-derives a
+  tier or streak. The current streak counts today once today is complete.
 - **`components/3d/equipment`** — the shop↔3D seam. Interface: `EQUIPMENT`
   registry (item id → slot + builder), `attachEquipment`, and
   `RENDERED_EQUIPMENT_IDS` (the shop gates purchasing on it: an item the 3D

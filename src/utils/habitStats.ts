@@ -34,29 +34,8 @@ export function calculateCompletionPercentage(
   return totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 }
 
-// Consecutive days (starting yesterday, looking back up to a year) on which
-// ALL habits were completed
-export function calculateCurrentStreak(habits: Habit[]): number {
-  if (habits.length === 0) return 0;
-
-  let streak = 0;
-  const today = new Date();
-
-  for (let i = 1; i < 365; i++) {
-    const checkDate = new Date(today);
-    checkDate.setDate(today.getDate() - i);
-    const dateKey = checkDate.toISOString().split("T")[0];
-
-    const allCompleted = habits.every((habit) =>
-      isHabitCompletedOnDate(habit, dateKey)
-    );
-
-    if (allCompleted) {
-      streak++;
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-}
+// Streak semantics live in utils/progression — the single owner of streak
+// and tier derivation — so the UI streak and the persisted streak can never
+// disagree. Re-exported here to keep one import site for habit stats.
+// Note: the consolidated streak counts today once today is complete.
+export { calculateCurrentStreak } from "./progression";
