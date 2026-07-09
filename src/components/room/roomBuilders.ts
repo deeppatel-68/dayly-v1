@@ -41,10 +41,15 @@ function createPalette(accent: THREE.Color): RoomPalette {
     extra: Partial<THREE.MeshStandardMaterialParameters> = {}
   ) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
 
+  // Wall/floor/rug pulled to sit near the app's own dark-theme tokens
+  // (Colors.dark.background #1F1E1D, backgroundSecondary #30302E, card
+  // #262624 -- src/constants/Colors.ts) so the room reads as an extension
+  // of the app chrome rather than an unrelated 3D scene, with floor darkest
+  // (grounding, close to #1F1E1D) and rug lightest (close to #30302E) for depth.
   return {
-    wall: std(0x2a2723, 0.95),
-    floor: std(0x211d19, 0.9),
-    rug: std(0x35302a, 0.95),
+    wall: std(0x262421, 0.95),
+    floor: std(0x1c1a18, 0.9),
+    rug: std(0x322f2a, 0.95),
     wood: std(0x584434, 0.7),
     darkWood: std(0x3b2f26, 0.75),
     fabric: std(0x433d35, 0.9),

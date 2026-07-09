@@ -1,6 +1,5 @@
 import bmesh
 import bpy
-import math
 
 OUT_DIR = "/Users/deeppatel/dayly-v1/assets/avatar"
 
@@ -16,7 +15,8 @@ scene = bpy.context.scene
 
 
 # ---------- materials ----------
-def make_mat(name, color, roughness, metallic=0.0, emission=None, emission_strength=0.0):
+def make_mat(name, color, roughness, metallic=0.0, emission=None,
+             emission_strength=0.0, coat=0.0):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]
@@ -26,17 +26,22 @@ def make_mat(name, color, roughness, metallic=0.0, emission=None, emission_stren
     if emission:
         bsdf.inputs["Emission Color"].default_value = (*emission, 1.0)
         bsdf.inputs["Emission Strength"].default_value = emission_strength
+    if coat:
+        try:
+            bsdf.inputs["Coat Weight"].default_value = coat
+        except KeyError:
+            pass
     return mat
 
 
 ORANGE = (1.0, 0.15, 0.035)  # ~#ff6b35 in linear
-mat_body = make_mat("Body_Charcoal", (0.045, 0.045, 0.052), 0.5)
-mat_base = make_mat("Base_Black", (0.012, 0.012, 0.014), 0.25, metallic=0.1)
+mat_body = make_mat("Body_Charcoal", (0.052, 0.052, 0.06), 0.45, coat=0.25)
+mat_base = make_mat("Base_Black", (0.012, 0.012, 0.014), 0.22, metallic=0.1)
 mat_eye = make_mat("Eye_White_Emission", (1.0, 0.96, 0.9), 0.4,
                    emission=(1.0, 0.93, 0.82), emission_strength=3.5)
 mat_accent = make_mat("Accent_Orange_Emission", ORANGE, 0.4,
                       emission=ORANGE, emission_strength=4.5)
-mat_platform = make_mat("Platform_Dark", (0.02, 0.02, 0.022), 0.8)
+mat_platform = make_mat("Platform_Dark", (0.02, 0.02, 0.022), 0.75)
 
 
 def smooth(obj):
@@ -48,7 +53,7 @@ def link(obj):
     bpy.context.collection.objects.link(obj)
 
 
-# ---------- Body (two-tone via material slots, seam at lower third) ----------
+# ---------- Body: squat friendly mass, two-tone via material slots ----------
 bm = bmesh.new()
 bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=18, radius=0.55)
 mesh = bpy.data.meshes.new("Body")
@@ -56,8 +61,8 @@ bm.to_mesh(mesh)
 bm.free()
 body = bpy.data.objects.new("Body", mesh)
 link(body)
-body.scale = (1.0, 0.95, 1.1)
-body.location = (0, 0, 0.68)
+body.scale = (1.05, 0.95, 0.98)
+body.location = (0, 0, 0.63)
 mesh.materials.append(mat_body)
 mesh.materials.append(mat_base)
 for poly in mesh.polygons:
@@ -65,63 +70,78 @@ for poly in mesh.polygons:
         poly.material_index = 1
 smooth(body)
 
-# ---------- FacePanel (glossy bubble, slightly proud of the body) ----------
+# ---------- FacePanel: wide glossy visor, slightly proud of the body ----------
 bpy.ops.mesh.primitive_uv_sphere_add(segments=28, ring_count=16, radius=0.42,
-                                     location=(0, -0.35, 0.87))
+                                     location=(0, -0.34, 0.81))
 face = bpy.context.active_object
 face.name = "FacePanel"
-face.scale = (1.0, 0.45, 0.75)
+face.scale = (1.12, 0.42, 0.62)
 face.data.materials.append(mat_base)
 smooth(face)
 
-# ---------- Eyes ----------
-for name, x in (("LeftEye", -0.17), ("RightEye", 0.17)):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.095,
-                                         location=(x, -0.5, 0.88))
+# ---------- Eyes: large soft ovals with a gentle outward tilt ----------
+for name, x, roll in (("LeftEye", -0.165, -0.07), ("RightEye", 0.165, 0.07)):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.105,
+                                         location=(x, -0.47, 0.83),
+                                         rotation=(0, roll, 0))
     eye = bpy.context.active_object
     eye.name = name
-    eye.scale = (1.0, 0.5, 1.3)
+    eye.scale = (1.0, 0.5, 1.35)
     eye.data.materials.append(mat_eye)
     smooth(eye)
 
-# ---------- EnergyCore ----------
-bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.06,
-                                     location=(0, -0.455, 0.46))
+# ---------- EnergyCore: small framed heart on the chest ----------
+bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.055,
+                                     location=(0, -0.43, 0.36))
 core = bpy.context.active_object
 core.name = "EnergyCore"
 core.data.materials.append(mat_accent)
 smooth(core)
 
-# ---------- HaloCharm ----------
-bpy.ops.mesh.primitive_torus_add(major_radius=0.12, minor_radius=0.018,
-                                 major_segments=32, minor_segments=12,
-                                 location=(0, 0, 1.48), rotation=(0.18, 0, 0))
+# ---------- HaloCharm: larger, thinner, tilted collectible ring ----------
+bpy.ops.mesh.primitive_torus_add(major_radius=0.14, minor_radius=0.015,
+                                 major_segments=36, minor_segments=12,
+                                 location=(0, 0, 1.34), rotation=(0.18, 0, 0))
 halo = bpy.context.active_object
 halo.name = "HaloCharm"
 halo.data.materials.append(mat_accent)
 smooth(halo)
 
-# ---------- Flippers ----------
-for name, x, rot in (("LeftFlipper", -0.56, 0.22), ("RightFlipper", 0.56, -0.22)):
+# ---------- Flippers: soft rounded fins, readable in silhouette ----------
+for name, x, rot in (("LeftFlipper", -0.62, 0.35), ("RightFlipper", 0.62, -0.35)):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.3,
-                                         location=(x, 0, 0.55), rotation=(0, rot, 0))
+                                         location=(x, 0, 0.48), rotation=(0, rot, 0))
     flip = bpy.context.active_object
     flip.name = name
-    flip.scale = (0.28, 0.4, 0.6)
+    flip.scale = (0.30, 0.42, 0.55)
     flip.data.materials.append(mat_body)
     smooth(flip)
 
-# ---------- Platform + ring ----------
-bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.78, depth=0.05,
-                                    location=(0, 0, 0.025))
+# ---------- Platform: two-tier pod (joined into one named mesh) ----------
+bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.80, depth=0.04,
+                                    location=(0, 0, 0.02))
+pod_base = bpy.context.active_object
+pod_base.data.materials.append(mat_platform)
+
+bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.62, depth=0.05,
+                                    location=(0, 0, 0.065))
+pod_top = bpy.context.active_object
+pod_top.data.materials.append(mat_platform)
+
+bpy.ops.object.select_all(action="DESELECT")
+pod_base.select_set(True)
+pod_top.select_set(True)
+bpy.context.view_layer.objects.active = pod_base
+bpy.ops.object.join()
 platform = bpy.context.active_object
 platform.name = "Platform"
-platform.data.materials.append(mat_platform)
+platform.data.name = "Platform"
 smooth(platform)
 
-bpy.ops.mesh.primitive_torus_add(major_radius=0.76, minor_radius=0.012,
+# ---------- PlatformRing: light channel between the pod tiers ----------
+bpy.ops.mesh.primitive_torus_add(major_radius=0.70, minor_radius=0.012,
                                  major_segments=48, minor_segments=10,
-                                 location=(0, 0, 0.05))
+                                 location=(0, 0, 0.052))
 ring = bpy.context.active_object
 ring.name = "PlatformRing"
 ring.data.materials.append(mat_accent)
@@ -155,9 +175,8 @@ key = add_light("KeyLight", "AREA", (2.0, -3.0, 3.2), 280, (1.0, 0.96, 0.9), siz
 fill = add_light("FillLight", "AREA", (-1.8, -2.4, 1.2), 60, (0.9, 0.93, 1.0), size=2.5)
 rim = add_light("RimLight", "POINT", (-2.2, 2.0, 1.8), 120, ORANGE)
 
-# aim the key/fill lights at the pet
 target = bpy.data.objects.new("AimTarget", None)
-target.location = (0, 0, 0.7)
+target.location = (0, 0, 0.66)
 link(target)
 for light_obj in (key, fill):
     con = light_obj.constraints.new("TRACK_TO")
@@ -169,7 +188,7 @@ for light_obj in (key, fill):
 cam_data = bpy.data.cameras.new("PreviewCamera")
 cam_data.lens = 55
 cam = bpy.data.objects.new("PreviewCamera", cam_data)
-cam.location = (0, -3.5, 1.6)
+cam.location = (0, -3.4, 1.5)
 link(cam)
 con = cam.constraints.new("TRACK_TO")
 con.target = target

@@ -66,15 +66,29 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       renderer.debug.checkShaderErrors = false;
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
-      camera.position.set(0.55, 1.75, 4.3);
-      camera.lookAt(0, 0.9, -0.4);
+      // Camera framing render-verified in headless Blender (marker spheres
+      // at the pet pod, desk, lamp and chair, rendered at a 720x1560
+      // portrait aspect matching a phone GLView). Because three's fov is
+      // always the VERTICAL angle, a portrait aspect (~0.46 here) derives a
+      // much narrower HORIZONTAL fov (roughly fov * aspect) -- the old
+      // fov=42 at (0.55,1.75,4.3) gave only ~20 degrees horizontal, which
+      // cropped out ROOM_PET_POSITION (x=1.05): the pet was ~85% offscreen.
+      // Pulling back, re-centering lookAt between the pet and the desk, and
+      // widening the vertical fov to 52 (horizontal ~25) brings the whole
+      // pet fully into frame with the desk/lamp/chair still readable on the
+      // left (the pod's own outer rim can clip slightly at the right edge,
+      // traded off in favour of the pet itself never being cropped).
+      const camera = new THREE.PerspectiveCamera(52, width / height, 0.1, 100);
+      camera.position.set(0.5, 1.3, 4.4);
+      camera.lookAt(0.42, 0.78, -0.48);
 
       const accent = new THREE.Color(accentColor);
       const motion = createPetMotionController({ levelTier, streakTier });
 
-      // Room lighting: soft ambient, warm key, desk lamp, accent rim by pet
-      const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+      // Room lighting: soft ambient, warm key, desk lamp, accent rim by pet.
+      // Ambient nudged warm (was neutral 0xffffff) to match the room's
+      // charcoal palette shift toward Colors.ts's warm dark theme.
+      const ambient = new THREE.AmbientLight(0xfff2e8, 0.5);
       const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.75);
       keyLight.position.set(2.5, 4, 3.5);
       const petRim = new THREE.PointLight(
@@ -132,15 +146,18 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
 
         motion.apply(companion.rig, s, t);
 
-        // Desk lamp settles brighter while focusing
-        const lampTarget = s === "focus" ? 1.5 : celebrating ? 1.1 : 0.85;
+        // Desk lamp settles brighter while focusing. Targets nudged up
+        // slightly (was 1.5/1.1/0.85) to keep the same visual pop now that
+        // the walls/floor sit darker against the app's warm-charcoal palette.
+        const lampTarget = s === "focus" ? 1.65 : celebrating ? 1.2 : 0.9;
         room.lampLight.intensity +=
           (lampTarget - room.lampLight.intensity) * 0.06;
 
-        // String lights shimmer during celebrations
+        // String lights shimmer during celebrations (peak raised to match
+        // the darker room; idle glow nudged up a touch for the same reason)
         room.stringMat.emissiveIntensity = celebrating
-          ? 1.3 + Math.sin(t * 8) * 0.45
-          : 0.8;
+          ? 1.4 + Math.sin(t * 8) * 0.5
+          : 0.85;
 
         renderer.render(scene, camera);
         gl.endFrameEXP();

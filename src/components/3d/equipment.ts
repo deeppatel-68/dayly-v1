@@ -90,31 +90,42 @@ const mesh = (
 // Pet-local frame: body centre y≈0.63, eyes at (±0.165, 0.83, ~0.5),
 // body top ≈1.17, pod ring around origin (see dayly-companion-build.py).
 export const EQUIPMENT: Record<string, EquipmentDef> = {
+  // Dome + brim render-verified against the GLB in headless Blender
+  // (primitive stand-ins imported alongside dayly-companion.glb, front +
+  // 3/4 + top renders). Original thetaLength (PI/2.8) let the dome's rim
+  // clip into the top of the eyes (eye top ≈0.97); PI/3 raises the rim to
+  // y=1.0, clearing them. The brim was undersized/mispositioned (sat high
+  // on the dome, barely poking past its surface) — moved to the new rim
+  // height and pushed forward so it reads as a bill.
   "focus-cap": {
     slot: "pet",
     build: (m) => {
       const group = new THREE.Group();
       const dome = mesh(
-        new THREE.SphereGeometry(0.6, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2.8),
+        new THREE.SphereGeometry(0.6, 18, 12, 0, Math.PI * 2, 0, Math.PI / 3),
         m.dark,
         0,
         0.7,
         0
       );
-      const brim = mesh(new THREE.BoxGeometry(0.42, 0.035, 0.3), m.dark, 0, 1.03, 0.52);
+      const brim = mesh(new THREE.BoxGeometry(0.42, 0.035, 0.16), m.dark, 0, 1.0, 0.58);
       group.add(dome, brim);
       return group;
     },
   },
+  // Lens size/position render-verified: the old radius (0.115) was smaller
+  // than the eye's own height (0.283) so it couldn't ring it, and z=0.5 sat
+  // behind the eye's front-most point (~0.522), embedding half the ring
+  // inside the head. Enlarged to 0.145 and pushed to z=0.57.
   "study-glasses": {
     slot: "pet",
     build: (m) => {
       const group = new THREE.Group();
-      const lensGeo = new THREE.TorusGeometry(0.115, 0.016, 8, 20);
+      const lensGeo = new THREE.TorusGeometry(0.145, 0.018, 8, 20);
       group.add(
-        mesh(lensGeo, m.frame, -0.165, 0.83, 0.5),
-        mesh(lensGeo, m.frame, 0.165, 0.83, 0.5),
-        mesh(new THREE.BoxGeometry(0.08, 0.016, 0.016), m.frame, 0, 0.83, 0.51)
+        mesh(lensGeo, m.frame, -0.165, 0.83, 0.57),
+        mesh(lensGeo, m.frame, 0.165, 0.83, 0.57),
+        mesh(new THREE.BoxGeometry(0.08, 0.016, 0.016), m.frame, 0, 0.83, 0.575)
       );
       return group;
     },
@@ -139,26 +150,35 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
       return group;
     },
   },
+  // Render-verified against the pod: the pod's raised puck tier (where the
+  // pet stands) has radius 0.62, but the old (0.62, _, 0.3) position is
+  // radius 0.69 from the pod origin — past the puck edge, so despite y=0.09
+  // matching the puck top it floated over the lower base tier instead.
+  // Pulled in along the same angle to radius ~0.5 so it actually sits on
+  // the puck beside the pet.
   "study-plant": {
     slot: "platform",
     build: (m) => {
       const group = new THREE.Group();
       group.add(
-        mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.1, 10), m.dark, 0.62, 0.09, 0.3),
-        mesh(new THREE.ConeGeometry(0.09, 0.18, 8), m.leaf, 0.62, 0.23, 0.3),
-        mesh(new THREE.ConeGeometry(0.06, 0.12, 8), m.leaf, 0.56, 0.19, 0.36)
+        mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.1, 10), m.dark, 0.46, 0.09, 0.2),
+        mesh(new THREE.ConeGeometry(0.09, 0.18, 8), m.leaf, 0.46, 0.23, 0.2),
+        mesh(new THREE.ConeGeometry(0.06, 0.12, 8), m.leaf, 0.4, 0.19, 0.26)
       );
       return group;
     },
   },
+  // Render-verified: the old position (radius 0.717 from origin + 0.06
+  // footprint = 0.777) sat within the pod's 0.80 base radius but only by
+  // 0.023 — nudged in slightly for a safer margin against the base edge.
   "neon-lamp": {
     slot: "platform",
     build: (m) => {
       const group = new THREE.Group();
       group.add(
-        mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.03, 10), m.dark, -0.66, 0.055, 0.28),
-        mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.38, 8), m.dark, -0.66, 0.26, 0.28),
-        mesh(new THREE.SphereGeometry(0.05, 12, 10), m.glow, -0.66, 0.48, 0.28)
+        mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.03, 10), m.dark, -0.64, 0.055, 0.26),
+        mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.38, 8), m.dark, -0.64, 0.26, 0.26),
+        mesh(new THREE.SphereGeometry(0.05, 12, 10), m.glow, -0.64, 0.48, 0.26)
       );
       return group;
     },
