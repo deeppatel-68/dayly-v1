@@ -3,6 +3,7 @@ import {
   getUserCharacterData,
   setUserCharacterData,
 } from "@/services/settingsService";
+import { logSupabaseError } from "@/utils/supabaseErrors";
 import React, {
   createContext,
   ReactNode,
@@ -18,6 +19,7 @@ export interface CharacterData {
   bodyColor: string; // companion body colour
   accessories: string[];
   model?: string;
+  companionName?: string; // user-chosen name from onboarding; optional/legacy-safe
 }
 
 interface CharacterContextType {
@@ -54,6 +56,10 @@ const normalizeCharacterData = (value: unknown): CharacterData => {
     accessories: Array.isArray(parsed.accessories)
       ? parsed.accessories.filter((item): item is string => typeof item === "string")
       : defaultCharacter.accessories,
+    companionName:
+      typeof parsed.companionName === "string" && parsed.companionName.trim()
+        ? parsed.companionName.trim()
+        : undefined,
   };
 
   if (
@@ -71,6 +77,9 @@ const toCharacterRecord = (characterData: CharacterData) => ({
   bodyColor: characterData.bodyColor,
   accessories: characterData.accessories,
   ...(characterData.model ? { model: characterData.model } : {}),
+  ...(characterData.companionName
+    ? { companionName: characterData.companionName }
+    : {}),
 });
 
 export function CharacterProvider({ children }: { children: ReactNode }) {
@@ -116,7 +125,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
           await setUserCharacterData(user.id, toCharacterRecord(nextCharacter));
         }
       } catch (error) {
-        console.error("Error loading character:", error);
+        logSupabaseError("Error loading character:", error);
       } finally {
         if (!cancelled) {
           loadedRef.current = true;
@@ -141,7 +150,7 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
     if (!user || !loadedRef.current) return;
 
     setUserCharacterData(user.id, toCharacterRecord(nextCharacter)).catch(
-      (error) => console.error("Error saving character:", error)
+      (error) => logSupabaseError("Error saving character:", error)
     );
   };
 

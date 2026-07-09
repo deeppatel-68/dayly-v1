@@ -1,4 +1,5 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { useCharacter } from "@/context/CharacterContext";
 import { useTheme } from "@/context/ThemeContext";
 import { getLevelProgress } from "@/utils/xp";
 import { Ionicons } from "@expo/vector-icons";
@@ -39,6 +40,7 @@ export default function SessionSummary({
   onClose,
 }: SessionSummaryProps) {
   const { colors } = useTheme();
+  const { character } = useCharacter();
   const { level, xpIntoLevel, xpForNextLevel, progress } =
     getLevelProgress(totalXp);
   const cardScale = useRef(new Animated.Value(0.92)).current;
@@ -97,7 +99,9 @@ export default function SessionSummary({
           )}
 
           <Text style={[styles.title, { color: colors.text }]}>
-            Session Complete
+            {character.companionName
+              ? `${character.companionName} is proud of you`
+              : "Session Complete"}
           </Text>
 
           <Text style={[styles.duration, { color: colors.text }]}>
@@ -276,6 +280,7 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit-Bold",
     letterSpacing: 0.5,
     marginBottom: Spacing.lg,
+    textAlign: "center",
   },
   duration: {
     fontSize: 56,
