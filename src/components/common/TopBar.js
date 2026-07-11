@@ -7,7 +7,6 @@ import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   Alert,
-  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -51,7 +50,7 @@ function TopBar() {
           onPress: async () => {
             try {
               await signOut();
-            } catch (error) {
+            } catch {
               Alert.alert("Error", "Failed to sign out. Please try again.");
             }
           },
@@ -96,21 +95,8 @@ function TopBar() {
       ]}
     >
       <View style={styles.titleContainer}>
-        {/* Left side: Logo and brand */}
+        {/* Left side: brand wordmark */}
         <View style={styles.leftSection}>
-          {/* Logo square with image */}
-          <View
-            style={[
-              styles.logoSquare,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Image
-              source={require("../../../assets/images/e9cdcfd52_1000193262.png")}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
           <View style={styles.brandText}>
             <Text style={[styles.title, { color: colors.text }]}>dayly</Text>
           </View>
@@ -119,8 +105,7 @@ function TopBar() {
         {/* Right side: Profile picture */}
         <TouchableOpacity
           ref={profileIconRef}
-          onLayout={(event) => {
-            const { x, y, width, height } = event.nativeEvent.layout;
+          onLayout={() => {
             profileIconRef.current?.measureInWindow(
               (fx, fy, fwidth, fheight) => {
                 setProfileIconLayout({
@@ -248,20 +233,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  logoSquare: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.md,
-    overflow: "hidden",
-    borderWidth: 1,
-  },
-  logoImage: {
-    width: "100%",
-    height: "100%",
-  },
   brandText: {
     flex: 1,
   },
@@ -283,7 +254,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ff6b35",
+    backgroundColor: "#D97757",
   },
   profileCircleActive: {
     opacity: 0.8,

@@ -1,11 +1,22 @@
 import { Habit } from "@/types/habits";
-import { calculateStreaks } from "./progression";
+import {
+  addCalendarDays,
+  fromLocalDateKey,
+  toLocalDateKey,
+} from "@/utils/dateKey";
+import { calculateStreaks } from "@/utils/progression";
 
-// Define FocusSession interface locally if not available in types
+export type AnalyticsPeriod = "day" | "week" | "month" | "3months";
+
 export interface FocusSession {
   id: string;
-  duration: number; // in seconds
+  duration: number;
   endedAt: string;
+}
+
+export interface ChartPoint {
+  label: string;
+  value: number;
 }
 
 export interface DayStats {
@@ -33,330 +44,304 @@ export interface PeriodStats {
   averageCompletion: number;
   totalStudyMinutes: number;
   averageStudyMinutes: number;
+  averageSessionMinutes: number;
+  sessionCount: number;
   bestDay: DayStats | null;
   worstDay: DayStats | null;
   currentStreak: number;
   longestStreak: number;
-  periodChange: number; // % change from previous period
+  periodChange: number;
 }
 
-// Get dates for a period
+const PERIOD_DAYS: Record<AnalyticsPeriod, number> = {
+  day: 1,
+  week: 7,
+  month: 30,
+  "3months": 91,
+};
+
+function atLocalMidnight(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isHabitActiveOn(habit: Habit, dateKey: string): boolean {
+  return (
+    habit.startsOn <= dateKey &&
+    (!habit.archivedOn || dateKey < habit.archivedOn)
+  );
+}
+
+function sessionDateKey(session: FocusSession): string | null {
+  const date = new Date(session.endedAt);
+  return Number.isNaN(date.getTime()) ? null : toLocalDateKey(date);
+}
+
 export function getDatesForPeriod(
-  period: "day" | "week" | "month" | "3months"
+  period: AnalyticsPeriod,
+  referenceDate = new Date()
 ): Date[] {
-  const dates: Date[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const daysCount =
-    period === "day" ? 1 : period === "week" ? 7 : period === "month" ? 30 : 90;
-
-  for (let i = daysCount - 1; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    dates.push(date);
-  }
-
-  return dates;
+  const today = atLocalMidnight(referenceDate);
+  return Array.from({ length: PERIOD_DAYS[period] }, (_, index) =>
+    addCalendarDays(today, index - PERIOD_DAYS[period] + 1)
+  );
 }
 
-// Calculate stats for each day
+export function getSessionsForPeriod(
+  sessions: FocusSession[],
+  period: AnalyticsPeriod,
+  referenceDate = new Date()
+): FocusSession[] {
+  const dates = getDatesForPeriod(period, referenceDate);
+  const firstKey = toLocalDateKey(dates[0]);
+  const lastKey = toLocalDateKey(dates[dates.length - 1]);
+  return sessions.filter((session) => {
+    const dateKey = sessionDateKey(session);
+    return dateKey !== null && dateKey >= firstKey && dateKey <= lastKey;
+  });
+}
+
 export function calculateDayStats(
   date: Date,
   habits: Habit[],
   sessions: FocusSession[] = []
 ): DayStats {
-  const dateKey = date.toISOString().split("T")[0];
-
-  const habitsCompleted = habits.filter(
-    (h) => h.completionHistory && h.completionHistory[dateKey] === true
+  const dateKey = toLocalDateKey(date);
+  const activeHabits = habits.filter((habit) =>
+    isHabitActiveOn(habit, dateKey)
+  );
+  const habitsCompleted = activeHabits.filter(
+    (habit) => habit.completionHistory?.[dateKey] === true
   ).length;
-
-  const studyMinutes = sessions
-    .filter(
-      (s) =>
-        s.endedAt && new Date(s.endedAt).toDateString() === date.toDateString()
-    )
-    .reduce((sum, s) => sum + s.duration / 60, 0);
+  const studySeconds = sessions
+    .filter((session) => sessionDateKey(session) === dateKey)
+    .reduce((sum, session) => sum + session.duration, 0);
 
   return {
     date,
     dateKey,
     habitsCompleted,
-    habitsTotal: habits.length,
-    studyMinutes: Math.round(studyMinutes),
+    habitsTotal: activeHabits.length,
+    studyMinutes: Math.round(studySeconds / 60),
     completionRate:
-      habits.length > 0 ? (habitsCompleted / habits.length) * 100 : 0,
+      activeHabits.length > 0
+        ? (habitsCompleted / activeHabits.length) * 100
+        : 0,
   };
 }
 
-// Calculate period statistics
+function shiftDates(dates: Date[], days: number): Date[] {
+  return dates.map((date) => addCalendarDays(date, days));
+}
+
+function averageCompletionForDates(
+  dates: Date[],
+  habits: Habit[],
+  sessions: FocusSession[]
+): number {
+  if (dates.length === 0) return 0;
+  return (
+    dates.reduce(
+      (sum, date) => sum + calculateDayStats(date, habits, sessions).completionRate,
+      0
+    ) / dates.length
+  );
+}
+
 export function calculatePeriodStats(
   habits: Habit[],
   sessions: FocusSession[] = [],
-  period: "day" | "week" | "month" | "3months"
+  period: AnalyticsPeriod,
+  referenceDate = new Date()
 ): PeriodStats {
-  const dates = getDatesForPeriod(period);
+  const dates = getDatesForPeriod(period, referenceDate);
   const dayStats = dates.map((date) =>
     calculateDayStats(date, habits, sessions)
   );
-
-  // Calculate totals and averages
+  const periodSessions = getSessionsForPeriod(sessions, period, referenceDate);
+  const totalStudySeconds = periodSessions.reduce(
+    (sum, session) => sum + session.duration,
+    0
+  );
   const totalHabitsCompleted = dayStats.reduce(
     (sum, day) => sum + day.habitsCompleted,
     0
   );
-  const totalStudyMinutes = dayStats.reduce(
-    (sum, day) => sum + day.studyMinutes,
-    0
+  const averageCompletion = averageCompletionForDates(
+    dates,
+    habits,
+    sessions
   );
-
-  // Find best and worst days
-  const sortedByCompletion = [...dayStats].sort(
-    (a, b) => b.completionRate - a.completionRate
+  const rankedDays = dayStats
+    .filter((day) => day.habitsTotal > 0)
+    .sort((a, b) => b.completionRate - a.completionRate);
+  const previousAverage = averageCompletionForDates(
+    shiftDates(dates, -dates.length),
+    habits,
+    sessions
   );
-  const bestDay = sortedByCompletion[0] || null;
-  const worstDay = sortedByCompletion[sortedByCompletion.length - 1] || null;
-
-  // Calculate streaks (overall)
-  // For overall streak, we check if ALL habits were completed on a day
-  const { currentStreak, longestStreak } = calculateStreaks(habits);
-
-  // Calculate period change (compare to previous period)
-  const previousDates = getDatesForPeriod(period).map((d) => {
-    const prevDate = new Date(d);
-    prevDate.setDate(prevDate.getDate() - dates.length);
-    return prevDate;
-  });
-
-  const previousStats = previousDates.map((date) =>
-    calculateDayStats(date, habits, sessions)
+  const { currentStreak, longestStreak } = calculateStreaks(
+    habits,
+    referenceDate
   );
-  const previousAverage =
-    previousStats.reduce((sum, day) => sum + day.completionRate, 0) /
-    (previousStats.length || 1);
-  const currentAverage =
-    dayStats.reduce((sum, day) => sum + day.completionRate, 0) /
-    (dayStats.length || 1);
-  const periodChange =
-    previousAverage > 0
-      ? ((currentAverage - previousAverage) / previousAverage) * 100
+  const averageSessionMinutes =
+    periodSessions.length > 0
+      ? totalStudySeconds / 60 / periodSessions.length
       : 0;
 
   return {
     totalHabitsCompleted,
-    averageCompletion: currentAverage,
-    totalStudyMinutes,
-    averageStudyMinutes: totalStudyMinutes / dates.length,
-    bestDay,
-    worstDay,
+    averageCompletion,
+    totalStudyMinutes: Math.round(totalStudySeconds / 60),
+    averageStudyMinutes: averageSessionMinutes,
+    averageSessionMinutes,
+    sessionCount: periodSessions.length,
+    bestDay: rankedDays[0] ?? null,
+    worstDay: rankedDays[rankedDays.length - 1] ?? null,
     currentStreak,
     longestStreak,
-    periodChange,
+    periodChange:
+      previousAverage > 0
+        ? ((averageCompletion - previousAverage) / previousAverage) * 100
+        : 0,
   };
 }
 
-// Calculate streaks for habits
-// calculateStreaks moved to utils/progression (single owner of streak
-// semantics); imported above and re-exported for existing callers.
-export { calculateStreaks };
+function dailyChartPoints(
+  sessions: FocusSession[],
+  period: Exclude<AnalyticsPeriod, "3months">,
+  referenceDate: Date
+): ChartPoint[] {
+  const dates = getDatesForPeriod(period, referenceDate);
+  return dates.map((date, index) => {
+    const dateKey = toLocalDateKey(date);
+    const seconds = sessions
+      .filter((session) => sessionDateKey(session) === dateKey)
+      .reduce((sum, session) => sum + session.duration, 0);
+    let label = "TODAY";
+    if (period === "week") {
+      label = date.toLocaleDateString("en", { weekday: "short" }).toUpperCase();
+    } else if (period === "month") {
+      label = index % 5 === 0 || index === dates.length - 1 ? `${date.getDate()}` : "";
+    }
+    return { label, value: Math.round(seconds / 60) };
+  });
+}
 
-// Calculate individual habit statistics
+export function buildStudyChartData(
+  sessions: FocusSession[],
+  period: AnalyticsPeriod,
+  referenceDate = new Date()
+): ChartPoint[] {
+  if (period !== "3months") {
+    return dailyChartPoints(sessions, period, referenceDate);
+  }
+
+  const today = atLocalMidnight(referenceDate);
+  return Array.from({ length: 13 }, (_, index) => {
+    const weeksAgo = 12 - index;
+    const end = addCalendarDays(today, -weeksAgo * 7);
+    const start = addCalendarDays(end, -6);
+    const startKey = toLocalDateKey(start);
+    const endKey = toLocalDateKey(end);
+    const seconds = sessions
+      .filter((session) => {
+        const dateKey = sessionDateKey(session);
+        return dateKey !== null && dateKey >= startKey && dateKey <= endKey;
+      })
+      .reduce((sum, session) => sum + session.duration, 0);
+
+    return {
+      label:
+        index % 2 === 0 || index === 12
+          ? start.toLocaleDateString("en", { month: "short", day: "numeric" })
+          : "",
+      value: Math.round(seconds / 60),
+    };
+  });
+}
+
 export function calculateHabitStats(habit: Habit): HabitStats {
-  const logs = habit.completionHistory
-    ? Object.entries(habit.completionHistory)
-    : [];
-  const completedDays = logs.filter(([_, value]) => value === true);
-
-  // Determine start date for completion rate.
-  // Using creation date or fallback to first log or just logs length?
-  // Prompt used: const totalDays = logs.length || 1; which is just days logged.
-  // But completionHistory only stores true/false for specific dates.
-  // Let's use a fixed period like 30 days or time since creation.
-  const now = new Date();
-  const createdAt = new Date(habit.createdAt);
-  const daysSinceCreation = Math.max(
-    1,
-    Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24))
-  );
-  const totalDays = daysSinceCreation;
-
-  // Calculate completion rate
-  const completionRate = Math.min(
-    100,
-    (completedDays.length / totalDays) * 100
-  );
-
-  // Calculate streaks
-  let currentStreak = 0;
-  let longestStreak = 0;
-  let tempStreak = 0;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  for (let i = 0; i < 365; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const dateKey = date.toISOString().split("T")[0];
-
-    if (habit.completionHistory && habit.completionHistory[dateKey] === true) {
-      tempStreak++;
-      if (
-        i === 0 ||
-        (habit.completionHistory && habit.completionHistory[dateKey] === true)
-      ) {
-        // This condition inside loop is redundant but follows "if completed"
-        // We need to know if the streak is contiguous from today
-        // Simplified:
-      }
-      longestStreak = Math.max(longestStreak, tempStreak);
-    } else {
-      tempStreak = 0;
-    }
-  }
-
-  // Recalculate current streak specifically
-  let streak = 0;
-  for (let i = 0; i < 365; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const dateKey = date.toISOString().split("T")[0];
-    if (habit.completionHistory && habit.completionHistory[dateKey] === true) {
-      streak++;
-    } else if (i === 0) {
-      // If today is not done, continue to yesterday
-      continue;
-    } else {
-      break;
-    }
-  }
-  currentStreak = streak;
-
-  // Find last completed date
-  const sortedCompletedDays = completedDays.sort((a, b) =>
-    b[0].localeCompare(a[0])
-  );
-  const lastCompleted = sortedCompletedDays[0]?.[0] || null;
+  const completedDays = Object.entries(habit.completionHistory ?? {})
+    .filter(([, completed]) => completed)
+    .map(([dateKey]) => dateKey)
+    .sort((a, b) => b.localeCompare(a));
+  const todayKey = toLocalDateKey();
+  const finalKey = habit.archivedOn
+    ? toLocalDateKey(addCalendarDays(fromLocalDateKey(habit.archivedOn), -1))
+    : todayKey;
+  const activeDays =
+    finalKey >= habit.startsOn
+      ? Math.floor(
+          (fromLocalDateKey(finalKey).getTime() -
+            fromLocalDateKey(habit.startsOn).getTime()) /
+            86_400_000
+        ) + 1
+      : 0;
+  const { currentStreak, longestStreak } = calculateStreaks([habit]);
 
   return {
     habitId: habit.id,
     name: habit.title,
-    icon: "📝", // Default icon as it's not in Habit type
-    completionRate,
+    icon: habit.icon,
+    completionRate:
+      activeDays > 0
+        ? Math.min(100, (completedDays.length / activeDays) * 100)
+        : 0,
     currentStreak,
     longestStreak,
     totalCompletions: completedDays.length,
-    lastCompleted,
+    lastCompleted: completedDays[0] ?? null,
   };
 }
 
-// Generate insights
 export function generateInsights(
   habits: Habit[],
-  sessions: FocusSession[] = [],
+  _sessions: FocusSession[] = [],
   periodStats: PeriodStats
 ): string[] {
   const insights: string[] = [];
+  const bestHabit = habits
+    .map(calculateHabitStats)
+    .sort((a, b) => b.completionRate - a.completionRate)[0];
 
-  // Best performing habit
-  if (habits.length > 0) {
-    const habitStats = habits.map((h) => calculateHabitStats(h));
-    const bestHabit = habitStats.sort(
-      (a, b) => b.completionRate - a.completionRate
-    )[0];
-    if (bestHabit && bestHabit.completionRate > 70) {
-      insights.push(
-        `${bestHabit.icon} ${
-          bestHabit.name
-        } is your strongest habit with ${Math.round(
-          bestHabit.completionRate
-        )}% completion rate`
-      );
-    }
+  if (bestHabit && bestHabit.completionRate > 70) {
+    insights.push(
+      `${bestHabit.name} is your strongest habit at ${Math.round(
+        bestHabit.completionRate
+      )}% completion.`
+    );
   }
-
-  // Streak insight
   if (periodStats.currentStreak > 3) {
-    insights.push(
-      `🔥 You're on a ${periodStats.currentStreak} day streak! Keep it up!`
-    );
-  } else if (periodStats.currentStreak === 0) {
-    insights.push(`💪 Start a new streak today by completing all your habits`);
+    insights.push(`Your active streak is ${periodStats.currentStreak} days.`);
   }
-
-  // Study time insight
-  if (periodStats.averageStudyMinutes > 60) {
+  if (periodStats.averageSessionMinutes >= 60) {
     insights.push(
-      `📚 Averaging ${Math.round(
-        periodStats.averageStudyMinutes
-      )} minutes of study per day - excellent focus!`
-    );
-  } else if (
-    periodStats.averageStudyMinutes < 30 &&
-    periodStats.averageStudyMinutes > 0
-  ) {
-    insights.push(
-      `⏰ Try to increase your study time to at least 30 minutes per day`
+      `Your average focus session is ${Math.round(
+        periodStats.averageSessionMinutes
+      )} minutes.`
     );
   }
-
-  // Improvement insight
   if (periodStats.periodChange > 10) {
     insights.push(
-      `📈 ${Math.round(
-        periodStats.periodChange
-      )}% improvement from last period!`
-    );
-  } else if (periodStats.periodChange < -10) {
-    insights.push(
-      `📉 Completion down ${Math.round(
-        Math.abs(periodStats.periodChange)
-      )}% - refocus on your goals`
+      `Habit completion improved ${Math.round(periodStats.periodChange)}% over the previous period.`
     );
   }
-
-  // Best day insight
-  if (periodStats.bestDay && periodStats.bestDay.completionRate === 100) {
-    const dayName = periodStats.bestDay.date.toLocaleDateString("en", {
-      weekday: "long",
-    });
-    insights.push(`✨ Perfect completion on ${dayName}!`);
-  }
-
   return insights;
 }
 
-// Get heatmap data for a habit
 export function getHabitHeatmapData(
   habit: Habit,
-  weeks: number = 12
+  weeks = 12
 ): number[][] {
-  const data: number[][] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Start from the beginning of the week
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay());
-
-  for (let week = 0; week < weeks; week++) {
-    const weekData: number[] = [];
-
-    for (let day = 0; day < 7; day++) {
-      const date = new Date(startOfWeek);
-      date.setDate(date.getDate() - week * 7 + day);
-      const dateKey = date.toISOString().split("T")[0];
-
-      const isCompleted =
-        habit.completionHistory && habit.completionHistory[dateKey] === true;
-      const intensity = isCompleted ? 4 : 0; // Simple binary for now: 4 (green) or 0 (empty)
-
-      weekData.push(intensity);
-    }
-
-    data.unshift(weekData); // Add to beginning to have oldest weeks first
-  }
-
-  return data;
+  const today = atLocalMidnight(new Date());
+  const startOfWeek = addCalendarDays(today, -today.getDay());
+  return Array.from({ length: weeks }, (_, weekIndex) =>
+    Array.from({ length: 7 }, (_, dayIndex) => {
+      const weeksAgo = weeks - weekIndex - 1;
+      const date = addCalendarDays(startOfWeek, dayIndex - weeksAgo * 7);
+      return habit.completionHistory?.[toLocalDateKey(date)] ? 4 : 0;
+    })
+  );
 }
+
+export { calculateStreaks };

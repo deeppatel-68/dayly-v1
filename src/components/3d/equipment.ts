@@ -41,7 +41,8 @@ export function createEquipmentMaterials(
   const glow = new THREE.MeshStandardMaterial({
     color: accent,
     emissive: accent,
-    emissiveIntensity: 0.9,
+    // Retuned ~1.3x hotter for ACES tone mapping (sceneRenderer.ts)
+    emissiveIntensity: 1.2,
   });
   const leaf = new THREE.MeshStandardMaterial({
     color: 0x4a7c59,
@@ -102,14 +103,37 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
     build: (m) => {
       const group = new THREE.Group();
       const dome = mesh(
-        new THREE.SphereGeometry(0.6, 18, 12, 0, Math.PI * 2, 0, Math.PI / 3),
+        new THREE.SphereGeometry(
+          0.54,
+          24,
+          12,
+          0,
+          Math.PI * 2,
+          0,
+          Math.PI / 2.25
+        ),
         m.dark,
         0,
-        0.7,
+        1.02,
         0
       );
-      const brim = mesh(new THREE.BoxGeometry(0.42, 0.035, 0.16), m.dark, 0, 1.0, 0.58);
-      group.add(dome, brim);
+      dome.scale.set(0.94, 0.38, 0.92);
+      const brim = mesh(
+        new THREE.CapsuleGeometry(0.035, 0.34, 4, 10),
+        m.dark,
+        0,
+        1.055,
+        0.5
+      );
+      brim.rotation.z = Math.PI / 2;
+      const focusTag = mesh(
+        new THREE.BoxGeometry(0.07, 0.035, 0.018),
+        m.glow,
+        0.18,
+        1.085,
+        0.545
+      );
+      group.add(dome, brim, focusTag);
       return group;
     },
   },

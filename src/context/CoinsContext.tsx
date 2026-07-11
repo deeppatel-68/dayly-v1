@@ -1,9 +1,8 @@
 import {
-  addCoins as addSupabaseCoins,
   getUserProgress,
-  spendCoins as spendSupabaseCoins,
   subscribeToProgress,
 } from "@/services/progressService";
+import { logSupabaseError } from "@/utils/supabaseErrors";
 import React, {
   createContext,
   ReactNode,
@@ -15,8 +14,6 @@ import { useAuth } from "./AuthContext";
 
 interface CoinsContextType {
   coins: number;
-  addCoins: (amount: number) => Promise<void>;
-  spendCoins: (amount: number) => Promise<boolean>;
   refreshCoins: () => Promise<void>;
 }
 
@@ -25,12 +22,10 @@ const CoinsContext = createContext<CoinsContextType | undefined>(undefined);
 export function CoinsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [coins, setCoins] = useState<number>(100);
-  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!user) {
       setCoins(100);
-      setLoaded(false);
       return;
     }
 
@@ -44,12 +39,10 @@ export function CoinsProvider({ children }: { children: ReactNode }) {
       .then((progress) => {
         if (!cancelled) {
           setCoins(progress.coins);
-          setLoaded(true);
         }
       })
       .catch((error) => {
-        console.error("Error loading coins:", error);
-        if (!cancelled) setLoaded(true);
+        logSupabaseError("Error loading coins:", error);
       });
 
     return () => {
@@ -60,25 +53,16 @@ export function CoinsProvider({ children }: { children: ReactNode }) {
 
   const refreshCoins = async () => {
     if (!user) return;
-    const progress = await getUserProgress(user.id);
-    setCoins(progress.coins);
-    setLoaded(true);
-  };
-
-  const addCoins = async (amount: number) => {
-    if (!user || !loaded || amount <= 0) return;
-    await addSupabaseCoins(user.id, amount);
-  };
-
-  const spendCoins = async (amount: number): Promise<boolean> => {
-    if (!user || !loaded) return false;
-    return spendSupabaseCoins(user.id, amount);
+    try {
+      const progress = await getUserProgress(user.id);
+      setCoins(progress.coins);
+    } catch (error) {
+      logSupabaseError("Error refreshing coins:", error);
+    }
   };
 
   const value = {
     coins,
-    addCoins,
-    spendCoins,
     refreshCoins,
   };
 

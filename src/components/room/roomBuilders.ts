@@ -56,25 +56,26 @@ function createPalette(accent: THREE.Color): RoomPalette {
     metal: std(0x1f1f23, 0.45, { metalness: 0.3 }),
     paper: std(0xe8dcc8, 0.9),
     leaf: std(0x4a7c59, 0.75, { flatShading: true }),
+    // Emissives retuned ~1.3x hotter for ACES tone mapping (sceneRenderer.ts)
     screen: std(0x0d0d10, 0.3, {
       emissive: 0x9db8c9,
-      emissiveIntensity: 0.4,
+      emissiveIntensity: 0.5,
     }),
     night: std(0x0e1420, 0.6, {
       emissive: 0x24344d,
-      emissiveIntensity: 0.7,
+      emissiveIntensity: 0.9,
     }),
     string: std(0xf0b36a, 0.5, {
       emissive: 0xf0b36a,
-      emissiveIntensity: 0.8,
+      emissiveIntensity: 1.05,
     }),
     lampGlow: std(0xf5d9a8, 0.5, {
       emissive: 0xf5d9a8,
-      emissiveIntensity: 1.1,
+      emissiveIntensity: 1.45,
     }),
     accentGlow: std(accent, 0.5, {
       emissive: accent,
-      emissiveIntensity: 0.9,
+      emissiveIntensity: 1.2,
     }),
   };
 }

@@ -61,6 +61,14 @@ export default function TabLayout() {
         name="social"
         options={{
           title: "Social",
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="customise"
+        options={{
+          title: "Customise",
+          href: null,
         }}
       />
       <Tabs.Screen

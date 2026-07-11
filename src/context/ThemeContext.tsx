@@ -10,6 +10,7 @@ import { useColorScheme } from "react-native";
 import { Colors, ColorScheme, ThemeColors } from "../constants/Colors";
 import { useAuth } from "./AuthContext";
 import { getUserSettings, setUserTheme } from "@/services/settingsService";
+import { logSupabaseError } from "@/utils/supabaseErrors";
 
 type ThemeContextType = {
   colorScheme: ColorScheme;
@@ -52,7 +53,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.setItem(THEME_STORAGE_KEY, settings.theme);
         }
       } catch (error) {
-        console.error("Error loading theme:", error);
+        logSupabaseError("Error loading theme:", error);
       } finally {
         if (!cancelled) setLoaded(true);
       }
@@ -72,7 +73,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         await setUserTheme(user.id, theme);
       }
     } catch (error) {
-      console.error("Error saving theme:", error);
+      logSupabaseError("Error saving theme:", error);
     }
   };
 

@@ -24,8 +24,7 @@ export default function ProfileScreen() {
   const { colors, colorScheme, toggleTheme } = useTheme();
   const isDark = colorScheme === "dark";
   const { user, profile, signOut, updateUsername } = useAuth();
-  const { habits, completedCount, totalCount, percentage, currentStreak } =
-    useHabits();
+  const { totalCount, percentage, currentStreak } = useHabits();
   const { xp, level } = useXp();
 
   const [showEditModal, setShowEditModal] = React.useState(false);
@@ -80,30 +79,9 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               await signOut();
-            } catch (error) {
+            } catch {
               Alert.alert("Error", "Failed to sign out. Please try again.");
             }
-          },
-        },
-      ],
-      { cancelable: true }
-    );
-  };
-
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      "Delete Account",
-      "Are you sure you want to delete your account? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            Alert.alert(
-              "Coming Soon",
-              "Account deletion will be available soon."
-            );
           },
         },
       ],
@@ -222,9 +200,7 @@ export default function ProfileScreen() {
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
           >
-            <View
-              style={[styles.settingRow, { borderBottomColor: colors.border }]}
-            >
+            <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
                 <Ionicons
                   name={isDark ? "moon" : "sunny"}
@@ -242,89 +218,6 @@ export default function ProfileScreen() {
                 thumbColor="#ffffff"
               />
             </View>
-            <View style={styles.settingRow}>
-              <View style={styles.settingLeft}>
-                <Ionicons
-                  name="notifications-outline"
-                  size={22}
-                  color={colors.text}
-                />
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  Notifications
-                </Text>
-              </View>
-              <Switch
-                value={false}
-                onValueChange={() =>
-                  Alert.alert(
-                    "Coming Soon",
-                    "Notifications will be available soon."
-                  )
-                }
-                trackColor={{ false: colors.border, true: colors.accent }}
-                thumbColor="#ffffff"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Account Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            ACCOUNT
-          </Text>
-          <View
-            style={[
-              styles.settingsCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Pressable
-              style={({ pressed }) => [
-                styles.settingRow,
-                {
-                  borderBottomColor: colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}
-              onPress={() =>
-                Alert.alert(
-                  "Coming Soon",
-                  "Password change will be available soon."
-                )
-              }
-            >
-              <View style={styles.settingLeft}>
-                <Ionicons name="key-outline" size={22} color={colors.text} />
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  Change Password
-                </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.settingRow,
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-              onPress={handleDeleteAccount}
-            >
-              <View style={styles.settingLeft}>
-                <Ionicons name="trash-outline" size={22} color={colors.error} />
-                <Text style={[styles.settingLabel, { color: colors.error }]}>
-                  Delete Account
-                </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </Pressable>
           </View>
         </View>
 

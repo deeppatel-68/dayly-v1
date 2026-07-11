@@ -1,10 +1,9 @@
 import AvatarRenderer from "@/components/avatar/AvatarRenderer";
+import BodyColorPicker from "@/components/customise/BodyColorPicker";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useTheme } from "@/context/ThemeContext";
-import { AVATAR_BODY_COLORS } from "@/data/avatarColors";
-import * as Haptics from "expo-haptics";
-import React, { useEffect, useRef } from "react";
-import { Animated, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import React from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
 const NAME_MAX_LENGTH = 20;
 
@@ -62,72 +61,8 @@ export default function CustomizeStep({
         returnKeyType="done"
       />
 
-      <View style={styles.swatchRow}>
-        {AVATAR_BODY_COLORS.map((swatch) => (
-          <ColorSwatch
-            key={swatch.id}
-            hex={swatch.hex}
-            name={swatch.name}
-            selected={bodyColor === swatch.hex}
-            accentColor={colors.accent}
-            borderColor={colors.border}
-            onSelect={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onSelectBodyColor(swatch.hex);
-            }}
-          />
-        ))}
-      </View>
+      <BodyColorPicker value={bodyColor} onChange={onSelectBodyColor} />
     </View>
-  );
-}
-
-// Body colour swatch with a spring when it becomes selected — copied from
-// the shop's ColorSwatch pattern (StudySpacePlaceholder.tsx) since it's not
-// exported for reuse.
-function ColorSwatch({
-  hex,
-  name,
-  selected,
-  accentColor,
-  borderColor,
-  onSelect,
-}: {
-  hex: string;
-  name: string;
-  selected: boolean;
-  accentColor: string;
-  borderColor: string;
-  onSelect: () => void;
-}) {
-  const scale = useRef(new Animated.Value(selected ? 1.08 : 1)).current;
-
-  useEffect(() => {
-    Animated.spring(scale, {
-      toValue: selected ? 1.08 : 1,
-      speed: 24,
-      bounciness: 3,
-      useNativeDriver: true,
-    }).start();
-  }, [selected, scale]);
-
-  return (
-    <Pressable accessibilityLabel={name} onPress={onSelect}>
-      {({ pressed }) => (
-        <Animated.View
-          style={[
-            styles.swatch,
-            {
-              backgroundColor: hex,
-              borderColor: selected ? accentColor : borderColor,
-              borderWidth: selected ? 2 : 1,
-              opacity: pressed ? 0.8 : 1,
-              transform: [{ scale }],
-            },
-          ]}
-        />
-      )}
-    </Pressable>
   );
 }
 
@@ -169,15 +104,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Outfit-Medium",
     marginBottom: Spacing.lg,
-  },
-  swatchRow: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    justifyContent: "center",
-  },
-  swatch: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
   },
 });

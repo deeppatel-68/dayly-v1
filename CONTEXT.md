@@ -24,9 +24,9 @@ Product nouns and verbs. Use these names in code and suggestions.
   from `level`) drives avatar evolution. **Coins** — spendable currency.
 - **Reward** — XP/coins granted once per source event. Habit completion and
   study finish are the only two reward sources; neither double-awards.
-- **Companion / avatar** — the 3D pet. **Body colour** — the one live
-  customisation. **Accessory / decoration** — shop items; **not yet rendered**
-  by the GLB, so shown as "Coming Soon" (see `RENDERED_ITEM_IDS`).
+- **Companion / avatar** — the interactive 3D pet. **Body colour** and
+  **companion name** are live customisations. **Accessory / decoration** —
+  shop items rendered through the equipment registry.
 - **Shop item** — purchasable cosmetic. **Owned / equipped** — per-item state.
 
 ## Good seams (respect these)
@@ -62,6 +62,9 @@ Each is a module with a small interface hiding real behaviour.
   implementation behind every scene: one GLB cache/instance factory, one
   state→motion controller. Scenes (avatar card, study room) are thin
   adapters that build an environment and apply the controller per frame.
+- **`components/3d/sceneRenderer` + `sceneInteraction`** — shared render and
+  interaction policy. Scenes do not invent their own tone mapping, contact
+  shadows, raycasting, or orbit math.
 
 - **Avatar renderer layer** — the deepest seam. `AvatarRenderer` is the single
   interface every screen imports; it selects a renderer (`AvatarGLB` primary,

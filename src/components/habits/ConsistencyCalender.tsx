@@ -1,6 +1,7 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
+import { toLocalDateKey } from "@/utils/dateKey";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useMemo, useState } from "react";
@@ -27,8 +28,7 @@ function ConsistencyCalender() {
     return days;
   }, [currentDate]);
 
-  // Memoize today's date string to avoid recreating on every render
-  const todayString = useMemo(() => new Date().toDateString(), []);
+  const todayKey = toLocalDateKey();
 
   const dayNames = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 
@@ -52,15 +52,13 @@ function ConsistencyCalender() {
     return `${firstMonth} ${firstDay.getDate()} - ${lastMonth} ${lastDay.getDate()}`;
   }, [weekDays]);
 
-  const handleCheckboxPress = (habitId: string, date: string) => {
-    const dateKey = date.split("T")[0]; // Extract date key from ISO string
-    const isFuture = new Date(date) > new Date();
-    if (isFuture) {
-      Alert.alert("You cannot mark a habit as completed for a future date.");
-      return;
+  const handleCheckboxPress = async (habitId: string, date: Date) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await toggleHabit(habitId, toLocalDateKey(date));
+    } catch {
+      Alert.alert("Could Not Update Habit", "Please try again.");
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    toggleHabit(habitId, dateKey);
   };
 
   return (
@@ -96,38 +94,41 @@ function ConsistencyCalender() {
           { backgroundColor: colors.card, borderColor: colors.border },
         ]}
       >
-        {/* Day names header */}
-        <View style={styles.daysRow}>
-          {dayNames.map((day, index) => {
-            const date = weekDays[index];
-            const isToday = date.toDateString() === todayString;
-            const dateKey = date.toISOString().split("T")[0];
-            return (
-              <View key={dateKey} style={styles.dayColumn}>
-                <Text
-                  style={[
-                    styles.dayName,
-                    {
-                      color: isToday ? colors.text : colors.textSecondary,
-                    },
-                  ]}
-                >
-                  {day}
-                </Text>
-                <Text
-                  style={[
-                    styles.dayNumber,
-                    {
-                      color: isToday ? colors.text : colors.textSecondary,
-                      fontWeight: isToday ? "bold" : "normal",
-                    },
-                  ]}
-                >
-                  {date.getDate()}
-                </Text>
-              </View>
-            );
-          })}
+        {/* Day names header — same 30/70 split as habit rows so columns align */}
+        <View style={[styles.daysRow, { borderBottomColor: colors.border }]}>
+          <View style={styles.dayLabelSpacer} />
+          <View style={styles.daysColumns}>
+            {dayNames.map((day, index) => {
+              const date = weekDays[index];
+              const dateKey = toLocalDateKey(date);
+              const isToday = dateKey === todayKey;
+              return (
+                <View key={dateKey} style={styles.dayColumn}>
+                  <Text
+                    style={[
+                      styles.dayName,
+                      {
+                        color: isToday ? colors.text : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.dayNumber,
+                      {
+                        color: isToday ? colors.text : colors.textSecondary,
+                        fontWeight: isToday ? "bold" : "normal",
+                      },
+                    ]}
+                  >
+                    {date.getDate()}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
         {/* Habit rows */}
         {habits.length === 0 ? (
@@ -138,7 +139,10 @@ function ConsistencyCalender() {
           </View>
         ) : (
           habits.map((habit) => (
-            <View key={habit.id} style={styles.habitRow}>
+            <View
+              key={habit.id}
+              style={[styles.habitRow, { borderBottomColor: colors.borderLight }]}
+            >
               <Text
                 style={[styles.habitTitle, { color: colors.text }]}
                 numberOfLines={1}
@@ -147,18 +151,20 @@ function ConsistencyCalender() {
               </Text>
               <View style={styles.checkboxRow}>
                 {weekDays.map((day) => {
-                  const dateKey = day.toISOString().split("T")[0];
+                  const dateKey = toLocalDateKey(day);
                   const isCompleted =
                     habit.completionHistory?.[dateKey] === true;
-                  const isFutureDate = day > new Date();
+                  const isFutureDate = dateKey > todayKey;
+                  const isActiveDate =
+                    dateKey >= habit.startsOn &&
+                    (!habit.archivedOn || dateKey < habit.archivedOn);
+                  const isDisabled = isFutureDate || !isActiveDate;
 
                   return (
                     <View key={dateKey} style={styles.checkboxContainer}>
                       <Pressable
-                        onPress={() =>
-                          handleCheckboxPress(habit.id, day.toISOString())
-                        }
-                        disabled={isFutureDate}
+                        onPress={() => handleCheckboxPress(habit.id, day)}
+                        disabled={isDisabled}
                         style={({ pressed }) => [
                           styles.checkbox,
                           {
@@ -168,7 +174,7 @@ function ConsistencyCalender() {
                             borderColor: isCompleted
                               ? colors.completed
                               : colors.checkboxEmpty,
-                            opacity: isFutureDate ? 0.3 : pressed ? 0.6 : 1,
+                            opacity: isDisabled ? 0.3 : pressed ? 0.6 : 1,
                           },
                         ]}
                       >
@@ -238,12 +244,20 @@ const styles = StyleSheet.create({
   },
   daysRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
     marginBottom: Spacing.md,
     paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.1)",
-    paddingHorizontal: 0, // Ensure no extra padding
+  },
+  dayLabelSpacer: {
+    flex: 0.3,
+    marginRight: Spacing.sm,
+  },
+  daysColumns: {
+    flex: 0.7,
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   dayColumn: {
     flex: 1,
@@ -266,7 +280,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.05)",
   },
   habitTitle: {
     fontSize: 12,

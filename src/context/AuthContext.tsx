@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { migrateLegacyUserData } from "@/services/settingsService";
+import { logSupabaseError } from "@/utils/supabaseErrors";
 import { Session, User } from "@supabase/supabase-js";
 import React, {
   createContext,
@@ -48,13 +49,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (error && error.code !== "PGRST116") {
         // PGRST116 is "not found" - we'll handle that below
-        console.error("Error loading profile:", error);
+        logSupabaseError("Error loading profile:", error);
         return null;
       }
 
       return data as UserProfile | null;
     } catch (error) {
-      console.error("Error loading profile:", error);
+      logSupabaseError("Error loading profile:", error);
       return null;
     }
   }, []);
@@ -68,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         await migrateLegacyUserData(nextSession.user.id);
       } catch (error) {
-        console.error("Error migrating legacy user data:", error);
+        logSupabaseError("Error migrating legacy user data:", error);
       }
       setUser(nextSession.user);
       setProfile(profileData);
@@ -82,15 +83,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      applySession(session);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        applySession(session);
+      })
+      .catch((error) => {
+        logSupabaseError("Error getting auth session:", error);
+        applySession(null);
+      });
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      await applySession(session);
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session).catch((error) => {
+        logSupabaseError("Error applying auth session:", error);
+      });
     });
 
     return () => subscription.unsubscribe();

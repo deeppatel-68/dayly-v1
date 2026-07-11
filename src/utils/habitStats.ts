@@ -1,9 +1,10 @@
 import { Habit } from "@/types/habits";
+import { toLocalDateKey } from "@/utils/dateKey";
 
 // Pure habit statistics helpers. No I/O, no React — the maths that screens
 // and services share.
 
-export const todayDateKey = () => new Date().toISOString().split("T")[0];
+export const todayDateKey = () => toLocalDateKey();
 
 // Presence of a completion row IS the completion (completed_at is a date)
 export function buildCompletionHistory(

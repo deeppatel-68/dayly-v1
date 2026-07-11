@@ -8,10 +8,23 @@ import {
   disposeEquipment,
 } from "@/components/3d/equipment";
 import { createPetMotionController } from "@/components/3d/petMotion";
+import SceneTouchLayer, {
+  SceneTapEvent,
+} from "@/components/3d/SceneTouchLayer";
+import {
+  createOrbitRig,
+  createPetTapDetector,
+  OrbitRig,
+} from "@/components/3d/sceneInteraction";
+import {
+  createContactShadow,
+  createPetLightRig,
+  createSceneRenderer,
+} from "@/components/3d/sceneRenderer";
 import CharacterScene from "@/components/character/CharacterScene";
 import { useTheme } from "@/context/ThemeContext";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
-import { Renderer } from "expo-three";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
 import * as THREE from "three";
@@ -28,6 +41,11 @@ export default function AvatarGLB(props: AvatarRendererProps) {
   const [failed, setFailed] = useState(false);
   const frameRef = useRef<number | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const orbitRef = useRef<OrbitRig | null>(null);
+  const petTapRef = useRef<
+    ((x: number, y: number, width: number, height: number) => boolean) | null
+  >(null);
+  const pokeRef = useRef<(() => void) | null>(null);
 
   // The render loop reads state through a ref so transitions animate live
   // without recreating the GL context
@@ -57,36 +75,31 @@ export default function AvatarGLB(props: AvatarRendererProps) {
       const width = gl.drawingBufferWidth;
       const height = gl.drawingBufferHeight;
 
-      const renderer = new Renderer({ gl });
-      renderer.setSize(width, height);
-      renderer.setClearColor(colors.background, 1);
-      // expo-gl returns undefined shader logs, which crashes three's debug
-      // path ("Cannot read property 'trim' of undefined")
-      renderer.debug.checkShaderErrors = false;
+      const renderer = createSceneRenderer({
+        gl,
+        clearColor: variant === "shop" ? "#181715" : colors.background,
+      });
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+      const orbitTarget = new THREE.Vector3(0, variant === "shop" ? 0.7 : 0.66, 0);
       if (variant === "shop") {
-        camera.position.set(0, 0.88, 2.2);
-        camera.lookAt(0, 0.7, 0);
+        camera.position.set(0, 0.9, 2.55);
       } else {
-        camera.position.set(0, 0.95, 2.5);
-        camera.lookAt(0, 0.66, 0);
+        camera.position.set(0, 0.94, 2.25);
       }
+      const orbit = createOrbitRig({
+        target: orbitTarget,
+        radius: variant === "shop" ? 2.55 : 2.25,
+        height: variant === "shop" ? 0.9 : 0.94,
+      });
+      orbit.applyTo(camera, 0);
+      orbitRef.current = orbit;
 
       const accent = new THREE.Color(accentColor);
       const motion = createPetMotionController({ levelTier, streakTier });
 
-      const ambient = new THREE.AmbientLight(0xffffff, 0.7);
-      const keyLight = new THREE.DirectionalLight(0xfff4e8, 1.2);
-      keyLight.position.set(2.5, 4, 4);
-      const rimLight = new THREE.PointLight(
-        accent,
-        0.5 + motion.streakBoost * 0.3,
-        10
-      );
-      rimLight.position.set(-2, 1.5, -2);
-      scene.add(ambient, keyLight, rimLight);
+      createPetLightRig(scene, accent, motion.streakBoost);
 
       const source = await loadCompanion();
       if (cancelled) return;
@@ -97,6 +110,8 @@ export default function AvatarGLB(props: AvatarRendererProps) {
         levelTier,
       });
       scene.add(companion.rig.petGroup, companion.root);
+      petTapRef.current = createPetTapDetector(camera, companion.rig.petGroup);
+      pokeRef.current = motion.poke;
 
       // Equipped shop items: wearables move with the pet, decorations sit
       // around the pod. Room-slot items only render in the study room scene.
@@ -108,16 +123,28 @@ export default function AvatarGLB(props: AvatarRendererProps) {
         { pet: companion.rig.petGroup, platform: companion.root }
       );
 
+      // Grounds the floating pet on its pod (puck top sits at y≈0.095)
+      const shadow = createContactShadow(0.5);
+      shadow.group.position.y = 0.096;
+      scene.add(shadow.group);
+
       const clock = new THREE.Clock();
       const animate = () => {
         frameRef.current = requestAnimationFrame(animate);
-        motion.apply(companion.rig, stateRef.current, clock.getElapsedTime());
+        const t = clock.getElapsedTime();
+        orbit.applyTo(camera, t);
+        motion.apply(companion.rig, stateRef.current, t);
+        shadow.setLift(companion.rig.petGroup.position.y);
         renderer.render(scene, camera);
         gl.endFrameEXP();
       };
       animate();
 
       cleanupRef.current = () => {
+        orbitRef.current = null;
+        petTapRef.current = null;
+        pokeRef.current = null;
+        shadow.dispose();
         disposeEquipment(equipped);
         equipMaterials.dispose();
         companion.dispose();
@@ -145,12 +172,24 @@ export default function AvatarGLB(props: AvatarRendererProps) {
     );
   }
 
+  const handleTap = (event: SceneTapEvent) => {
+    if (!petTapRef.current?.(event.x, event.y, event.width, event.height)) return;
+    pokeRef.current?.();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  };
+
   return (
-    <GLView
-      key={sceneKey}
-      style={styles.glView}
-      onContextCreate={onContextCreate}
-    />
+    <SceneTouchLayer
+      onTap={handleTap}
+      onDrag={(delta) => orbitRef.current?.orbitBy(delta)}
+    >
+      <GLView
+        key={sceneKey}
+        style={styles.glView}
+        msaaSamples={4}
+        onContextCreate={onContextCreate}
+      />
+    </SceneTouchLayer>
   );
 }
 

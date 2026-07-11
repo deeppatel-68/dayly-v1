@@ -21,13 +21,20 @@ Selection lives in `AVATAR_MODE` in `AvatarRenderer.tsx` ("glb" today).
 
 ## Shared 3D foundation (`src/components/3d/`)
 
-- `companionModel.ts` — session-level GLB cache (`loadCompanion`) +
-  `createCompanionInstance` (clone, pet-node reparenting, per-instance
-  material tinting for body colour/accent, disposal). Used by every scene
-  that shows the pet.
+- `companionModel.ts` — bundled GLB loader (`loadCompanion`) +
+  `createCompanionInstance` (pet-node reparenting, per-instance material
+  tinting, and disposal). Used by every scene that shows the pet. Each Expo
+  GL context deep-clones an immutable loaded graph and owns its resources;
+  mutating or sharing the loader's internally cached graph caused later
+  native contexts to intermittently render empty.
 - `petMotion.ts` — the state→motion controller (bob/sway/celebration spin,
-  core heartbeat, halo/ring glow, blink). One place to tune; scenes only
-  apply it each frame.
+  core heartbeat, halo/ring glow, blink, and tap-triggered poke bounce). One
+  place to tune; scenes only apply it each frame.
+- `sceneRenderer.ts` — shared Expo GL quality (4x MSAA, ACES filmic tone
+  mapping, sRGB output), companion lighting, and inexpensive contact shadows.
+- `SceneTouchLayer.tsx` + `sceneInteraction.ts` — the React Native/Three.js
+  touch boundary. It distinguishes taps from drags, raycasts the pet, and owns
+  camera orbit math.
 - `equipment.ts` — the shop↔3D seam: item id → { slot, build } registry
   (slots: `pet`, `platform`, `room`), `attachEquipment`/`disposeEquipment`,
   and `RENDERED_EQUIPMENT_IDS`, which the shop reads to gate purchasing (an
@@ -36,14 +43,27 @@ Selection lives in `AVATAR_MODE` in `AvatarRenderer.tsx` ("glb" today).
 ## Scenes
 
 - `AvatarGLB` (avatar card / shop preview) — pet + pod, renders `pet` and
-  `platform` equipment slots.
+  `platform` equipment slots. Tap for a haptic bounce; drag for a full orbit.
 - `components/room/StudyRoomScene.tsx` — My Space: cozy study nook
   (`roomBuilders.ts`: shell, desk setup, lamp with live light, chair, shelf,
   string lights) with the pet on its pod. Renders all equipment slots
   (furniture/wall art at `ROOM_ANCHORS`). Reacts to focus/reward/levelUp:
   pet motion plus desk-lamp brightening and string-light shimmer. Hosted by
   the full-screen My Space modal (`StudySpacePlaceholder`), which the study
-  tab opens on focus start and the dashboard opens from the avatar card.
+  tab opens on focus start and the dashboard opens from the avatar card. Its
+  orbit is clamped and eases back to the iOS-simulator-verified home
+  composition. My Space keeps a dark environment clear colour in both app
+  themes so the finite room shell never exposes a bright canvas edge.
+
+## Customisation flow
+
+- `app/(tabs)/customise.tsx` is a hidden tab route opened from the dashboard.
+  It owns the live preview, companion name, body colour, and equipment state.
+- `components/customise/BodyColorPicker.tsx` is shared with onboarding.
+- Owned items equip or unequip through `ShopContext`; unowned rendered items
+  open the existing shop. The UI does not mutate equipment state directly.
+- The dashboard scene stays interactive. Separate `My Space` and `Customise`
+  actions own navigation, so dragging never opens a modal accidentally.
 
 - `src/components/avatar/avatarTypes.ts` — the renderer contract:
   `AvatarState` ("idle" | "focus" | "reward" | "levelUp"), `AvatarVariant`
@@ -80,14 +100,15 @@ renderer-independent.
 
 No other code changes; all three surfaces switch over together.
 
-## GLB later
+## Blender asset pipeline
 
-- `expo-three@8` ships `loadAsync` for GLTF/GLB.
-- Add `glb` to Metro `assetExts` (create metro.config.js extending
-  `expo/metro-config`) when the model lands.
-- Implement `AvatarGLB` against `AvatarRendererProps` + `useAvatarData`,
-  add it to the selector in `AvatarRenderer.tsx`. Keep Avatar2D as its
-  fallback.
+- `assets/avatar/dayly-companion-build.py` is the source of truth for the GLB,
+  `.blend`, and preview. Keep node names stable because `companionModel.ts`
+  uses them for animation and material tinting.
+- The compact asset includes the body/visor/eyes/core, flippers, foot nubs,
+  halo charm, visor accent contour, and two-tier pod. It has no skeletal rig.
+- After model edits, rerun the script in Blender background mode, inspect the
+  preview, and verify wearable and pod-equipment fit against the exported GLB.
 
 ## Rules
 

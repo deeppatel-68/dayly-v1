@@ -1,6 +1,6 @@
 import { FocusSession, getDatesForPeriod } from "@/utils/analytics";
 import React from "react";
-import BarChart from "./Chart";
+import StudyBarChart from "./Chart";
 
 export const StudyTimeBreakdown = ({
   sessions,
@@ -50,7 +50,7 @@ export const StudyTimeBreakdown = ({
       });
 
   return (
-    <BarChart
+    <StudyBarChart
       data={data}
       color="#00CFFF"
       height={100}
@@ -60,4 +60,3 @@ export const StudyTimeBreakdown = ({
 };
 
 export default StudyTimeBreakdown;
-

@@ -6,6 +6,8 @@ export interface Habit {
   description?: string; // optional description
   completed: boolean;
   createdAt: string;
+  startsOn: string;
+  archivedOn?: string;
   completedAt?: string;
   completionHistory: { [date: string]: boolean }; //  Track completion by date (e.g., "2024-11-18": true)
   target_count: number; // Target number of completions per day

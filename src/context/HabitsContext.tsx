@@ -1,12 +1,13 @@
 import * as habitsService from "@/services/habitsService";
 import { HabitRewardResult } from "@/services/habitsService";
-import { incrementUserProgress } from "@/services/progressService";
+import {
+  getUserProgress,
+  subscribeToProgress,
+} from "@/services/progressService";
 import { Habit } from "@/types/habits";
-import { calculateStreaks } from "@/utils/progression";
 import {
   calculateCompletedCount,
   calculateCompletionPercentage,
-  calculateCurrentStreak,
   isHabitCompletedOnDate,
   todayDateKey,
 } from "@/utils/habitStats";
@@ -14,21 +15,18 @@ import { logSupabaseError } from "@/utils/supabaseErrors";
 import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import { AppState } from "react-native";
 import { useAuth } from "./AuthContext";
-
-// Thin view over the habits persistence seam (services/habitsService): holds
-// screen state and optimistic updates; every query and reward lives behind
-// the service interface.
 
 interface HabitsContextType {
   habits: Habit[];
   loading: boolean;
-
-  // Actions
   addHabit: (title: string, description?: string) => Promise<void>;
   toggleHabit: (
     id: string,
@@ -40,15 +38,12 @@ interface HabitsContextType {
     title: string,
     description?: string
   ) => Promise<void>;
-
-  // Statistics
   completedCount: number;
   totalCount: number;
   percentage: number;
   currentStreak: number;
 }
 
-// Context
 export const HabitsContext = createContext<HabitsContextType | undefined>(
   undefined
 );
@@ -57,203 +52,193 @@ export const HabitsProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const activeDateKey = useRef(todayDateKey());
 
-  // Load habits and run the daily reset check when the user logs in
+  const loadHabitState = useCallback(async () => {
+    if (!user) return null;
+    const loaded = await habitsService.loadUserHabits(user.id);
+    const progress = await getUserProgress(user.id);
+    return { habits: loaded, currentStreak: progress.current_streak };
+  }, [user]);
+
+  const reloadHabits = useCallback(async () => {
+    const nextState = await loadHabitState();
+    if (!nextState) return;
+    setHabits(nextState.habits);
+    setCurrentStreak(nextState.currentStreak);
+  }, [loadHabitState]);
+
   useEffect(() => {
     if (!user) {
       setHabits([]);
+      setCurrentStreak(0);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
-
     setLoading(true);
-    habitsService
-      .loadUserHabits(user.id)
-      .then((loaded) => {
-        if (!cancelled) setHabits(loaded);
+    activeDateKey.current = todayDateKey();
+
+    const unsubscribe = subscribeToProgress((progress) => {
+      if (progress.user_id === user.id) {
+        setCurrentStreak(progress.current_streak);
+      }
+    });
+
+    loadHabitState()
+      .then((nextState) => {
+        if (cancelled) return;
+        if (!nextState) return;
+        setHabits(nextState.habits);
+        setCurrentStreak(nextState.currentStreak);
       })
       .catch((error) => logSupabaseError("Error loading habits:", error))
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
 
-    habitsService.syncDailyReset(user.id).then((didReset) => {
-      if (!didReset || cancelled) return;
-      console.log("New day detected - resetting completion status");
-      // Completion status is derived from habit_completions; on a new day
-      // only the local "completed today" flags need clearing
-      setHabits((prev) =>
-        prev.map((habit) => ({
-          ...habit,
-          completed: false,
-          completedAt: undefined,
-        }))
-      );
-    });
-
     return () => {
       cancelled = true;
+      unsubscribe();
     };
-  }, [user]);
+  }, [loadHabitState, user]);
 
-  // Keep streak progress in sync for the rest of the app (avatar tiers etc.)
   useEffect(() => {
-    if (!user || loading) return;
-    const { currentStreak, longestStreak } = calculateStreaks(habits);
-    incrementUserProgress(user.id, {
-      currentStreak,
-      bestStreak: longestStreak,
-    }).catch((error) =>
-      logSupabaseError("Error syncing streak progress:", error)
-    );
-  }, [habits, loading, user]);
+    let midnightTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Add Habit
+    const refreshForNewDate = () => {
+      const nextDateKey = todayDateKey();
+      if (nextDateKey === activeDateKey.current) return;
+      activeDateKey.current = nextDateKey;
+      reloadHabits().catch((error) =>
+        logSupabaseError("Error refreshing habits for a new day:", error)
+      );
+    };
+
+    const scheduleMidnightRefresh = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 1, 0);
+      midnightTimer = setTimeout(() => {
+        refreshForNewDate();
+        scheduleMidnightRefresh();
+      }, nextMidnight.getTime() - now.getTime());
+    };
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshForNewDate();
+    });
+    scheduleMidnightRefresh();
+
+    return () => {
+      subscription.remove();
+      if (midnightTimer) clearTimeout(midnightTimer);
+    };
+  }, [reloadHabits]);
+
   const addHabit = async (title: string, description?: string) => {
-    if (!user) {
-      console.error("No user logged in");
-      return;
-    }
+    if (!user || loading) return;
+    if (habits.length >= habitsService.MAX_HABITS) return;
 
-    // Fast-path guard; the service enforces the same invariant
-    if (habits.length >= habitsService.MAX_HABITS) {
-      console.warn(
-        `Maximum habit limit reached (${habitsService.MAX_HABITS} habits)`
-      );
-      return;
-    }
-
-    try {
-      const newHabit = await habitsService.createHabit(
-        user.id,
-        title,
-        description
-      );
-      setHabits((prev) => [...prev, newHabit]);
-    } catch (error) {
-      logSupabaseError("Error adding habit:", error);
-      throw error;
-    }
+    const newHabit = await habitsService.createHabit(
+      user.id,
+      title,
+      description
+    );
+    setHabits((previous) => [...previous, newHabit]);
   };
 
-  // Toggle Habit completion for a date (defaults to today)
   const toggleHabit = async (id: string, dateKey?: string) => {
-    if (!user) return;
+    if (!user || loading) return;
+    const targetDate = dateKey ?? todayDateKey();
+    const habit = habits.find((candidate) => candidate.id === id);
+    if (!habit) return;
 
-    const targetDate = dateKey || todayDateKey();
+    const completed = !isHabitCompletedOnDate(habit, targetDate);
+    const result = await habitsService.setHabitCompletion(
+      user.id,
+      id,
+      targetDate,
+      completed
+    );
 
-    try {
-      const habit = habits.find((h) => h.id === id);
-      if (!habit) return;
+    setHabits((previous) =>
+      previous.map((candidate) => {
+        if (candidate.id !== id) return candidate;
+        const isToday = targetDate === todayDateKey();
+        return {
+          ...candidate,
+          completed: isToday ? completed : candidate.completed,
+          completedAt: isToday
+            ? completed
+              ? new Date().toISOString()
+              : undefined
+            : candidate.completedAt,
+          completionHistory: {
+            ...candidate.completionHistory,
+            [targetDate]: completed,
+          },
+        };
+      })
+    );
 
-      const newCompletedState = !isHabitCompletedOnDate(habit, targetDate);
-
-      const rewardResult = await habitsService.setHabitCompletion(
-        user.id,
-        id,
-        targetDate,
-        newCompletedState
-      );
-
-      // Update local state
-      setHabits((prev) =>
-        prev.map((h) => {
-          if (h.id !== id) return h;
-
-          const isToday = targetDate === todayDateKey();
-
-          return {
-            ...h,
-            completed: isToday ? newCompletedState : h.completed,
-            completedAt:
-              isToday && newCompletedState
-                ? new Date().toISOString()
-                : h.completedAt,
-            completionHistory: {
-              ...h.completionHistory,
-              [targetDate]: newCompletedState,
-            },
-          };
-        })
-      );
-
-      return rewardResult;
-    } catch (error) {
-      logSupabaseError("Error toggling habit:", error);
-      throw error;
-    }
+    return result;
   };
 
-  // Delete Habit
   const deleteHabit = async (id: string) => {
-    if (!user) return;
-
-    try {
-      await habitsService.deleteHabit(user.id, id);
-      setHabits((prev) => prev.filter((habit) => habit.id !== id));
-    } catch (error) {
-      logSupabaseError("Error deleting habit:", error);
-      throw error;
-    }
+    if (!user || loading) return;
+    await habitsService.deleteHabit(user.id, id);
+    setHabits((previous) => previous.filter((habit) => habit.id !== id));
   };
 
-  // Update Habit
   const updateHabit = async (
     id: string,
     title: string,
     description?: string
   ) => {
-    if (!user) return;
-
-    try {
-      await habitsService.updateHabit(user.id, id, title, description);
-      setHabits((prev) =>
-        prev.map((habit) =>
-          habit.id === id
-            ? {
-                ...habit,
-                title: title.trim(),
-                description: description?.trim() || undefined,
-              }
-            : habit
-        )
-      );
-    } catch (error) {
-      logSupabaseError("Error updating habit:", error);
-      throw error;
-    }
+    if (!user || loading) return;
+    await habitsService.updateHabit(user.id, id, title, description);
+    setHabits((previous) =>
+      previous.map((habit) =>
+        habit.id === id
+          ? {
+              ...habit,
+              title: title.trim(),
+              description: description?.trim() || undefined,
+            }
+          : habit
+      )
+    );
   };
 
-  // Derived statistics
   const completedCount = calculateCompletedCount(habits);
   const totalCount = habits.length;
   const percentage = calculateCompletionPercentage(completedCount, totalCount);
-  const currentStreak = calculateCurrentStreak(habits);
-
-  const value = {
-    habits,
-    loading,
-    addHabit,
-    toggleHabit,
-    deleteHabit,
-    updateHabit,
-    completedCount,
-    totalCount,
-    percentage,
-    currentStreak,
-  };
 
   return (
-    <HabitsContext.Provider value={value}>{children}</HabitsContext.Provider>
+    <HabitsContext.Provider
+      value={{
+        habits,
+        loading,
+        addHabit,
+        toggleHabit,
+        deleteHabit,
+        updateHabit,
+        completedCount,
+        totalCount,
+        percentage,
+        currentStreak,
+      }}
+    >
+      {children}
+    </HabitsContext.Provider>
   );
 };
 
 export function useHabits() {
   const context = useContext(HabitsContext);
-  if (context === undefined) {
-    throw new Error("useHabits must be used within a HabitsProvider");
-  }
+  if (!context) throw new Error("useHabits must be used within a HabitsProvider");
   return context;
 }

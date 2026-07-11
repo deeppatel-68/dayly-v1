@@ -222,3 +222,4 @@ After coding:
 - List files changed.
 - Explain how to test idle, focus, reward, levelUp, level progression, and equipped items.
 - Mention limitations.
+r

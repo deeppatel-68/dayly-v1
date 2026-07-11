@@ -1,5 +1,9 @@
 export type { StudySession } from "@/services/studySessionService";
 export {
+  beginStudySession,
+  finishStudySession,
   loadStudySessions,
-  recordStudySession,
+  resumeStudySession,
+  saveFocusTimerState,
+  subscribeToStudySessions,
 } from "@/services/studySessionService";

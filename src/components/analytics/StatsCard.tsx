@@ -66,13 +66,13 @@ export const StatsCard = ({
             backgroundColor:
               change >= 0
                 ? "rgba(110, 231, 183, 0.2)"
-                : "rgba(239, 68, 68, 0.2)",
+                : "rgba(198, 91, 78, 0.2)",
           }}
         >
           <Ionicons
             name={change >= 0 ? "trending-up" : "trending-down"}
             size={12}
-            color={change >= 0 ? "#6EE7B7" : "#EF4444"}
+            color={change >= 0 ? "#6A9B5E" : "#C65B4E"}
           />
           <Text
             className={`text-xs ml-1 font-semibold`}
@@ -80,7 +80,7 @@ export const StatsCard = ({
               fontSize: 12,
               marginLeft: 4,
               fontWeight: "600",
-              color: change >= 0 ? "#6EE7B7" : "#EF4444",
+              color: change >= 0 ? "#6A9B5E" : "#C65B4E",
             }}
           >
             {Math.abs(Math.round(change))}%

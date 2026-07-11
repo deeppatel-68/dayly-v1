@@ -37,8 +37,8 @@ def make_mat(name, color, roughness, metallic=0.0, emission=None,
 ORANGE = (1.0, 0.15, 0.035)  # ~#ff6b35 in linear
 mat_body = make_mat("Body_Charcoal", (0.052, 0.052, 0.06), 0.45, coat=0.25)
 mat_base = make_mat("Base_Black", (0.012, 0.012, 0.014), 0.22, metallic=0.1)
-mat_eye = make_mat("Eye_White_Emission", (1.0, 0.96, 0.9), 0.4,
-                   emission=(1.0, 0.93, 0.82), emission_strength=3.5)
+mat_eye = make_mat("Eye_White_Emission", (1.0, 0.89, 0.72), 0.42,
+                   emission=(1.0, 0.78, 0.52), emission_strength=2.0)
 mat_accent = make_mat("Accent_Orange_Emission", ORANGE, 0.4,
                       emission=ORANGE, emission_strength=4.5)
 mat_platform = make_mat("Platform_Dark", (0.02, 0.02, 0.022), 0.75)
@@ -79,14 +79,14 @@ face.scale = (1.12, 0.42, 0.62)
 face.data.materials.append(mat_base)
 smooth(face)
 
-# ---------- Eyes: large soft ovals with a gentle outward tilt ----------
+# ---------- Eyes: warm, compact ovals with a gentle outward tilt ----------
 for name, x, roll in (("LeftEye", -0.165, -0.07), ("RightEye", 0.165, 0.07)):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.105,
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.095,
                                          location=(x, -0.47, 0.83),
                                          rotation=(0, roll, 0))
     eye = bpy.context.active_object
     eye.name = name
-    eye.scale = (1.0, 0.5, 1.35)
+    eye.scale = (1.18, 0.5, 1.15)
     eye.data.materials.append(mat_eye)
     smooth(eye)
 
@@ -107,6 +107,18 @@ halo.name = "HaloCharm"
 halo.data.materials.append(mat_accent)
 smooth(halo)
 
+# One asymmetric bead turns the halo into an ownable charm rather than a
+# generic status ring. It stays parented to the halo so the shared idle
+# animation carries both pieces as one signature.
+bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, radius=0.027,
+                                     location=(0.14, -0.015, 1.36))
+halo_bead = bpy.context.active_object
+halo_bead.name = "HaloBead"
+halo_bead.data.materials.append(mat_accent)
+smooth(halo_bead)
+halo_bead.parent = halo
+halo_bead.matrix_parent_inverse = halo.matrix_world.inverted()
+
 # ---------- Flippers: soft rounded fins, readable in silhouette ----------
 for name, x, rot in (("LeftFlipper", -0.62, 0.35), ("RightFlipper", 0.62, -0.35)):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.3,
@@ -116,6 +128,37 @@ for name, x, rot in (("LeftFlipper", -0.62, 0.35), ("RightFlipper", 0.62, -0.35)
     flip.scale = (0.30, 0.42, 0.55)
     flip.data.materials.append(mat_body)
     smooth(flip)
+
+# ---------- Feet: tiny forward nubs that ground the pet on the pod ----------
+for name, x, roll in (("LeftFoot", -0.25, -0.1), ("RightFoot", 0.25, 0.1)):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=18, ring_count=10, radius=0.18,
+                                         location=(x, -0.18, 0.16),
+                                         rotation=(0, roll, 0))
+    foot = bpy.context.active_object
+    foot.name = name
+    foot.scale = (1.0, 1.35, 0.55)
+    foot.data.materials.append(mat_body)
+    smooth(foot)
+
+# ---------- Visor lip: thin emissive contour under the face ----------
+# A shallow curve keeps the visor readable in dark mode without turning the
+# companion into a neon robot. It shares the user-tinted accent material.
+lip_curve = bpy.data.curves.new("VisorLip", type="CURVE")
+lip_curve.dimensions = "3D"
+lip_curve.resolution_u = 2
+lip_curve.bevel_depth = 0.009
+lip_curve.bevel_resolution = 3
+lip_spline = lip_curve.splines.new("POLY")
+lip_points = 18
+lip_spline.points.add(lip_points - 1)
+for index, point in enumerate(lip_spline.points):
+    progress = index / (lip_points - 1)
+    x = -0.34 + progress * 0.68
+    z = 0.695 - (1.0 - ((progress - 0.5) * 2.0) ** 2) * 0.025
+    point.co = (x, -0.525, z, 1.0)
+visor_lip = bpy.data.objects.new("VisorLip", lip_curve)
+link(visor_lip)
+visor_lip.data.materials.append(mat_accent)
 
 # ---------- Platform: two-tier pod (joined into one named mesh) ----------
 bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.80, depth=0.04,
@@ -148,7 +191,8 @@ ring.data.materials.append(mat_accent)
 smooth(ring)
 
 MODEL_OBJECTS = ["Body", "FacePanel", "LeftEye", "RightEye", "EnergyCore",
-                 "HaloCharm", "LeftFlipper", "RightFlipper", "Platform",
+                 "HaloCharm", "HaloBead", "LeftFlipper", "RightFlipper",
+                 "LeftFoot", "RightFoot", "VisorLip", "Platform",
                  "PlatformRing"]
 
 # ---------- normalize: apply scale/rotation, keep positions ----------

@@ -3,13 +3,27 @@ import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
-import { recordStudySession } from "@/utils/studySessions";
+import {
+  beginStudySession,
+  finishStudySession,
+  resumeStudySession,
+  saveFocusTimerState,
+} from "@/services/studySessionService";
+import {
+  FocusTimerState,
+  getActiveSeconds,
+  pauseFocusTimer,
+  resumeFocusTimer,
+} from "@/utils/focusTimerState";
+import { logSupabaseError } from "@/utils/supabaseErrors";
 import { getLevelProgress, getStudyRewards } from "@/utils/xp";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
+  AppState,
   Dimensions,
   Pressable,
   StyleSheet,
@@ -21,8 +35,6 @@ import Svg, { Circle } from "react-native-svg";
 const { width } = Dimensions.get("window");
 const TIMER_SIZE = width * 0.65;
 const STROKE_WIDTH = 8;
-
-type FocusMode = "SOLO" | "GROUP" | "CAMPUS";
 
 interface FocusTimerProps {
   onStart?: () => void;
@@ -45,21 +57,90 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
   const { colors } = useTheme();
   const { user } = useAuth();
   const { xp } = useXp();
-  const [isRunning, setIsRunning] = useState(false);
+  const [timerState, setTimerState] = useState<FocusTimerState | null>(null);
+  const [displaySeconds, setDisplaySeconds] = useState(0);
+  const [isRestoring, setIsRestoring] = useState(true);
+  const [isStarting, setIsStarting] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
-  const [time, setTime] = useState(0); // Time in seconds
-  const [mode, setMode] = useState<FocusMode>("SOLO");
   const [summary, setSummary] = useState<SessionResult | null>(null);
+  const playScale = useRef(new Animated.Value(1)).current;
+  const playMounted = useRef(false);
+  const onStateChangeRef = useRef(onStateChange);
+  const isRunning = timerState?.runningSinceMs !== null && timerState !== null;
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (isRunning) {
-      interval = setInterval(() => {
-        setTime((prev) => prev + 1);
-      }, 1000);
+    onStateChangeRef.current = onStateChange;
+  }, [onStateChange]);
+
+  // Pop the play button when the session starts or pauses (not on mount)
+  useEffect(() => {
+    if (!playMounted.current) {
+      playMounted.current = true;
+      return;
     }
+    playScale.setValue(0.94);
+    Animated.spring(playScale, {
+      toValue: 1,
+      speed: 24,
+      bounciness: 5,
+      useNativeDriver: true,
+    }).start();
+  }, [isRunning, playScale]);
+
+  useEffect(() => {
+    if (!user) {
+      setTimerState(null);
+      setDisplaySeconds(0);
+      setIsRestoring(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTimerState(null);
+    setDisplaySeconds(0);
+    setIsRestoring(true);
+    resumeStudySession(user.id)
+      .then((restored) => {
+        if (cancelled) return;
+        if (!restored) {
+          onStateChangeRef.current?.("idle");
+          return;
+        }
+        setTimerState(restored);
+        setDisplaySeconds(getActiveSeconds(restored, Date.now()));
+        onStateChangeRef.current?.(
+          restored.runningSinceMs === null ? "idle" : "focus"
+        );
+      })
+      .catch((error) =>
+        logSupabaseError("Error restoring focus session:", error)
+      )
+      .finally(() => {
+        if (!cancelled) setIsRestoring(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!timerState || timerState.runningSinceMs === null) return;
+    const refresh = () =>
+      setDisplaySeconds(getActiveSeconds(timerState, Date.now()));
+    refresh();
+    const interval = setInterval(refresh, 1000);
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [timerState]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active" && timerState) {
+        setDisplaySeconds(getActiveSeconds(timerState, Date.now()));
+      }
+    });
+    return () => subscription.remove();
+  }, [timerState]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -67,14 +148,61 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
-  const rewards = getStudyRewards(time);
+  const rewards = getStudyRewards(displaySeconds);
+
+  const handlePlayPause = async () => {
+    if (!user || isRestoring || isStarting || isFinishing) return;
+
+    try {
+      if (!timerState) {
+        setIsStarting(true);
+        const started = await beginStudySession(user.id);
+        setTimerState(started);
+        setDisplaySeconds(0);
+        onStart?.();
+        onStateChangeRef.current?.("focus");
+        return;
+      }
+
+      const next = isRunning
+        ? pauseFocusTimer(timerState, Date.now())
+        : resumeFocusTimer(timerState, Date.now());
+      await saveFocusTimerState(user.id, next);
+      setTimerState(next);
+      setDisplaySeconds(getActiveSeconds(next, Date.now()));
+      onStateChangeRef.current?.(isRunning ? "idle" : "focus");
+      if (!isRunning) onStart?.();
+    } catch (error) {
+      logSupabaseError("Error updating focus session:", error);
+      Alert.alert(
+        "Could Not Start Session",
+        "Connect to the internet and try again."
+      );
+    } finally {
+      setIsStarting(false);
+    }
+  };
 
   const handleFinish = async () => {
-    if (isFinishing) return;
-    setIsRunning(false);
+    if (!user || !timerState || isFinishing) return;
+    const pausedState = pauseFocusTimer(timerState, Date.now());
+    const activeSeconds = getActiveSeconds(pausedState, Date.now());
 
-    if (rewards.minutes < 1) {
-      onStateChange?.("idle");
+    try {
+      await saveFocusTimerState(user.id, pausedState);
+      setTimerState(pausedState);
+      setDisplaySeconds(activeSeconds);
+    } catch (error) {
+      logSupabaseError("Error pausing focus session:", error);
+      Alert.alert(
+        "Could Not Update Session",
+        "Your timer is still running. Please try again."
+      );
+      return;
+    }
+
+    if (activeSeconds < 60) {
+      onStateChangeRef.current?.("idle");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       Alert.alert(
         "Session Too Short",
@@ -87,17 +215,16 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
     let leveledUp = false;
 
     try {
-      if (!user) throw new Error("No user logged in");
-      const result = await recordStudySession(user.id, {
-        duration: time,
-        xp: rewards.xp,
-        coins: rewards.coins,
-      });
+      const result = await finishStudySession(
+        user.id,
+        pausedState.clientSessionId,
+        activeSeconds
+      );
       leveledUp =
         getLevelProgress(result.progress.xp).level > getLevelProgress(xp).level;
 
       setSummary({
-        minutes: rewards.minutes,
+        minutes: Math.floor(result.session.duration / 60),
         xp: result.xp,
         coins: result.coins,
         leveledUp,
@@ -107,8 +234,8 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
         endedAt: result.session.endedAt,
       });
     } catch (error) {
-      console.error("Error recording study session:", error);
-      onStateChange?.("idle");
+      logSupabaseError("Error recording study session:", error);
+      onStateChangeRef.current?.("idle");
       setIsFinishing(false);
       Alert.alert(
         "Session Save Failed",
@@ -119,8 +246,9 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
     setIsFinishing(false);
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onStateChange?.(leveledUp ? "levelUp" : "reward");
-    setTime(0);
+    onStateChangeRef.current?.(leveledUp ? "levelUp" : "reward");
+    setTimerState(null);
+    setDisplaySeconds(0);
   };
 
   const radius = (TIMER_SIZE - STROKE_WIDTH) / 2;
@@ -128,46 +256,6 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
 
   return (
     <View style={styles.container}>
-      {/* Mode Selector */}
-      <View style={styles.modeSelector}>
-        {(["SOLO", "GROUP", "CAMPUS"] as FocusMode[]).map((m) => (
-          <Pressable
-            key={m}
-            style={[
-              styles.modeButton,
-              {
-                backgroundColor: mode === m ? colors.accent : "transparent",
-                borderColor: mode === m ? colors.accent : colors.border,
-              },
-            ]}
-            onPress={() => setMode(m)}
-          >
-            <Ionicons
-              name={
-                m === "SOLO"
-                  ? "flash"
-                  : m === "GROUP"
-                  ? "people-outline"
-                  : "business-outline"
-              }
-              size={16}
-              color={mode === m ? colors.background : colors.textSecondary}
-              style={styles.modeIcon}
-            />
-            <Text
-              style={[
-                styles.modeText,
-                {
-                  color: mode === m ? colors.background : colors.textSecondary,
-                },
-              ]}
-            >
-              {m}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
       {/* Timer Circle */}
       <View style={styles.timerContainer}>
         <Svg width={TIMER_SIZE} height={TIMER_SIZE}>
@@ -181,7 +269,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
             fill="none"
           />
           {/* Progress Circle */}
-          {time > 0 && (
+          {displaySeconds > 0 && (
             <Circle
               cx={TIMER_SIZE / 2}
               cy={TIMER_SIZE / 2}
@@ -201,7 +289,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
         {/* Timer Display */}
         <View style={styles.timerContent}>
           <Text style={[styles.timerText, { color: colors.text }]}>
-            {formatTime(time)}
+            {formatTime(displaySeconds)}
           </Text>
           <Text style={[styles.phaseText, { color: colors.textSecondary }]}>
             FOCUS PHASE
@@ -215,26 +303,27 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
 
       {/* Controls */}
       <View style={styles.controls}>
-        <Pressable
-          style={[styles.playButton, { backgroundColor: colors.accent }]}
-          onPress={() => {
-            const wasRunning = isRunning;
-            setIsRunning(!isRunning);
-            onStateChange?.(wasRunning ? "idle" : "focus");
-            // If starting the timer (wasn't running, now will be), trigger callback
-            if (!wasRunning && onStart) {
-              onStart();
-            }
-          }}
-        >
-          <Ionicons
-            name={isRunning ? "pause" : "play"}
-            size={40}
-            color={colors.background}
-            style={isRunning ? {} : { marginLeft: 4 }}
-          />
-        </Pressable>
-        {time > 0 && (
+        <Animated.View style={{ transform: [{ scale: playScale }] }}>
+          <Pressable
+            style={[styles.playButton, { backgroundColor: colors.accent }]}
+            disabled={isRestoring || isStarting || isFinishing}
+            onPress={handlePlayPause}
+          >
+            <Ionicons
+              name={
+                isRestoring || isStarting
+                  ? "hourglass"
+                  : isRunning
+                  ? "pause"
+                  : "play"
+              }
+              size={40}
+              color={colors.background}
+              style={isRunning ? {} : { marginLeft: 4 }}
+            />
+          </Pressable>
+        </Animated.View>
+        {displaySeconds > 0 && (
           <Pressable
             style={[
               styles.finishButton,
@@ -267,7 +356,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
         endedAt={summary?.endedAt}
         onClose={() => {
           setSummary(null);
-          onStateChange?.("idle");
+          onStateChangeRef.current?.("idle");
         }}
       />
     </View>
@@ -278,28 +367,6 @@ const styles = StyleSheet.create({
   container: {
     alignItems: "center",
     paddingVertical: Spacing.xl,
-  },
-  modeSelector: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-  modeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    gap: Spacing.xs,
-  },
-  modeIcon: {
-    marginRight: 2,
-  },
-  modeText: {
-    fontSize: 14,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 0.5,
   },
   timerContainer: {
     position: "relative",
@@ -353,10 +420,10 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#ff6b35",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowColor: "#D97757",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
   },
 });

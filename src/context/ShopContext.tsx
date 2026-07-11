@@ -13,6 +13,7 @@ import {
   unequipShopItem,
 } from "@/services/shopService";
 import { OwnedItem } from "@/types/shop";
+import { logSupabaseError } from "@/utils/supabaseErrors";
 import { useAuth } from "./AuthContext";
 import { useCoins } from "./CoinsContext";
 
@@ -57,7 +58,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       .then((items) => {
         if (!cancelled) setOwnedItems(items);
       })
-      .catch((error) => console.error("Error loading owned items:", error))
+      .catch((error) => logSupabaseError("Error loading owned items:", error))
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -85,7 +86,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     try {
       setBusyItemId(itemId);
       setLastError(null);
-      const result = await buyShopItem(user.id, item);
+      const result = await buyShopItem(user.id, item.id);
       if (!result.success) {
         setLastError(
           result.reason === "insufficient_coins"
@@ -101,7 +102,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       await refreshCoins();
       return true;
     } catch (error) {
-      console.error("Error buying item:", error);
+      logSupabaseError("Error buying item:", error);
       setLastError("Could not buy that item.");
       return false;
     } finally {
@@ -121,10 +122,10 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     try {
       setBusyItemId(itemId);
       setLastError(null);
-      const items = await equipShopItem(user.id, item);
+      const items = await equipShopItem(user.id, item.id);
       setOwnedItems(items);
     } catch (error) {
-      console.error("Error equipping item:", error);
+      logSupabaseError("Error equipping item:", error);
       setLastError("Could not equip that item.");
     } finally {
       setBusyItemId(null);
@@ -140,7 +141,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       const items = await unequipShopItem(user.id, itemId);
       setOwnedItems(items);
     } catch (error) {
-      console.error("Error unequipping item:", error);
+      logSupabaseError("Error unequipping item:", error);
       setLastError("Could not unequip that item.");
     } finally {
       setBusyItemId(null);

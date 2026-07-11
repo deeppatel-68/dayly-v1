@@ -1,3 +1,4 @@
+import FadeInView from "@/components/common/FadeInView";
 import ShortcutButton from "@/components/common/ShortcutButtons";
 import TopBar from "@/components/common/TopBar";
 import ArenaPlaceholder from "@/components/dashboard-stats/ArenaPlaceholder";
@@ -8,14 +9,16 @@ import StudySpacePlaceholder from "@/components/study/StudySpacePlaceholder";
 import { Spacing } from "@/constants/Spacing";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
-import { CharacterState } from "@/components/character/CharacterScene";
+import { AvatarState } from "@/components/avatar/avatarTypes";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 export default function Index() {
+  const router = useRouter();
   const { colors } = useTheme();
   const { habits, completedCount } = useHabits();
   const [showStudySpace, setShowStudySpace] = useState(false);
-  const [characterState, setCharacterState] = useState<CharacterState>("idle");
+  const [characterState, setCharacterState] = useState<AvatarState>("idle");
   const prevCompleted = useRef(completedCount);
 
   // Celebrate on the dashboard avatar when a habit gets completed
@@ -37,22 +40,25 @@ export default function Index() {
         showsVerticalScrollIndicator={false}
       >
         <TopBar />
-        <View style={styles.arenaContainer}>
+        <FadeInView style={styles.arenaContainer}>
           <ArenaPlaceholder
-            onPress={() => setShowStudySpace(true)}
+            active={!showStudySpace}
+            onOpenSpace={() => setShowStudySpace(true)}
+            onCustomise={() => router.push("/(tabs)/customise")}
             state={characterState}
           />
-        </View>
-        {/* <View>
-        <RoundStat />
-      </View> */}
-        <View>
+        </FadeInView>
+        <FadeInView delay={40}>
           <ShortcutButton />
-        </View>
-        <XpBar />
-        <ProgressDisplay />
+        </FadeInView>
+        <FadeInView delay={80}>
+          <XpBar />
+        </FadeInView>
+        <FadeInView delay={120}>
+          <ProgressDisplay />
+        </FadeInView>
         {habits.length > 0 && (
-          <View style={styles.habitsSection}>
+          <FadeInView delay={160} style={styles.habitsSection}>
             <View style={styles.habitsHeader}>
               <Text style={[styles.habitsTitle, { color: colors.text }]}>
                 {"Today's Habits"}
@@ -69,7 +75,7 @@ export default function Index() {
                 <HabitItem key={habit.id} habit={habit} />
               ))}
             </View>
-          </View>
+          </FadeInView>
         )}
       </ScrollView>
       <StudySpacePlaceholder

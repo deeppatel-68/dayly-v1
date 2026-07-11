@@ -1,16 +1,13 @@
 import { supabase } from "@/lib/supabase";
 import {
-  completeHabitWithReward,
   HabitRewardResult,
+  normalizeRpcProgress,
+  normalizeUserProgress,
+  syncUserProgress,
+  UserProgress,
 } from "@/services/progressService";
 import { Habit } from "@/types/habits";
 import { buildCompletionHistory, todayDateKey } from "@/utils/habitStats";
-import { logSupabaseError } from "@/utils/supabaseErrors";
-
-// Habits persistence seam: every Supabase habit/completion query lives here,
-// alongside the once-per-habit-per-date reward (the atomic
-// complete_habit_with_reward RPC via progressService). HabitsContext is a
-// thin view over this interface, matching progress/shop/settings/study.
 
 export type { HabitRewardResult };
 
@@ -21,7 +18,7 @@ const DEFAULT_HABITS = [
     title: "Drink Water",
     target_count: 8,
     icon: "water",
-    color: "#3B82F6", // blue
+    color: "#3B82F6",
     frequency: "daily",
     description: "Stay hydrated throughout the day",
   },
@@ -29,7 +26,7 @@ const DEFAULT_HABITS = [
     title: "Exercise",
     target_count: 3,
     icon: "walk",
-    color: "#22C55E", // green
+    color: "#22C55E",
     frequency: "daily",
     description: "Move your body",
   },
@@ -37,7 +34,7 @@ const DEFAULT_HABITS = [
     title: "Read",
     target_count: 1,
     icon: "book",
-    color: "#A855F7", // purple
+    color: "#A855F7",
     frequency: "daily",
     description: "Read for personal growth",
   },
@@ -54,11 +51,13 @@ interface HabitRow {
   frequency: string;
   completed_at?: string | null;
   created_at: string;
+  starts_on: string;
+  archived_on?: string | null;
 }
 
 function mapHabitRow(
   row: HabitRow,
-  completionHistory: { [date: string]: boolean }
+  completionHistory: Record<string, boolean>
 ): Habit {
   const completedToday = completionHistory[todayDateKey()] === true;
 
@@ -72,14 +71,41 @@ function mapHabitRow(
     color: row.color,
     frequency: row.frequency,
     completed: completedToday,
-    completedAt: completedToday ? (row.completed_at ?? undefined) : undefined,
+    completedAt: completedToday ? row.completed_at ?? undefined : undefined,
     createdAt: row.created_at,
+    startsOn: row.starts_on,
+    archivedOn: row.archived_on ?? undefined,
     completionHistory,
   };
 }
 
-// Load the user's habits with completion history; first-time users get the
-// default starter habits created for them.
+async function createHabitRpc(
+  habit: (typeof DEFAULT_HABITS)[number]
+): Promise<Habit> {
+  const { data, error } = await supabase
+    .rpc("create_user_habit", {
+      p_title: habit.title,
+      p_description: habit.description,
+      p_target_count: habit.target_count,
+      p_icon: habit.icon,
+      p_color: habit.color,
+      p_frequency: habit.frequency,
+      p_local_today: todayDateKey(),
+    })
+    .single();
+
+  if (error) throw error;
+  return mapHabitRow(data as HabitRow, {});
+}
+
+async function createDefaultHabits(): Promise<Habit[]> {
+  const created: Habit[] = [];
+  for (const habit of DEFAULT_HABITS) {
+    created.push(await createHabitRpc(habit));
+  }
+  return created;
+}
+
 export async function loadUserHabits(userId: string): Promise<Habit[]> {
   const { data, error } = await supabase
     .from("habits")
@@ -88,17 +114,11 @@ export async function loadUserHabits(userId: string): Promise<Habit[]> {
     .order("created_at", { ascending: true });
 
   if (error) throw error;
+  if (!data || data.length === 0) return createDefaultHabits();
 
-  if (!data || data.length === 0) {
-    try {
-      return await createDefaultHabits(userId);
-    } catch (creationError) {
-      logSupabaseError("Error creating default habits:", creationError);
-      return [];
-    }
-  }
+  const activeRows = (data as HabitRow[]).filter((row) => !row.archived_on);
+  if (activeRows.length === 0) return [];
 
-  // One query for every completion, grouped per habit
   const { data: completionRows, error: completionsError } = await supabase
     .from("habit_completions")
     .select("habit_id,completed_at")
@@ -108,32 +128,16 @@ export async function loadUserHabits(userId: string): Promise<Habit[]> {
 
   const rowsByHabit = new Map<string, { completed_at?: string | null }[]>();
   completionRows?.forEach(
-    (row: { habit_id: string; completed_at?: string }) => {
-      const list = rowsByHabit.get(row.habit_id) ?? [];
-      list.push(row);
-      rowsByHabit.set(row.habit_id, list);
+    (row: { habit_id: string; completed_at?: string | null }) => {
+      const rows = rowsByHabit.get(row.habit_id) ?? [];
+      rows.push(row);
+      rowsByHabit.set(row.habit_id, rows);
     }
   );
 
-  return (data as HabitRow[]).map((row) =>
+  return activeRows.map((row) =>
     mapHabitRow(row, buildCompletionHistory(rowsByHabit.get(row.id)))
   );
-}
-
-async function createDefaultHabits(userId: string): Promise<Habit[]> {
-  const habitsToCreate = DEFAULT_HABITS.map((habit) => ({
-    ...habit,
-    user_id: userId,
-  }));
-
-  const { data, error } = await supabase
-    .from("habits")
-    .insert(habitsToCreate)
-    .select();
-
-  if (error) throw error;
-
-  return (data as HabitRow[]).map((row) => mapHabitRow(row, {}));
 }
 
 export async function createHabit(
@@ -141,53 +145,34 @@ export async function createHabit(
   title: string,
   description?: string
 ): Promise<Habit> {
-  // The limit is a habits-domain invariant, enforced behind the seam
-  const { count, error: countError } = await supabase
-    .from("habits")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
-
-  if (countError) throw countError;
-  if ((count ?? 0) >= MAX_HABITS) {
-    throw new Error(`Maximum habit limit reached (${MAX_HABITS} habits)`);
-  }
-
   const { data, error } = await supabase
-    .from("habits")
-    .insert([
-      {
-        user_id: userId,
-        title: title.trim(),
-        description: description?.trim() || null,
-        target_count: 1,
-        icon: "book",
-        color: "#FF6B35", // orange
-        frequency: "daily",
-      },
-    ])
-    .select()
+    .rpc("create_user_habit", {
+      p_title: title,
+      p_description: description ?? null,
+      p_target_count: 1,
+      p_icon: "book",
+      p_color: "#FF6B35",
+      p_frequency: "daily",
+      p_local_today: todayDateKey(),
+    })
     .single();
 
   if (error) throw error;
-
+  await refreshProgress(userId);
   return mapHabitRow(data as HabitRow, {});
 }
 
 export async function updateHabit(
-  userId: string,
+  _userId: string,
   habitId: string,
   title: string,
   description?: string
 ): Promise<void> {
-  const { error } = await supabase
-    .from("habits")
-    .update({
-      title: title.trim(),
-      description: description?.trim() || null,
-    })
-    .eq("id", habitId)
-    .eq("user_id", userId);
-
+  const { error } = await supabase.rpc("update_user_habit", {
+    p_habit_id: habitId,
+    p_title: title,
+    p_description: description ?? null,
+  });
   if (error) throw error;
 }
 
@@ -195,88 +180,66 @@ export async function deleteHabit(
   userId: string,
   habitId: string
 ): Promise<void> {
-  const { error } = await supabase
-    .from("habits")
-    .delete()
-    .eq("id", habitId)
-    .eq("user_id", userId);
+  const { data, error } = await supabase
+    .rpc("archive_user_habit", {
+      p_habit_id: habitId,
+      p_local_today: todayDateKey(),
+    })
+    .single();
 
   if (error) throw error;
+  await syncUserProgress(normalizeUserProgress(data as UserProgress));
+  await refreshProgress(userId);
 }
 
-// Set a habit's completion for a date. Completing runs the atomic
-// completion+reward RPC (once per habit per date — uncomplete/recomplete
-// can never double-award) and returns the reward result for celebration UI.
 export async function setHabitCompletion(
   userId: string,
   habitId: string,
   dateKey: string,
   completed: boolean
-): Promise<HabitRewardResult | undefined> {
-  if (completed) {
-    return completeHabitWithReward(userId, habitId, dateKey);
-  }
-
-  const { error } = await supabase
-    .from("habit_completions")
-    .delete()
-    .eq("habit_id", habitId)
-    .eq("user_id", userId)
-    .eq("completed_at", dateKey);
+): Promise<HabitRewardResult> {
+  const { data, error } = await supabase
+    .rpc("set_habit_completion", {
+      p_habit_id: habitId,
+      p_completed_at: dateKey,
+      p_completed: completed,
+      p_local_today: todayDateKey(),
+    })
+    .single();
 
   if (error) throw error;
-  return undefined;
+  const row = data as {
+    completion_id: string | null;
+    awarded: boolean;
+    reward_xp: number;
+    reward_coins: number;
+    progress_user_id: string;
+    progress_xp: number;
+    progress_coins: number;
+    progress_current_streak: number;
+    progress_best_streak: number;
+    progress_total_focus_seconds: number;
+    progress_total_completed_habits: number;
+    progress_updated_at?: string;
+  };
+  const progress = await syncUserProgress(normalizeRpcProgress(row));
+
+  if (progress.user_id !== userId) throw new Error("Progress user mismatch");
+  return {
+    completionId: row.completion_id,
+    awarded: row.awarded,
+    xp: row.reward_xp,
+    coins: row.reward_coins,
+    progress,
+  };
 }
 
-// New-day check against profiles.last_reset_date. Returns true when a new
-// day was detected (callers clear local completed-today flags). Never
-// throws — matching the previous fire-and-forget behaviour.
-export async function syncDailyReset(userId: string): Promise<boolean> {
-  try {
-    const today = new Date().toDateString();
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("last_reset_date")
-      .eq("id", userId)
-      .single();
-
-    if (profileError && profileError.code !== "PGRST116") {
-      // PGRST116 is "not found" - handled below
-      throw profileError;
-    }
-
-    const lastReset = profile?.last_reset_date || null;
-    if (lastReset === today) return false;
-
-    const { error: updateError } = await supabase.from("profiles").upsert(
-      {
-        id: userId,
-        last_reset_date: today,
-      },
-      {
-        onConflict: "id",
-      }
-    );
-
-    if (updateError) {
-      if (
-        updateError.code === "42501" &&
-        updateError.message &&
-        updateError.message.includes("row-level security")
-      ) {
-        logSupabaseError(
-          "Failed to update last reset date due to row-level security (RLS) on the 'profiles' table. Ensure your Supabase RLS policies allow authenticated users to upsert their own profile records. Update your Supabase policy for table 'profiles' to allow upserts for authenticated users where user id = auth.uid().",
-          updateError
-        );
-      } else {
-        logSupabaseError("Error updating last reset date:", updateError);
-      }
-    }
-
-    return true;
-  } catch (error) {
-    logSupabaseError("Error checking and resetting daily:", error);
-    return false;
-  }
+async function refreshProgress(userId: string) {
+  const { data, error } = await supabase
+    .from("user_progress")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+  if (error) throw error;
+  await syncUserProgress(normalizeUserProgress(data));
 }

@@ -1,18 +1,28 @@
-import InsightsCard from "@/components/analytics/Insights";
-import LineChart from "@/components/analytics/LineChart";
+import AnalyticsInsightsCard from "@/components/analytics/Insights";
+import StudyLineChart from "@/components/analytics/LineChart";
+import PeriodSelector from "@/components/analytics/PeriodSelector";
 import TopBar from "@/components/common/TopBar";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { useAuth } from "@/context/AuthContext";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
 import {
-  calculateDayStats,
+  loadStudySessions,
+  StudySession,
+  subscribeToStudySessions,
+} from "@/services/studySessionService";
+import {
+  AnalyticsPeriod,
+  buildStudyChartData,
   calculatePeriodStats,
   generateInsights,
-  getDatesForPeriod,
 } from "@/utils/analytics";
+import { toLocalDateKey } from "@/utils/dateKey";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  AppState,
   Modal,
   Pressable,
   ScrollView,
@@ -23,18 +33,61 @@ import {
 
 export default function AnalyticsScreen() {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const { habits } = useHabits();
-  // Mock sessions for now
-  const sessions: any[] = [];
+  const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
 
-  const [selectedPeriod, setSelectedPeriod] = useState<
-    "day" | "week" | "month" | "3months"
-  >("week");
+  const [selectedPeriod, setSelectedPeriod] =
+    useState<AnalyticsPeriod>("week");
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(
     habits.length > 0 ? habits[0].id : null
   );
   const [showHabitDropdown, setShowHabitDropdown] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const refreshSessions = useCallback(async () => {
+    if (!user) {
+      setSessions([]);
+      setSessionsLoading(false);
+      setSessionsError(null);
+      return;
+    }
+
+    setSessionsLoading(true);
+    setSessionsError(null);
+    try {
+      setSessions(await loadStudySessions(user.id));
+    } catch (error) {
+      setSessionsError(
+        error instanceof Error ? error.message : "Could not load focus history."
+      );
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      setSessions([]);
+      setSessionsLoading(false);
+      setSessionsError(null);
+      return;
+    }
+
+    const unsubscribe = subscribeToStudySessions(setSessions);
+    refreshSessions();
+    return unsubscribe;
+  }, [refreshSessions, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshSessions();
+    });
+    return () => subscription.remove();
+  }, [refreshSessions, user]);
 
   // Calculate all metrics based on selected period
   const periodStats = useMemo(
@@ -48,20 +101,10 @@ export default function AnalyticsScreen() {
     [habits, sessions, periodStats]
   );
 
-  // Get chart data for weekly study time
-  const weeklyChartData = useMemo(() => {
-    const dates = getDatesForPeriod("week");
-    return dates.map((date) => {
-      const dayStats = calculateDayStats(date, habits, sessions);
-      return {
-        label: date
-          .toLocaleDateString("en", { weekday: "short" })
-          .toUpperCase()
-          .slice(0, 3),
-        value: dayStats.studyMinutes,
-      };
-    });
-  }, [habits, sessions]);
+  const studyChartData = useMemo(
+    () => buildStudyChartData(sessions, selectedPeriod),
+    [selectedPeriod, sessions]
+  );
 
   // Get current month calendar dates
   const calendarDates = useMemo(() => {
@@ -128,27 +171,16 @@ export default function AnalyticsScreen() {
     }
   }, [habits, selectedHabitId]);
 
-  // Calculate total time, sessions, avg min for today
-  const todayStats = useMemo(() => {
-    const today = new Date();
-    const todayKey = today.toISOString().split("T")[0];
-    const todayStats = calculateDayStats(today, habits, sessions);
-
-    return {
-      totalTime: Math.round(todayStats.studyMinutes / 60), // Convert to hours
-      sessions: sessions.filter((s) => {
-        const sessionDate = new Date(s.startTime || s.date);
-        return sessionDate.toISOString().split("T")[0] === todayKey;
-      }).length,
-      avgMin:
-        sessions.length > 0
-          ? Math.round(
-              sessions.reduce((sum, s) => sum + (s.duration || 0), 0) /
-                sessions.length
-            )
-          : 0,
-    };
-  }, [habits, sessions]);
+  const periodLabel = {
+    day: "TODAY",
+    week: "LAST 7 DAYS",
+    month: "LAST 30 DAYS",
+    "3months": "LAST 13 WEEKS",
+  }[selectedPeriod];
+  const focusTimeLabel =
+    periodStats.totalStudyMinutes < 60
+      ? `${periodStats.totalStudyMinutes}M`
+      : `${(periodStats.totalStudyMinutes / 60).toFixed(1)}H`;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -166,7 +198,12 @@ export default function AnalyticsScreen() {
           </Text>
         </View>
 
-        {/* Today's Stats Card */}
+        <PeriodSelector
+          selected={selectedPeriod}
+          onSelect={setSelectedPeriod}
+        />
+
+        {/* Selected period summary */}
         <View
           style={[
             styles.card,
@@ -176,21 +213,21 @@ export default function AnalyticsScreen() {
           <View style={styles.todayHeader}>
             <Ionicons name="flash" size={16} color={colors.accent} />
             <Text style={[styles.todayLabel, { color: colors.accent }]}>
-              TODAY
+              {periodLabel}
             </Text>
           </View>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.text }]}>
-                {todayStats.totalTime}H
+                {focusTimeLabel}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                TOTAL TIME
+                FOCUS
               </Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.text }]}>
-                {todayStats.sessions}
+                {periodStats.sessionCount}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                 SESSIONS
@@ -198,7 +235,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.text }]}>
-                {todayStats.avgMin}
+                {Math.round(periodStats.averageSessionMinutes)}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                 AVG MIN
@@ -292,7 +329,7 @@ export default function AnalyticsScreen() {
                     );
                   }
 
-                  const dateKey = date.toISOString().split("T")[0];
+                  const dateKey = toLocalDateKey(date);
                   const isCompleted =
                     selectedHabit.completionHistory?.[dateKey] === true;
                   const isToday =
@@ -308,14 +345,6 @@ export default function AnalyticsScreen() {
                           backgroundColor: isCompleted
                             ? colors.accent
                             : colors.checkboxEmpty,
-                          opacity: isCompleted ? 0.6 : 1,
-                          shadowColor: isCompleted
-                            ? colors.accent
-                            : "transparent",
-                          shadowOffset: { width: 0, height: 0 },
-                          shadowOpacity: isCompleted ? 0.8 : 0,
-                          shadowRadius: isCompleted ? 4 : 0,
-                          elevation: isCompleted ? 3 : 0,
                           borderWidth: isToday ? 2 : 1,
                           borderColor: isToday
                             ? colors.accent
@@ -419,26 +448,91 @@ export default function AnalyticsScreen() {
           </View>
         )}
 
-        {/* Weekly Study Time Chart */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
-            WEEKLY STUDY TIME
-          </Text>
-          <LineChart
-            data={weeklyChartData}
-            color={colors.accent}
-            height={150}
-            showValues={true}
-          />
-        </View>
+        {sessionsLoading && (
+          <View
+            style={[
+              styles.stateCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <ActivityIndicator color={colors.accent} />
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+              LOADING FOCUS HISTORY
+            </Text>
+          </View>
+        )}
+
+        {!sessionsLoading && sessionsError && (
+          <View
+            style={[
+              styles.stateCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Ionicons
+              name="cloud-offline-outline"
+              size={22}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+              FOCUS HISTORY UNAVAILABLE
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry focus history"
+              onPress={refreshSessions}
+              style={[styles.retryButton, { borderColor: colors.border }]}
+            >
+              <Ionicons name="refresh" size={18} color={colors.accent} />
+              <Text style={[styles.retryText, { color: colors.accent }]}>
+                RETRY
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {!sessionsLoading && !sessionsError && sessions.length === 0 && (
+          <View
+            style={[
+              styles.stateCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Ionicons
+              name="timer-outline"
+              size={24}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+              NO FOCUS DATA YET
+            </Text>
+          </View>
+        )}
+
+        {/* Study time chart */}
+        {!sessionsLoading && !sessionsError && sessions.length > 0 && (
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
+              {periodLabel} STUDY TIME
+            </Text>
+            <StudyLineChart
+              data={studyChartData}
+              color={colors.accent}
+              height={150}
+              showValues={studyChartData.length <= 7}
+            />
+          </View>
+        )}
 
         {/* AI Insights */}
-        {insights.length > 0 && <InsightsCard insights={insights} />}
+        {insights.length > 0 && (
+          <AnalyticsInsightsCard insights={insights} />
+        )}
 
         {/* Bottom padding for tab bar */}
         <View style={{ height: 100 }} />
@@ -451,9 +545,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  // Bottom padding clears the floating nav
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 140,
   },
   header: {
     paddingHorizontal: Spacing.md,
@@ -511,6 +606,35 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: Spacing.md,
   },
+  stateCard: {
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+    minHeight: 112,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+  },
+  stateText: {
+    fontSize: 11,
+    fontFamily: "Outfit-SemiBold",
+    letterSpacing: 1,
+  },
+  retryButton: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  retryText: {
+    fontSize: 11,
+    fontFamily: "Outfit-Bold",
+  },
   matrixHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -561,11 +685,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginBottom: Spacing.sm,
     width: "100%",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.xs,
   },
   dayHeader: {
-    width: "13%",
+    width: `${100 / 7}%`,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -578,11 +700,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     width: "100%",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.xs,
   },
   calendarCell: {
-    width: "13%",
+    // Exact sevenths so rows align and partial weeks stay left-aligned
+    width: `${100 / 7}%`,
     aspectRatio: 1,
     borderRadius: BorderRadius.sm,
     borderWidth: 1,

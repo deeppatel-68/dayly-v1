@@ -6,7 +6,7 @@ import { Habit } from "@/types/habits";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   ColorValue,
@@ -20,6 +20,7 @@ import {
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withSpring,
 } from "react-native-reanimated";
 import EditHabitModel from "./EditHabitModel";
@@ -48,6 +49,17 @@ const HabitItem = ({ habit }: HabitItemProps) => {
 
   //Animation Value
   const cardScale = useSharedValue(1);
+  const checkScale = useSharedValue(1);
+
+  // Satisfying pop when the habit gets completed
+  useEffect(() => {
+    if (habit.completed) {
+      checkScale.value = withSequence(
+        withSpring(1.12, { damping: 14, stiffness: 380 }),
+        withSpring(1, { damping: 18, stiffness: 300 })
+      );
+    }
+  }, [habit.completed, checkScale]);
 
   const handleToggle = async () => {
     if (isToggling) return;
@@ -87,13 +99,6 @@ const HabitItem = ({ habit }: HabitItemProps) => {
     );
   };
 
-  const renderRightActions = () => (
-    <Pressable onPress={handleDelete} style={styles.deleteAction}>
-      <Ionicons name="trash-outline" size={24} color="#FFF" />
-      <Text style={styles.deleteText}>Delete</Text>
-    </Pressable>
-  );
-
   const handleEdit = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowEditModal(true);
@@ -127,6 +132,10 @@ const HabitItem = ({ habit }: HabitItemProps) => {
 
   const cardAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: cardScale.value }],
+  }));
+
+  const checkAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkScale.value }],
   }));
 
   const subtleBorder =
@@ -171,6 +180,7 @@ const HabitItem = ({ habit }: HabitItemProps) => {
               <Animated.View
                 style={[
                   styles.checkbox,
+                  checkAnimatedStyle,
                   {
                     borderColor: habit.completed
                       ? colors.completed
@@ -238,12 +248,12 @@ const HabitItem = ({ habit }: HabitItemProps) => {
                 style={({ pressed }) => [
                   styles.actionButton,
                   {
-                    backgroundColor: "rgba(239, 68, 68, 0.15)",
+                    backgroundColor: "rgba(198, 91, 78, 0.18)",
                     opacity: pressed ? 0.75 : 1,
                   },
                 ]}
               >
-                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                <Ionicons name="trash-outline" size={18} color="#C65B4E" />
               </Pressable>
             </View>
           </LinearGradient>
@@ -320,21 +330,5 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-  },
-  deleteAction: {
-    backgroundColor: "#EF4444",
-    justifyContent: "center",
-    alignItems: "center",
-    width: 80,
-    height: "85%",
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.md,
-    gap: 4,
-    padding: Spacing.md,
-  },
-  deleteText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontFamily: "Outfit-Medium",
   },
 });

@@ -12,23 +12,20 @@ export const PET_NODES = [
   "HaloCharm",
   "LeftFlipper",
   "RightFlipper",
+  "LeftFoot",
+  "RightFoot",
+  "VisorLip",
 ];
 
-// Parse the GLB once per app session; instances clone the cached graph
-// (geometries stay shared, only animated materials are cloned per instance)
-let companionPromise: Promise<THREE.Group> | null = null;
+// Parse the tiny bundled GLB per scene mount. Expo GL resources can retain
+// native-context state across renderer disposal, so sharing a parsed graph
+// made later previews intermittently clear to an empty canvas.
 export function loadCompanion(): Promise<THREE.Group> {
-  if (!companionPromise) {
-    companionPromise = loadAsync(
-      // Metro resolves bundled assets via static require
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../../../assets/avatar/dayly-companion.glb")
-    ).then((gltf: { scene: THREE.Group }) => gltf.scene);
-    companionPromise.catch(() => {
-      companionPromise = null; // allow retry on next mount
-    });
-  }
-  return companionPromise;
+  return loadAsync(
+    // Metro resolves bundled assets via static require
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require("../../../assets/avatar/dayly-companion.glb")
+  ).then((gltf: { scene: THREE.Group }) => gltf.scene);
 }
 
 export interface CompanionOptions {
@@ -51,32 +48,60 @@ export function createCompanionInstance(
   source: THREE.Group,
   { accent, bodyColor, levelTier }: CompanionOptions
 ): CompanionInstance {
+  // expo-three may internally cache the parsed scene. Treat that source as
+  // immutable and deep-clone all disposable resources for this GL context.
   const root = source.clone(true);
+  const ownedGeometries = new Set<THREE.BufferGeometry>();
+  const ownedMaterials = new Set<THREE.Material>();
 
-  const petGroup = new THREE.Group();
-  PET_NODES.forEach((name) => {
-    const node = root.getObjectByName(name);
-    if (node) petGroup.add(node);
+  // Track imported resources so scene teardown is complete and deterministic.
+  root.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    obj.geometry = obj.geometry.clone();
+    ownedGeometries.add(obj.geometry);
+    if (Array.isArray(obj.material)) {
+      obj.material = obj.material.map((material: THREE.Material) =>
+        material.clone()
+      );
+      obj.material.forEach((material: THREE.Material) =>
+        ownedMaterials.add(material)
+      );
+    } else {
+      obj.material = obj.material.clone();
+      ownedMaterials.add(obj.material);
+    }
   });
 
-  const leftEye = root.getObjectByName("LeftEye") as THREE.Mesh | undefined;
-  const rightEye = root.getObjectByName("RightEye") as THREE.Mesh | undefined;
-  const core = root.getObjectByName("EnergyCore") as THREE.Mesh | undefined;
-  const halo = root.getObjectByName("HaloCharm") as THREE.Mesh | undefined;
+  const petGroup = new THREE.Group();
+  const petNodes = PET_NODES.map((name) => root.getObjectByName(name)).filter(
+    (node): node is THREE.Object3D => Boolean(node)
+  );
+  petNodes.forEach((node) => petGroup.add(node));
+
+  const leftEye = petGroup.getObjectByName("LeftEye") as THREE.Mesh | undefined;
+  const rightEye = petGroup.getObjectByName("RightEye") as THREE.Mesh | undefined;
+  const core = petGroup.getObjectByName("EnergyCore") as THREE.Mesh | undefined;
+  const halo = petGroup.getObjectByName("HaloCharm") as THREE.Mesh | undefined;
+  const visorLip = petGroup.getObjectByName("VisorLip") as THREE.Mesh | undefined;
   const ring = root.getObjectByName("PlatformRing") as THREE.Mesh | undefined;
 
-  const cloneMat = (mesh?: THREE.Mesh) => {
-    if (!mesh) return null;
-    const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
-    mesh.material = mat;
-    return mat;
-  };
+  const materialOf = (mesh?: THREE.Mesh) =>
+    mesh && !Array.isArray(mesh.material)
+      ? (mesh.material as THREE.MeshStandardMaterial)
+      : null;
 
-  const eyeMat = cloneMat(leftEye);
+  const eyeMat = materialOf(leftEye);
   if (rightEye && eyeMat) rightEye.material = eyeMat;
-  const coreMat = cloneMat(core);
-  const accentMat = cloneMat(ring);
+  const coreMat = materialOf(core);
+  const accentMat = materialOf(ring);
   if (halo && accentMat) halo.material = accentMat;
+  if (visorLip && accentMat) visorLip.material = accentMat;
+
+  if (eyeMat) {
+    eyeMat.color.set(0xffe3bd);
+    eyeMat.emissive.set(0xffbd78);
+    eyeMat.roughness = 0.42;
+  }
 
   // Tint accent parts with the user's customisation colour
   for (const mat of [coreMat, accentMat]) {
@@ -92,7 +117,7 @@ export function createCompanionInstance(
   // (MeshPhysicalMaterial) whose shader fails on expo-gl, so swap in a plain
   // standard material rather than cloning it.
   let bodyMat: THREE.MeshStandardMaterial | null = null;
-  root.traverse((obj) => {
+  petGroup.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     const mat = obj.material as THREE.MeshStandardMaterial;
     if (mat?.name !== "Body_Charcoal") return;
@@ -103,6 +128,7 @@ export function createCompanionInstance(
         metalness: 0.08,
       });
       bodyMat.name = "Body_Charcoal_Runtime";
+      ownedMaterials.add(bodyMat);
     }
     obj.material = bodyMat;
   });
@@ -111,11 +137,8 @@ export function createCompanionInstance(
     root,
     rig: { petGroup, leftEye, rightEye, halo, eyeMat, coreMat, accentMat },
     dispose: () => {
-      // Dispose only per-instance clones; geometries are shared with the
-      // module-level cache and other mounted instances
-      for (const mat of [eyeMat, coreMat, accentMat, bodyMat]) {
-        mat?.dispose();
-      }
+      ownedGeometries.forEach((geometry) => geometry.dispose());
+      ownedMaterials.forEach((material) => material.dispose());
     },
   };
 }

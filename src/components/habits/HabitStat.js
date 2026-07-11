@@ -7,7 +7,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { useHabits } from "@/context/HabitsContext";
 function HabitStat() {
   const { colors } = useTheme();
-  const { habits, completedCount, currentStreak, totalCount } = useHabits();
+  const { completedCount, currentStreak, totalCount } = useHabits();
   // Calculate total completions across all habits and all dates
   const stats = [
     {

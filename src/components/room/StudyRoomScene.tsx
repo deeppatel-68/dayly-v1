@@ -8,12 +8,24 @@ import {
   disposeEquipment,
 } from "@/components/3d/equipment";
 import { createPetMotionController } from "@/components/3d/petMotion";
+import SceneTouchLayer, {
+  SceneTapEvent,
+} from "@/components/3d/SceneTouchLayer";
+import {
+  createOrbitRig,
+  createPetTapDetector,
+  OrbitRig,
+} from "@/components/3d/sceneInteraction";
+import {
+  createContactShadow,
+  createSceneRenderer,
+} from "@/components/3d/sceneRenderer";
 import { AvatarState } from "@/components/avatar/avatarTypes";
 import { useAvatarData } from "@/components/avatar/useAvatarData";
 import CharacterScene from "@/components/character/CharacterScene";
 import { useTheme } from "@/context/ThemeContext";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
-import { Renderer } from "expo-three";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
 import * as THREE from "three";
@@ -28,12 +40,17 @@ interface StudyRoomSceneProps {
 // renders every equipped shop item — wearables on the pet, decorations by
 // the pod, wall art and furniture at room anchors.
 export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) {
-  const { colors, colorScheme } = useTheme();
+  const { colorScheme } = useTheme();
   const { accentColor, bodyColor, levelTier, streakTier, equippedItems } =
     useAvatarData({});
   const [failed, setFailed] = useState(false);
   const frameRef = useRef<number | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const orbitRef = useRef<OrbitRig | null>(null);
+  const petTapRef = useRef<
+    ((x: number, y: number, width: number, height: number) => boolean) | null
+  >(null);
+  const pokeRef = useRef<(() => void) | null>(null);
 
   const stateRef = useRef<AvatarState>(state);
   stateRef.current = state;
@@ -60,44 +77,49 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       const width = gl.drawingBufferWidth;
       const height = gl.drawingBufferHeight;
 
-      const renderer = new Renderer({ gl });
-      renderer.setSize(width, height);
-      renderer.setClearColor(colors.background, 1);
-      renderer.debug.checkShaderErrors = false;
+      const renderer = createSceneRenderer({
+        gl,
+        clearColor: "#141311",
+      });
 
       const scene = new THREE.Scene();
-      // Camera framing render-verified in headless Blender (marker spheres
-      // at the pet pod, desk, lamp and chair, rendered at a 720x1560
-      // portrait aspect matching a phone GLView). Because three's fov is
-      // always the VERTICAL angle, a portrait aspect (~0.46 here) derives a
-      // much narrower HORIZONTAL fov (roughly fov * aspect) -- the old
-      // fov=42 at (0.55,1.75,4.3) gave only ~20 degrees horizontal, which
-      // cropped out ROOM_PET_POSITION (x=1.05): the pet was ~85% offscreen.
-      // Pulling back, re-centering lookAt between the pet and the desk, and
-      // widening the vertical fov to 52 (horizontal ~25) brings the whole
-      // pet fully into frame with the desk/lamp/chair still readable on the
-      // left (the pod's own outer rim can clip slightly at the right edge,
-      // traded off in favour of the pet itself never being cropped).
-      const camera = new THREE.PerspectiveCamera(52, width / height, 0.1, 100);
-      camera.position.set(0.5, 1.3, 4.4);
-      camera.lookAt(0.42, 0.78, -0.48);
+      // Portrait framing verified in the iOS simulator. Three's FOV is
+      // vertical, so the narrow phone aspect needs a wider FOV and a target
+      // close to the companion; the desk remains supporting context and can
+      // be inspected with the bounded room orbit.
+      const camera = new THREE.PerspectiveCamera(58, width / height, 0.1, 100);
+      camera.position.set(0.72, 1.3, 4.8);
+      const orbitTarget = new THREE.Vector3(0.72, 0.82, -0.48);
+      const homeOffset = camera.position.clone().sub(orbitTarget);
+      const homeAzimuth = Math.atan2(homeOffset.x, homeOffset.z);
+      const orbit = createOrbitRig({
+        target: orbitTarget,
+        radius: Math.hypot(homeOffset.x, homeOffset.z),
+        height: camera.position.y,
+        initialAzimuth: homeAzimuth,
+        minAzimuth: homeAzimuth - 0.6,
+        maxAzimuth: homeAzimuth + 0.6,
+        easeBackAfter: 2.5,
+      });
+      orbit.applyTo(camera, 0);
+      orbitRef.current = orbit;
 
       const accent = new THREE.Color(accentColor);
       const motion = createPetMotionController({ levelTier, streakTier });
 
-      // Room lighting: soft ambient, warm key, desk lamp, accent rim by pet.
-      // Ambient nudged warm (was neutral 0xffffff) to match the room's
-      // charcoal palette shift toward Colors.ts's warm dark theme.
-      const ambient = new THREE.AmbientLight(0xfff2e8, 0.5);
-      const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.75);
+      // Room lighting: warm-sky/charcoal-ground hemisphere (replaces the flat
+      // ambient wash — gives walls/floor tonal variation), warm key, desk
+      // lamp, accent rim by the pet.
+      const hemi = new THREE.HemisphereLight(0xfff2e8, 0x1c1a18, 0.55);
+      const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.85);
       keyLight.position.set(2.5, 4, 3.5);
       const petRim = new THREE.PointLight(
         accent,
-        0.45 + motion.streakBoost * 0.3,
+        0.5 + motion.streakBoost * 0.3,
         6
       );
       petRim.position.set(2.0, 1.5, 1.5);
-      scene.add(ambient, keyLight, petRim);
+      scene.add(hemi, keyLight, petRim);
 
       const room = buildStudyRoom(accent);
       scene.add(room.group);
@@ -117,6 +139,8 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       companion.rig.petGroup.position.x = ROOM_PET_POSITION.x;
       companion.rig.petGroup.position.z = ROOM_PET_POSITION.z;
       scene.add(companion.rig.petGroup, companion.root);
+      petTapRef.current = createPetTapDetector(camera, companion.rig.petGroup);
+      pokeRef.current = motion.poke;
 
       // Equipped items: this scene renders every slot, including room decor
       const equipMaterials = createEquipmentMaterials(accent);
@@ -137,6 +161,15 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
         }
       );
 
+      // Grounds the floating pet on its pod (puck top ≈ y 0.095)
+      const shadow = createContactShadow(0.5);
+      shadow.group.position.set(
+        ROOM_PET_POSITION.x,
+        0.096,
+        ROOM_PET_POSITION.z
+      );
+      scene.add(shadow.group);
+
       const clock = new THREE.Clock();
       const animate = () => {
         frameRef.current = requestAnimationFrame(animate);
@@ -144,20 +177,20 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
         const s = stateRef.current;
         const celebrating = s === "reward" || s === "levelUp";
 
+        orbit.applyTo(camera, t);
         motion.apply(companion.rig, s, t);
+        shadow.setLift(companion.rig.petGroup.position.y);
 
-        // Desk lamp settles brighter while focusing. Targets nudged up
-        // slightly (was 1.5/1.1/0.85) to keep the same visual pop now that
-        // the walls/floor sit darker against the app's warm-charcoal palette.
-        const lampTarget = s === "focus" ? 1.65 : celebrating ? 1.2 : 0.9;
+        // Desk lamp settles brighter while focusing. Values retuned ~1.3x
+        // hotter for ACES tone mapping (see sceneRenderer.ts).
+        const lampTarget = s === "focus" ? 2.15 : celebrating ? 1.55 : 1.2;
         room.lampLight.intensity +=
           (lampTarget - room.lampLight.intensity) * 0.06;
 
-        // String lights shimmer during celebrations (peak raised to match
-        // the darker room; idle glow nudged up a touch for the same reason)
+        // String lights shimmer during celebrations (tone-mapped retune)
         room.stringMat.emissiveIntensity = celebrating
-          ? 1.4 + Math.sin(t * 8) * 0.5
-          : 0.85;
+          ? 1.8 + Math.sin(t * 8) * 0.65
+          : 1.1;
 
         renderer.render(scene, camera);
         gl.endFrameEXP();
@@ -165,6 +198,10 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       animate();
 
       cleanupRef.current = () => {
+        orbitRef.current = null;
+        petTapRef.current = null;
+        pokeRef.current = null;
+        shadow.dispose();
         disposeEquipment(equipped);
         equipMaterials.dispose();
         companion.dispose();
@@ -188,12 +225,24 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
     return <CharacterScene variant="full" state={state} />;
   }
 
+  const handleTap = (event: SceneTapEvent) => {
+    if (!petTapRef.current?.(event.x, event.y, event.width, event.height)) return;
+    pokeRef.current?.();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  };
+
   return (
-    <GLView
-      key={sceneKey}
-      style={styles.glView}
-      onContextCreate={onContextCreate}
-    />
+    <SceneTouchLayer
+      onTap={handleTap}
+      onDrag={(delta) => orbitRef.current?.orbitBy(delta)}
+    >
+      <GLView
+        key={sceneKey}
+        style={styles.glView}
+        msaaSamples={4}
+        onContextCreate={onContextCreate}
+      />
+    </SceneTouchLayer>
   );
 }
 

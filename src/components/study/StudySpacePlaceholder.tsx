@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Animated,
+  ActivityIndicator,
   View,
   StyleSheet,
   Modal,
@@ -9,6 +10,7 @@ import {
   ScrollView,
   TextInput,
   FlatList,
+  InteractionManager,
 } from "react-native";
 import { useTheme } from "@/context/ThemeContext";
 import { useCharacter } from "@/context/CharacterContext";
@@ -31,6 +33,7 @@ interface StudySpacePlaceholderProps {
   visible: boolean;
   onClose: () => void;
   showTimer?: boolean;
+  initialShopOpen?: boolean;
 }
 
 // Shop item ids the 3D layer actually displays (wearables + pod decorations
@@ -250,10 +253,33 @@ export default function StudySpacePlaceholder({
   visible,
   onClose,
   showTimer = true,
+  initialShopOpen = false,
 }: StudySpacePlaceholderProps) {
   const { colors } = useTheme();
   const [showShop, setShowShop] = useState(false);
   const [characterState, setCharacterState] = useState<AvatarState>("idle");
+  const [sceneReady, setSceneReady] = useState(false);
+
+  useEffect(() => {
+    let task: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
+      null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (visible) {
+      setShowShop(initialShopOpen);
+      setCharacterState("idle");
+      setSceneReady(false);
+      task = InteractionManager.runAfterInteractions(() => {
+        timer = setTimeout(() => setSceneReady(true), 500);
+      });
+    } else {
+      setShowShop(false);
+      setSceneReady(false);
+    }
+    return () => {
+      task?.cancel();
+      if (timer) clearTimeout(timer);
+    };
+  }, [initialShopOpen, visible]);
 
   return (
     <Modal
@@ -265,7 +291,11 @@ export default function StudySpacePlaceholder({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* My Space: the companion at home in its study nook */}
         <View style={styles.roomArea}>
-          <StudyRoomScene state={characterState} />
+          {sceneReady ? (
+            <StudyRoomScene state={characterState} />
+          ) : (
+            <ActivityIndicator size="small" color="#D97757" />
+          )}
         </View>
 
         {/* Overlay UI */}
@@ -273,16 +303,18 @@ export default function StudySpacePlaceholder({
           {/* Top Bar */}
           <View style={styles.topBar}>
             <Pressable
-              style={[styles.iconButton, { backgroundColor: colors.card }]}
+              accessibilityLabel="Close My Space"
+              style={styles.iconButton}
               onPress={onClose}
             >
-              <Ionicons name="close" size={24} color={colors.text} />
+              <Ionicons name="close" size={22} color="#F0EEE6" />
             </Pressable>
             <Pressable
-              style={[styles.iconButton, { backgroundColor: colors.card }]}
+              accessibilityLabel="Open shop"
+              style={styles.iconButton}
               onPress={() => setShowShop(true)}
             >
-              <Ionicons name="storefront" size={24} color={colors.text} />
+              <Ionicons name="storefront" size={22} color="#F0EEE6" />
             </Pressable>
           </View>
 
@@ -877,6 +909,9 @@ const styles = StyleSheet.create({
   },
   roomArea: {
     ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#141311",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -889,9 +924,12 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   iconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: "rgba(240, 238, 230, 0.16)",
+    backgroundColor: "rgba(24, 23, 21, 0.82)",
     alignItems: "center",
     justifyContent: "center",
   },
