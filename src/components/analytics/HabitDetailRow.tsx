@@ -2,7 +2,7 @@ import { HabitStats } from "@/utils/analytics";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
-import CircularProgress from "./ProgressRing";
+import HabitProgressRing from "./ProgressRing";
 
 // Note: Habit type here is the raw habit from store, HabitStats is calculated
 import { Habit } from "@/types/habits";
@@ -50,7 +50,7 @@ export const HabitDetailRow = ({
           </View>
         </View>
       </View>
-      <CircularProgress
+      <HabitProgressRing
         progress={stats.completionRate}
         size={50}
         strokeWidth={5}
@@ -59,7 +59,7 @@ export const HabitDetailRow = ({
             ? "#6EE7B7"
             : stats.completionRate > 40
             ? "#FFB800"
-            : "#EF4444"
+            : "#C65B4E"
         }
       />
     </View>
@@ -67,4 +67,3 @@ export const HabitDetailRow = ({
 );
 
 export default HabitDetailRow;
-

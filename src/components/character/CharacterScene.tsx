@@ -4,6 +4,7 @@ import { useShop } from "@/context/ShopContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
 import { shopItems } from "@/data/shopItems";
+import { toLevelTier, toStreakTier } from "@/utils/progression";
 import { Ionicons } from "@expo/vector-icons";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import { Renderer } from "expo-three";
@@ -52,12 +53,11 @@ export default function CharacterScene({
   );
 
   // Progression tiers keep the scene key stable between every XP gain
-  const levelTier = Math.min(3, Math.floor((level - 1) / 3));
-  const streakTier =
-    currentStreak >= 14 ? 3 : currentStreak >= 7 ? 2 : currentStreak >= 3 ? 1 : 0;
+  const levelTier = toLevelTier(level);
+  const streakTier = toStreakTier(currentStreak);
 
   // Recreate the GL context only on customisation/theme/tier changes
-  const sceneKey = `${character.color}|${equippedIds.join("+")}|${colorScheme}|L${levelTier}|S${streakTier}`;
+  const sceneKey = `${character.color}|${character.bodyColor}|${equippedIds.join("+")}|${colorScheme}|L${levelTier}|S${streakTier}`;
 
   const stopAndDispose = () => {
     if (frameRef.current !== null) {
@@ -111,9 +111,10 @@ export default function CharacterScene({
         scene.add(crownLight);
       }
 
-      // Materials — smooth matte charcoal body, glossy face screen, warm glows
+      // Materials — smooth matte body in the user's colour, glossy face
+      // screen, warm glows
       const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x2a2a2f,
+        color: new THREE.Color(character.bodyColor || "#F3E7D3"),
         roughness: 0.45,
         metalness: 0.08,
       });

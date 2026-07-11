@@ -1,12 +1,23 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 
 function XpBar() {
   const { colors } = useTheme();
   const { level, xpIntoLevel, xpForNextLevel, progress } = useXp();
+  const fillAnim = useRef(new Animated.Value(progress)).current;
+
+  // Ease the bar toward new progress whenever XP changes
+  useEffect(() => {
+    Animated.timing(fillAnim, {
+      toValue: progress,
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // width animation
+    }).start();
+  }, [progress, fillAnim]);
 
   return (
     <View style={styles.container}>
@@ -37,13 +48,16 @@ function XpBar() {
             { backgroundColor: colors.backgroundSecondary },
           ]}
         >
-          <View
+          <Animated.View
             style={[
               styles.fill,
               {
                 backgroundColor: colors.accent,
-                // Keep a small visible nub at 0 progress so the bar reads as intentional
-                width: `${Math.min(100, Math.max(3, Math.round(progress * 100)))}%`,
+                // 3% floor keeps a visible nub at zero progress
+                width: fillAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ["3%", "100%"],
+                }),
               },
             ]}
           />

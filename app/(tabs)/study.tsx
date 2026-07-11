@@ -1,5 +1,4 @@
 import TopBar from "@/components/common/TopBar";
-import AudioSelector from "@/components/study/AudioSelector";
 import FocusTimer from "@/components/study/FocusTimer";
 import SessionTasks from "@/components/study/SessionTasks";
 import StudySpacePlaceholder from "@/components/study/StudySpacePlaceholder";
@@ -15,11 +14,17 @@ export default function StudyScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.contentContainer}
       >
-        <TopBar />
-        <FocusTimer onStart={() => setShowStudySpace(true)} />
-        <AudioSelector />
+        <TopBar
+          eyebrow="Deep work"
+          title="Focus"
+          subtitle="Time spent here becomes progress your companion can wear."
+        />
+        {!showStudySpace && (
+          <FocusTimer onStart={() => setShowStudySpace(true)} />
+        )}
         <SessionTasks />
       </ScrollView>
       <StudySpacePlaceholder
@@ -36,7 +41,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 120, // Space for tab bar
+    paddingBottom: 32,
   },
 });
-

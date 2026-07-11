@@ -15,7 +15,7 @@ type StatsContextValue = {
 const StatsContext = createContext<StatsContextValue | undefined>(undefined);
 
 export function StatsProvider({ children }: { children: ReactNode }) {
-  const [stats, setStats] = useState<Stats[]>([
+  const [stats] = useState<Stats[]>([
     { id: 1, title: "xp", value: 100, change: 10, percentage: 10 },
     { id: 2, title: "coins", value: 325, change: 10, percentage: 10 },
     { id: 3, title: "streak", value: 3, change: 1, percentage: 10 },

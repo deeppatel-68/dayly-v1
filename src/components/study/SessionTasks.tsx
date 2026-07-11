@@ -11,15 +11,9 @@ type Task = {
   completed: boolean;
 };
 
-const DEFAULT_TASKS: Task[] = [
-  { id: "1", text: "REVIEW CHAPTER 3", completed: false },
-  { id: "2", text: "SOLVE PRACTICE PROBLEMS", completed: false },
-  { id: "3", text: "TAKE NOTES", completed: false },
-];
-
 export default function SessionTasks() {
   const { colors } = useTheme();
-  const [tasks, setTasks] = useState<Task[]>(DEFAULT_TASKS);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newTextTask, setNewTextTask] = useState("");
 
   const toggleTask = (id: string) => {
@@ -28,25 +22,31 @@ export default function SessionTasks() {
         task.id === id ? { ...task, completed: !task.completed } : task
       )
     );
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (process.env.EXPO_OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   };
 
   const deleteTask = (id: string) => {
     setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (process.env.EXPO_OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
   };
 
   const addTask = () => {
     // Validation
     if (newTextTask.trim() === "") {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (process.env.EXPO_OS === "ios") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
       return;
     }
 
     // Create new task
     const newTask: Task = {
       id: Date.now().toString(),
-      text: newTextTask.trim().toUpperCase(),
+      text: newTextTask.trim(),
       completed: false,
     };
 
@@ -57,7 +57,9 @@ export default function SessionTasks() {
     setNewTextTask("");
 
     // Success feedback
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (process.env.EXPO_OS === "ios") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   };
 
   return (
@@ -119,7 +121,7 @@ export default function SessionTasks() {
               color={colors.textSecondary}
             />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              No tasks yet. Add one above!
+              Add a small target for this focus session.
             </Text>
           </View>
         ) : (

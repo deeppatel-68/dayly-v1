@@ -1,3 +1,4 @@
+import FadeInView from "@/components/common/FadeInView";
 import ShortcutButton from "@/components/common/ShortcutButtons";
 import TopBar from "@/components/common/TopBar";
 import ArenaPlaceholder from "@/components/dashboard-stats/ArenaPlaceholder";
@@ -7,15 +8,19 @@ import HabitItem from "@/components/habits/HabitItem";
 import StudySpacePlaceholder from "@/components/study/StudySpacePlaceholder";
 import { Spacing } from "@/constants/Spacing";
 import { useHabits } from "@/context/HabitsContext";
+import { useCharacter } from "@/context/CharacterContext";
 import { useTheme } from "@/context/ThemeContext";
-import { CharacterState } from "@/components/character/CharacterScene";
+import { AvatarState } from "@/components/avatar/avatarTypes";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 export default function Index() {
+  const router = useRouter();
   const { colors } = useTheme();
   const { habits, completedCount } = useHabits();
+  const { character } = useCharacter();
   const [showStudySpace, setShowStudySpace] = useState(false);
-  const [characterState, setCharacterState] = useState<CharacterState>("idle");
+  const [characterState, setCharacterState] = useState<AvatarState>("idle");
   const prevCompleted = useRef(completedCount);
 
   // Celebrate on the dashboard avatar when a habit gets completed
@@ -34,25 +39,33 @@ export default function Index() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
+        contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <TopBar />
-        <View style={styles.arenaContainer}>
+        <TopBar
+          eyebrow="Your momentum"
+          title="Ready for today?"
+          subtitle={`${character.companionName || "Your companion"} grows with every habit and focus session.`}
+        />
+        <FadeInView style={styles.arenaContainer}>
           <ArenaPlaceholder
-            onPress={() => setShowStudySpace(true)}
+            active={!showStudySpace}
+            onOpenSpace={() => setShowStudySpace(true)}
+            onCustomise={() => router.push("/customise")}
             state={characterState}
           />
-        </View>
-        {/* <View>
-        <RoundStat />
-      </View> */}
-        <View>
+        </FadeInView>
+        <FadeInView delay={40}>
           <ShortcutButton />
-        </View>
-        <XpBar />
-        <ProgressDisplay />
+        </FadeInView>
+        <FadeInView delay={80}>
+          <XpBar />
+        </FadeInView>
+        <FadeInView delay={120}>
+          <ProgressDisplay />
+        </FadeInView>
         {habits.length > 0 && (
-          <View style={styles.habitsSection}>
+          <FadeInView delay={160} style={styles.habitsSection}>
             <View style={styles.habitsHeader}>
               <Text style={[styles.habitsTitle, { color: colors.text }]}>
                 {"Today's Habits"}
@@ -69,7 +82,7 @@ export default function Index() {
                 <HabitItem key={habit.id} habit={habit} />
               ))}
             </View>
-          </View>
+          </FadeInView>
         )}
       </ScrollView>
       <StudySpacePlaceholder
@@ -95,7 +108,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: 140,
+    paddingBottom: Spacing.xl,
   },
   habitsSection: {
     marginTop: Spacing.lg,
@@ -105,15 +118,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   habitsTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontFamily: "Outfit-Bold",
     marginBottom: Spacing.xs,
-    letterSpacing: 0.5,
   },
   habitsSubtitle: {
     fontSize: 14,
     fontFamily: "Outfit-Regular",
-    letterSpacing: 0.5,
   },
   habitsList: {
     paddingHorizontal: Spacing.md,

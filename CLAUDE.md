@@ -35,18 +35,12 @@ When working on Dayly, use the relevant files in `.claude/skills/`:
 
 Already built:
 
-- Supabase auth
-- profile screen
-- habit creation/deletion/completion
-- 5 habit limit
-- dashboard habit display
-- analytics foundation
-- study/focus screen foundation
-- theme toggle
-- local coins
-- local character customisation
-- shop/customisation UI foundation
-- placeholders for 3D arena, 3D character, and 3D study space
+- Supabase auth + services layer (progress/habits/shop/settings/study; see CONTEXT.md seams)
+- habits (5 max), completions by date, streaks, consistency calendars
+- XP/levels/coins with award-once idempotency; study focus timer + session summary
+- 3D GLB companion with idle/focus/reward/levelUp states, tap-poke + drag-orbit
+- 3D study room (My Space), equipment/shop gating, Customise screen, onboarding flow
+- warm terracotta/ivory/charcoal theme, motion pass, vitest suite
 
 ## Product Vision
 
@@ -75,6 +69,28 @@ Choose habits → complete habits/study → earn XP/coins → keep streak → un
 8. Friend leaderboard
 9. Activity feed
 10. Gym geofencing later
+
+## Commands
+
+- Before every commit: `npm run typecheck` && `npm run lint` && `npm test`
+- Bundle check: `npx expo start --port 8090` then curl `/node_modules/expo-router/entry.bundle?platform=ios&dev=true&minify=false` → expect 200, no ERROR in log; kill server after
+- Companion model is GENERATED: `/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python assets/avatar/dayly-companion-build.py` rebuilds blend/glb/preview; iterate by Reading the preview PNG
+- metro.config.js changes (e.g. assetExts) require `expo start -c`
+
+## 3D / expo-gl gotchas
+
+- MeshStandardMaterial only — clearcoat/MeshPhysicalMaterial shaders fail on expo-gl
+- Keep `renderer.debug.checkShaderErrors = false` (expo-gl returns undefined shader logs → three crashes on `.trim()`)
+- Load the GLB per scene mount; sharing a parsed graph across GL contexts blanks later scenes
+- three.js `fov` is VERTICAL: portrait GLViews get only ~fov×aspect horizontal — check framing at portrait aspect
+- Blender→three coords: blender (x, y, z) → three (x, z, −y)
+- Screens import only AvatarRenderer, never a concrete renderer (docs/avatar-architecture.md)
+
+## Supabase
+
+- Credentials in `.env` (EXPO_PUBLIC_SUPABASE_URL/ANON_KEY, see .env.example); env changes need `expo start -c`
+- Auth → "Confirm email" must be OFF or signup silently fails RLS on profile insert
+- Schema: docs/supabase-setup.sql (bootstrap) + supabase/migrations/ (apply via SQL editor or CLI)
 
 ## General Rules
 

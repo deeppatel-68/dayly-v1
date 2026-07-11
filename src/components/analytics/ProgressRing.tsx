@@ -14,7 +14,6 @@ export const CircularProgress = ({
   color?: string;
   bgColor?: string;
 }) => {
-  const radius = (size - strokeWidth) / 2;
   // Note: SVG implementation would be ideal, but simplified View-based implementation
   // is requested/provided in prompt. Using basic rotation logic.
 

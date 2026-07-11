@@ -2,13 +2,89 @@ import { Spacing } from "@/constants/Spacing";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import React from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import {
+  Animated,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const HIDDEN_ROUTE_NAMES = new Set(["customise", "profile", "social"]);
+
+function TabButton({ iconName, isFocused, colors, onPress, onLongPress }) {
+  const pressScale = useRef(new Animated.Value(1)).current;
+  const focusAnim = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(focusAnim, {
+      toValue: isFocused ? 1 : 0,
+      speed: 22,
+      bounciness: 3,
+      useNativeDriver: true,
+    }).start();
+  }, [isFocused, focusAnim]);
+
+  const springTo = (value) =>
+    Animated.spring(pressScale, {
+      toValue: value,
+      speed: 26,
+      bounciness: 3,
+      useNativeDriver: true,
+    }).start();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={isFocused ? { selected: true } : {}}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      onPressIn={() => springTo(0.92)}
+      onPressOut={() => springTo(1)}
+      style={styles.tab}
+    >
+      {/* Active indicator - springs in when focused */}
+      <Animated.View
+        style={[
+          styles.activeBackground,
+          {
+            backgroundColor: colors.accent,
+            shadowColor: colors.accent,
+            opacity: focusAnim,
+            transform: [
+              {
+                scale: focusAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.75, 1],
+                }),
+              },
+            ],
+          },
+        ]}
+      />
+      <Animated.View
+        style={[styles.icon, { transform: [{ scale: pressScale }] }]}
+      >
+        <Ionicons
+          name={iconName}
+          size={24}
+          color={isFocused ? colors.background : colors.textSecondary}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 export default function FloatingTabBar({ state, descriptors, navigation }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const currentRoute = state.routes[state.index];
+
+  // Hidden detail routes (Customise, Profile) own their own back navigation.
+  // Keeping the main dock visible there creates inactive/unknown controls.
+  if (HIDDEN_ROUTE_NAMES.has(currentRoute.name)) return null;
 
   return (
     <View
@@ -21,19 +97,14 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
           styles.tabBar,
           {
             backgroundColor:
-              Platform.OS === "ios" ? "rgba(26, 26, 26, 0.8)" : colors.card,
+              Platform.OS === "ios" ? "rgba(32, 31, 28, 0.85)" : colors.card,
             borderColor: colors.border,
           },
         ]}
       >
         {state.routes
-          .filter((route) => {
-            const { options } = descriptors[route.key];
-            // Filter out hidden tabs (profile)
-            return options.href !== null && route.name !== "profile";
-          })
-          .map((route, index) => {
-            const { options } = descriptors[route.key];
+          .filter((route) => !HIDDEN_ROUTE_NAMES.has(route.name))
+          .map((route) => {
             const isFocused =
               state.index ===
               state.routes.findIndex((r) => r.key === route.key);
@@ -53,8 +124,6 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
                     : "checkmark-circle-outline";
                 case "study":
                   return isFocused ? "book" : "book-outline";
-                case "social":
-                  return isFocused ? "people" : "people-outline";
                 default:
                   return "help-circle-outline";
               }
@@ -80,35 +149,14 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
             };
 
             return (
-              <Pressable
+              <TabButton
                 key={route.key}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
+                iconName={iconName}
+                isFocused={isFocused}
+                colors={colors}
                 onPress={onPress}
                 onLongPress={onLongPress}
-                style={styles.tab}
-              >
-                {/* Active indicator - glowing circle */}
-                {isFocused && (
-                  <View
-                    style={[
-                      styles.activeBackground,
-                      {
-                        backgroundColor: colors.accent,
-                        shadowColor: colors.accent,
-                      },
-                    ]}
-                  />
-                )}
-
-                {/* Icon */}
-                <Ionicons
-                  name={iconName}
-                  size={24}
-                  color={isFocused ? colors.background : colors.textSecondary}
-                  style={styles.icon}
-                />
-              </Pressable>
+              />
             );
           })}
       </BlurView>
@@ -150,11 +198,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    opacity: 0.9,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 15,
-    elevation: 8,
+    opacity: 0.95,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   icon: {
     zIndex: 1,

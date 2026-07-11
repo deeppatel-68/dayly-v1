@@ -1,73 +1,74 @@
 /**
- * Black and Orange Theme - Minimalist Design
- * Inspired by the "Dayly" app aesthetic
+ * Anthropic/Claude-inspired theme - ivory, warm charcoal, terracotta
+ * Dayly: gamified productivity companion
  */
 
-const accent = "#ff6b35"; // Orange accent color
+const accent = "#D97757"; // Claude terracotta
+const accentLight = "#D4A27F"; // Kraft tan
 
 export const Colors = {
   light: {
-    // Backgrounds
-    background: "#ffffff",
-    backgroundSecondary: "#f5f5f5",
-    card: "#ffffff",
+    // Backgrounds - warm ivory
+    background: "#FAF9F5",
+    backgroundSecondary: "#F0EEE6",
+    card: "#FFFFFF",
 
     // Text
-    text: "#1a1a1a",
-    textSecondary: "#B0B8C4",
-    textTertiary: "#999999",
+    text: "#141413",
+    textSecondary: "#87867F",
+    textTertiary: "#B0AEA5",
 
     // Accent
     accent: accent,
-    accentLight: "#ff8a5c",
+    accentLight: accentLight,
 
     // Borders
-    border: "rgba(255, 255, 255, 0.15)", // More visible borders
-    borderLight: "#f0f0f0",
+    border: "#E5E3DA",
+    borderLight: "#F0EEE6",
 
     // Task completion
     completed: accent,
-    completedBackground: "rgba(255, 107, 53, 0.1)",
+    completedBackground: "rgba(217, 119, 87, 0.1)",
 
     // Interactive states
-    checkboxEmpty: "#e0e0e0",
+    checkboxEmpty: "#E5E3DA",
     checkboxFilled: accent,
 
     // Status
-    success: accent,
-    error: "#f44336",
+    success: "#6A9B5E",
+    error: "#C65B4E",
   },
 
   dark: {
-    // Backgrounds - Pure black like the design
-    background: "#000000",
-    backgroundSecondary: "#1a1a1a",
-    card: "#1a1a1a",
+    // Backgrounds - Claude warm charcoal
+    background: "#1F1E1D",
+    backgroundSecondary: "#30302E",
+    card: "#262624",
 
-    // Text
-    text: "#ffffff",
-    textSecondary: "#999999",
-    textTertiary: "#666666",
+    // Text - ivory
+    text: "#F0EEE6",
+    textSecondary: "#B0AEA5",
+    textTertiary: "#87867F",
 
-    // Accent - Same orange in both themes
+    // Accent - terracotta in both themes
     accent: accent,
-    accentLight: "#ff8a5c",
+    accentLight: accentLight,
 
-    // Borders - Subtle gray lines
-    border: "#333333",
-    borderLight: "#2a2a2a",
+    // Borders - warm subtle lines
+    border: "#3E3D3A",
+    borderLight: "#30302E",
 
     // Task completion
     completed: accent,
-    completedBackground: "rgba(255, 107, 53, 0.1)",
+    completedBackground: "rgba(217, 119, 87, 0.12)",
 
     // Interactive states
-    checkboxEmpty: "#333333",
+    checkboxEmpty: "#3E3D3A",
     checkboxFilled: accent,
 
     // Status
-    success: accent,
-    error: "#f44336",
+    success: "#6A9B5E",
+    error: "#C65B4E",
   },
 };
 

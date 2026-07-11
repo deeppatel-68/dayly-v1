@@ -6,10 +6,15 @@ import { ShopProvider } from "@/context/ShopContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { XpProvider } from "@/context/XpContext";
 import { AuthScreen } from "@/components/auth/AuthScreen";
+import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
+import {
+  getOnboardingComplete,
+  setOnboardingComplete,
+} from "@/services/onboardingService";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 
 // Prevent the splash screen from auto-hiding before fonts are loaded
@@ -19,6 +24,30 @@ SplashScreen.preventAutoHideAsync();
 function AppContent() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
+
+  // First-run onboarding gate: checked per-user against AsyncStorage
+  // (@onboarding_complete:<userId>). null = not checked yet, so we never
+  // flash the Stack (or the flow) before we know which one to show.
+  const [onboardingComplete, setOnboardingCompleteState] = useState<
+    boolean | null
+  >(null);
+
+  useEffect(() => {
+    if (!user) {
+      setOnboardingCompleteState(null);
+      return;
+    }
+
+    let cancelled = false;
+    setOnboardingCompleteState(null);
+    getOnboardingComplete(user.id).then((complete) => {
+      if (!cancelled) setOnboardingCompleteState(complete);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Show loading indicator while checking auth state
   if (loading) {
@@ -34,14 +63,53 @@ function AppContent() {
     return <AuthScreen />;
   }
 
-  // Show main app if authenticated
+  // Show main app if authenticated. Onboarding needs Character/Habits
+  // context (companion preview, starter habit picker), so it renders inside
+  // the same provider tree as the Stack rather than gating in front of it.
   return (
     <XpProvider>
       <CoinsProvider>
         <HabitsProvider>
           <CharacterProvider>
             <ShopProvider>
-              <Stack screenOptions={{ headerShown: false }} />
+              {onboardingComplete === null ? (
+                <View
+                  style={[
+                    styles.loadingContainer,
+                    { backgroundColor: colors.background },
+                  ]}
+                >
+                  <ActivityIndicator size="large" color={colors.accent} />
+                </View>
+              ) : onboardingComplete ? (
+                <Stack
+                  screenOptions={{
+                    contentStyle: { backgroundColor: colors.background },
+                    headerStyle: { backgroundColor: colors.background },
+                    headerTintColor: colors.text,
+                    headerTitleStyle: { fontFamily: "Outfit-SemiBold" },
+                    headerShadowVisible: false,
+                  }}
+                >
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="customise"
+                    options={{ title: "Customise", headerBackTitle: "Home" }}
+                  />
+                  <Stack.Screen
+                    name="profile"
+                    options={{ title: "Profile", headerBackTitle: "Home" }}
+                  />
+                  <Stack.Screen name="auth" options={{ headerShown: false }} />
+                </Stack>
+              ) : (
+                <OnboardingFlow
+                  onComplete={() => {
+                    setOnboardingComplete(user.id);
+                    setOnboardingCompleteState(true);
+                  }}
+                />
+              )}
             </ShopProvider>
           </CharacterProvider>
         </HabitsProvider>
@@ -73,11 +141,11 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <ThemeProvider>
         <AppContent />
-      </AuthProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
 

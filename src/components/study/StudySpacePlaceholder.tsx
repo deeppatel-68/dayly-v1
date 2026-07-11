@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
+  Animated,
+  ActivityIndicator,
   View,
   StyleSheet,
   Modal,
@@ -7,27 +9,38 @@ import {
   Text,
   ScrollView,
   TextInput,
-  Dimensions,
   FlatList,
+  InteractionManager,
 } from "react-native";
 import { useTheme } from "@/context/ThemeContext";
 import { useCharacter } from "@/context/CharacterContext";
 import { useCoins } from "@/context/CoinsContext";
 import { useShop } from "@/context/ShopContext";
+import { useXp } from "@/context/XpContext";
 import { Ionicons } from "@expo/vector-icons";
-import CharacterScene, {
-  CharacterState,
-} from "@/components/character/CharacterScene";
+import { RENDERED_EQUIPMENT_IDS } from "@/components/3d/equipment";
+import AvatarRenderer from "@/components/avatar/AvatarRenderer";
+import { AvatarState } from "@/components/avatar/avatarTypes";
+import StudyRoomScene from "@/components/room/StudyRoomScene";
 import FocusTimer from "@/components/study/FocusTimer";
 import { Spacing, BorderRadius, Shadows } from "@/constants/Spacing";
+import { AVATAR_BODY_COLORS } from "@/data/avatarColors";
 import { shopItems } from "@/data/shopItems";
+import * as Haptics from "expo-haptics";
 import { ItemCategory, ItemRarity, ShopItem } from "@/types/shop";
 
 interface StudySpacePlaceholderProps {
   visible: boolean;
   onClose: () => void;
   showTimer?: boolean;
+  initialShopOpen?: boolean;
 }
+
+// Shop item ids the 3D layer actually displays (wearables + pod decorations
+// on the companion, wall art + furniture in the study room). Items outside
+// this list show as "Coming Soon" and cannot be bought.
+const RENDERED_ITEM_IDS = new Set<string>(RENDERED_EQUIPMENT_IDS);
+const itemAffectsAvatar = (id: string) => RENDERED_ITEM_IDS.has(id);
 
 // Item Card Component
 interface ItemCardProps {
@@ -38,6 +51,9 @@ interface ItemCardProps {
   colors: any;
   rarityColor: string;
   borderWidth: number;
+  comingSoon: boolean;
+  busy: boolean;
+  disabled: boolean;
   onPress: () => void;
 }
 
@@ -49,40 +65,105 @@ function ItemCard({
   colors,
   rarityColor,
   borderWidth,
+  comingSoon,
+  busy,
+  disabled,
   onPress,
 }: ItemCardProps) {
+  const canAfford = coins >= item.cost;
+  const locked = comingSoon || disabled || busy;
+  const actionLabel = comingSoon
+    ? "Preview soon"
+    : busy
+      ? "Working..."
+      : equipped
+        ? "Equipped"
+        : owned
+          ? "Equip"
+          : canAfford
+            ? "Buy"
+            : `Need ${item.cost - coins}`;
+  const actionIcon = comingSoon
+    ? "construct-outline"
+    : equipped
+      ? "checkmark"
+      : owned
+        ? "shirt-outline"
+        : canAfford
+          ? "bag-add-outline"
+          : "lock-closed-outline";
+  const actionColor = comingSoon
+    ? colors.textSecondary
+    : equipped
+      ? colors.background
+      : owned || canAfford
+        ? colors.background
+        : colors.textSecondary;
+  const actionBackground = comingSoon
+    ? colors.border + "30"
+    : equipped
+      ? colors.accent
+      : owned || canAfford
+        ? colors.text
+        : colors.border + "30";
+
   return (
     <Pressable
+      disabled={locked}
       style={({ pressed }) => [
         styles.itemCard,
         {
           backgroundColor: colors.card,
-          borderColor: rarityColor,
-          borderWidth: borderWidth,
-          opacity: pressed ? 0.8 : 1,
+          borderColor: equipped
+            ? colors.accent
+            : comingSoon
+              ? colors.border
+              : rarityColor,
+          borderWidth: equipped ? 2 : comingSoon ? 1 : borderWidth,
+          opacity: comingSoon ? 0.72 : pressed ? 0.86 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
       ]}
       onPress={onPress}
     >
-      {/* Item Icon */}
-      <View
-        style={[
-          styles.itemIconContainer,
-          {
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <Ionicons
-          name={item.icon as any}
-          size={32}
-          color={rarityColor !== colors.border ? rarityColor : colors.text}
-        />
+      <View style={styles.itemCardTop}>
+        <View
+          style={[
+            styles.itemIconContainer,
+            {
+              backgroundColor: colors.background,
+              borderColor: equipped ? colors.accent : colors.border,
+            },
+          ]}
+        >
+          <Ionicons
+            name={item.icon as any}
+            size={30}
+            color={rarityColor !== colors.border ? rarityColor : colors.text}
+          />
+        </View>
+
+        <View
+          style={[
+            styles.costChip,
+            {
+              backgroundColor: colors.background,
+              borderColor: canAfford || owned ? colors.border : "#D4A27F",
+            },
+          ]}
+        >
+          <Ionicons name="star" size={12} color="#D4A27F" />
+          <Text
+            style={[
+              styles.costChipText,
+              { color: canAfford || owned ? colors.text : colors.textSecondary },
+            ]}
+          >
+            {item.cost}
+          </Text>
+        </View>
       </View>
 
-      {/* Item Info */}
       <View style={styles.itemCardInfo}>
         <View style={styles.itemCardHeader}>
           <Text
@@ -91,61 +172,78 @@ function ItemCard({
           >
             {item.name}
           </Text>
-          {item.rarity && item.rarity !== "common" && (
-            <View
-              style={[
-                styles.rarityBadgeSmall,
-                { backgroundColor: rarityColor + "20" },
-              ]}
-            >
-              <Text
-                style={[styles.rarityTextSmall, { color: rarityColor }]}
-              >
-                {item.rarity.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
         </View>
 
-        {/* Cost */}
-        <View style={styles.itemCardCost}>
-          <Ionicons name="star" size={14} color="#ffd700" />
-          <Text
-            style={[
-              styles.itemCardCostText,
-              {
-                color: coins >= item.cost ? colors.text : colors.textSecondary,
-              },
-            ]}
-          >
-            {item.cost}
-          </Text>
-        </View>
+        <Text
+          style={[styles.itemDescription, { color: colors.textSecondary }]}
+          numberOfLines={2}
+        >
+          {item.description}
+        </Text>
 
-        {/* Status Badge */}
-        {owned && (
+        <View style={styles.itemMetaRow}>
           <View
             style={[
-              styles.statusBadge,
-              {
-                backgroundColor: equipped
-                  ? colors.accent + "20"
-                  : colors.border + "20",
-              },
+              styles.rarityBadge,
+              { backgroundColor: rarityColor + "20" },
             ]}
           >
             <Text
               style={[
-                styles.statusBadgeText,
+                styles.rarityBadgeText,
                 {
-                  color: equipped ? colors.accent : colors.textSecondary,
+                  color:
+                    rarityColor !== colors.border
+                      ? rarityColor
+                      : colors.textSecondary,
                 },
               ]}
             >
-              {equipped ? "Equipped" : "Owned"}
+              {(item.rarity ?? "common").toUpperCase()}
             </Text>
           </View>
-        )}
+          {owned && (
+            <View
+              style={[
+                styles.ownedBadge,
+                {
+                  backgroundColor: equipped
+                    ? colors.accent + "20"
+                    : colors.border + "20",
+                },
+              ]}
+            >
+              <Ionicons
+                name={equipped ? "checkmark-circle" : "checkmark"}
+                size={11}
+                color={equipped ? colors.accent : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.ownedBadgeText,
+                  { color: equipped ? colors.accent : colors.textSecondary },
+                ]}
+              >
+                {equipped ? "On" : "Owned"}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      <View
+        style={[
+          styles.actionPill,
+          {
+            backgroundColor: actionBackground,
+            borderColor: comingSoon ? colors.border : actionBackground,
+          },
+        ]}
+      >
+        <Ionicons name={actionIcon as any} size={13} color={actionColor} />
+        <Text style={[styles.actionPillText, { color: actionColor }]}>
+          {actionLabel}
+        </Text>
       </View>
     </Pressable>
   );
@@ -155,10 +253,33 @@ export default function StudySpacePlaceholder({
   visible,
   onClose,
   showTimer = true,
+  initialShopOpen = false,
 }: StudySpacePlaceholderProps) {
   const { colors } = useTheme();
   const [showShop, setShowShop] = useState(false);
-  const [characterState, setCharacterState] = useState<CharacterState>("idle");
+  const [characterState, setCharacterState] = useState<AvatarState>("idle");
+  const [sceneReady, setSceneReady] = useState(false);
+
+  useEffect(() => {
+    let task: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
+      null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (visible) {
+      setShowShop(initialShopOpen);
+      setCharacterState("idle");
+      setSceneReady(false);
+      task = InteractionManager.runAfterInteractions(() => {
+        timer = setTimeout(() => setSceneReady(true), 1600);
+      });
+    } else {
+      setShowShop(false);
+      setSceneReady(false);
+    }
+    return () => {
+      task?.cancel();
+      if (timer) clearTimeout(timer);
+    };
+  }, [initialShopOpen, visible]);
 
   return (
     <Modal
@@ -168,16 +289,13 @@ export default function StudySpacePlaceholder({
       onRequestClose={onClose}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Study Space avatar scene */}
-        <View style={[styles.placeholderArea, { backgroundColor: colors.card }]}>
-          <View
-            style={[
-              styles.placeholderBox,
-              { backgroundColor: colors.background, borderColor: colors.border },
-            ]}
-          >
-            <CharacterScene state={characterState} />
-          </View>
+        {/* My Space: the companion at home in its study nook */}
+        <View style={styles.roomArea}>
+          {sceneReady ? (
+            <StudyRoomScene state={characterState} />
+          ) : (
+            <ActivityIndicator size="small" color="#D97757" />
+          )}
         </View>
 
         {/* Overlay UI */}
@@ -185,16 +303,18 @@ export default function StudySpacePlaceholder({
           {/* Top Bar */}
           <View style={styles.topBar}>
             <Pressable
-              style={[styles.iconButton, { backgroundColor: colors.card }]}
+              accessibilityLabel="Close My Space"
+              style={styles.iconButton}
               onPress={onClose}
             >
-              <Ionicons name="close" size={24} color={colors.text} />
+              <Ionicons name="close" size={22} color="#F0EEE6" />
             </Pressable>
             <Pressable
-              style={[styles.iconButton, { backgroundColor: colors.card }]}
+              accessibilityLabel="Open shop"
+              style={styles.iconButton}
               onPress={() => setShowShop(true)}
             >
-              <Ionicons name="storefront" size={24} color={colors.text} />
+              <Ionicons name="storefront" size={22} color="#F0EEE6" />
             </Pressable>
           </View>
 
@@ -216,6 +336,53 @@ export default function StudySpacePlaceholder({
   );
 }
 
+// Body colour swatch with a spring when it becomes selected
+function ColorSwatch({
+  hex,
+  name,
+  selected,
+  accentColor,
+  borderColor,
+  onSelect,
+}: {
+  hex: string;
+  name: string;
+  selected: boolean;
+  accentColor: string;
+  borderColor: string;
+  onSelect: () => void;
+}) {
+  const scale = useRef(new Animated.Value(selected ? 1.08 : 1)).current;
+
+  useEffect(() => {
+    Animated.spring(scale, {
+      toValue: selected ? 1.08 : 1,
+      speed: 24,
+      bounciness: 3,
+      useNativeDriver: true,
+    }).start();
+  }, [selected, scale]);
+
+  return (
+    <Pressable accessibilityLabel={name} onPress={onSelect}>
+      {({ pressed }) => (
+        <Animated.View
+          style={[
+            styles.swatch,
+            {
+              backgroundColor: hex,
+              borderColor: selected ? accentColor : borderColor,
+              borderWidth: selected ? 2 : 1,
+              opacity: pressed ? 0.8 : 1,
+              transform: [{ scale }],
+            },
+          ]}
+        />
+      )}
+    </Pressable>
+  );
+}
+
 // Shop Component
 function ShopModal({
   visible,
@@ -225,9 +392,20 @@ function ShopModal({
   onClose: () => void;
 }) {
   const { colors } = useTheme();
-  const { character } = useCharacter();
-  const { coins, spendCoins } = useCoins();
-  const { isOwned, isEquipped, buyItem, equipItem, ownedItems } = useShop();
+  const { character, updateCharacter } = useCharacter();
+  const { coins } = useCoins();
+  const { level } = useXp();
+  const {
+    isOwned,
+    isEquipped,
+    buyItem,
+    equipItem,
+    ownedItems,
+    loading,
+    busyItemId,
+    lastError,
+    clearShopError,
+  } = useShop();
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -239,9 +417,14 @@ function ShopModal({
   // Get equipped accessories
   const equippedAccessories = useMemo(() => {
     return shopItems.filter((item) => {
-      return item.category === "accessory" && isEquipped(item.id);
+      return (
+        item.category === "accessory" &&
+        ownedItems.some(
+          (ownedItem) => ownedItem.itemId === item.id && ownedItem.equipped
+        )
+      );
     });
-  }, [ownedItems, shopItems, isEquipped]);
+  }, [ownedItems]);
 
   // Filter and search items
   const filteredItems = useMemo(() => {
@@ -259,7 +442,7 @@ function ShopModal({
         item.description?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [selectedCategory, searchQuery, shopItems]);
+  }, [selectedCategory, searchQuery]);
 
   // Sort by rarity (legendary > epic > rare > common) then by cost
   const sortedItems = useMemo(() => {
@@ -279,20 +462,24 @@ function ShopModal({
     });
   }, [filteredItems]);
 
-  const handleBuy = (itemId: string, cost: number) => {
-    if (spendCoins(cost)) {
-      buyItem(itemId);
-    }
+  const handleBuy = async (itemId: string) => {
+    const bought = await buyItem(itemId);
+    Haptics.notificationAsync(
+      bought
+        ? Haptics.NotificationFeedbackType.Success
+        : Haptics.NotificationFeedbackType.Warning
+    );
   };
 
-  const handleEquip = (itemId: string) => {
-    equipItem(itemId);
+  const handleEquip = async (itemId: string) => {
+    await equipItem(itemId);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const getRarityColor = (rarity?: ItemRarity): string => {
     switch (rarity) {
       case "legendary":
-        return "#FFD700"; // Gold
+        return "#D4A27F"; // Kraft tan
       case "epic":
         return "#9B59B6"; // Purple
       case "rare":
@@ -324,11 +511,20 @@ function ShopModal({
     >
       <View style={[styles.shopOverlay, { backgroundColor: colors.background }]}>
         <View style={[styles.shopContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.shopHandle, { backgroundColor: colors.border }]} />
+
           {/* Header */}
           <View style={styles.shopHeader}>
-            <Text style={[styles.shopTitle, { color: colors.text }]}>
-              Shop
-            </Text>
+            <View style={styles.shopTitleBlock}>
+              <Text style={[styles.shopTitle, { color: colors.text }]}>
+                Companion Shop
+              </Text>
+              <Text
+                style={[styles.shopSubtitle, { color: colors.textSecondary }]}
+              >
+                Spend focus coins on upgrades for your study companion.
+              </Text>
+            </View>
             <View style={styles.headerRight}>
               <View
                 style={[
@@ -339,7 +535,7 @@ function ShopModal({
                   },
                 ]}
               >
-                <Ionicons name="star" size={18} color="#ffd700" />
+                <Ionicons name="star" size={18} color="#D4A27F" />
                 <Text style={[styles.coinText, { color: colors.text }]}>
                   {coins}
                 </Text>
@@ -356,6 +552,63 @@ function ShopModal({
             </View>
           </View>
 
+          <View style={styles.shopSummaryRow}>
+            <View
+              style={[
+                styles.summaryPill,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons name="cube-outline" size={13} color={colors.accent} />
+              <Text style={[styles.summaryText, { color: colors.text }]}>
+                {ownedItems.length} owned
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.summaryPill,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons name="sparkles" size={13} color="#D4A27F" />
+              <Text style={[styles.summaryText, { color: colors.text }]}>
+                {equippedAccessories.length} equipped
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.summaryPill,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons name="flash-outline" size={13} color={colors.accent} />
+              <Text style={[styles.summaryText, { color: colors.text }]}>
+                Level {level}
+              </Text>
+            </View>
+          </View>
+
+          {lastError && (
+            <View
+              style={[
+                styles.noticeBanner,
+                { backgroundColor: "#D4A27F20", borderColor: "#D4A27F55" },
+              ]}
+            >
+              <Ionicons name="alert-circle-outline" size={16} color="#D4A27F" />
+              <Text style={[styles.noticeText, { color: colors.text }]}>
+                {lastError}
+              </Text>
+              <Pressable onPress={clearShopError} hitSlop={8}>
+                <Ionicons
+                  name="close"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            </View>
+          )}
+
           {/* Main Content - Vertical Layout */}
           <View style={styles.shopMainContent}>
             {/* Top - Character Preview */}
@@ -365,9 +618,16 @@ function ShopModal({
                 { backgroundColor: colors.card, borderColor: colors.border },
               ]}
             >
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Character
-              </Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Companion Setup
+                </Text>
+                <Text
+                  style={[styles.sectionMeta, { color: colors.textSecondary }]}
+                >
+                  Body colour syncs to your account
+                </Text>
+              </View>
 
               <View style={styles.characterContent}>
                 {/* 3D Character preview */}
@@ -384,7 +644,7 @@ function ShopModal({
                         { backgroundColor: colors.background },
                       ]}
                     >
-                      <CharacterScene variant="preview" />
+                      <AvatarRenderer variant="shop" />
                     </View>
                   </View>
                 </View>
@@ -397,9 +657,29 @@ function ShopModal({
                       { color: colors.textSecondary },
                     ]}
                   >
-                    Customize your study buddy soon. Unlock accessories by
-                    staying focused.
+                    Pick a body colour, then equip accessories you unlock from
+                    the shop below.
                   </Text>
+
+                  {/* Body colour swatches */}
+                  <View style={styles.swatchRow}>
+                    {AVATAR_BODY_COLORS.map((swatch) => (
+                      <ColorSwatch
+                        key={swatch.id}
+                        hex={swatch.hex}
+                        name={swatch.name}
+                        selected={character.bodyColor === swatch.hex}
+                        accentColor={colors.accent}
+                        borderColor={colors.border}
+                        onSelect={() => {
+                          Haptics.impactAsync(
+                            Haptics.ImpactFeedbackStyle.Light
+                          );
+                          updateCharacter({ bodyColor: swatch.hex });
+                        }}
+                      />
+                    ))}
+                  </View>
 
                   <View style={styles.characterStatsRow}>
                     <View
@@ -410,7 +690,7 @@ function ShopModal({
                     >
                       <Ionicons name="star" size={12} color={colors.accent} />
                       <Text style={[styles.statChipText, { color: colors.text }]}>
-                        Lv.1
+                        Level {level}
                       </Text>
                     </View>
                     <View
@@ -430,7 +710,9 @@ function ShopModal({
                           { color: colors.textSecondary },
                         ]}
                       >
-                        {character.color}
+                        {AVATAR_BODY_COLORS.find(
+                          (c) => c.hex === character.bodyColor
+                        )?.name ?? "Custom"}
                       </Text>
                     </View>
                   </View>
@@ -460,7 +742,7 @@ function ShopModal({
                         { color: colors.textSecondary },
                       ]}
                     >
-                      Equip accessories from the shop to personalize your avatar.
+                      More ways to customise your companion are coming soon.
                     </Text>
                   )}
                 </View>
@@ -486,7 +768,7 @@ function ShopModal({
                     />
                     <TextInput
                       style={[styles.searchInput, { color: colors.text }]}
-                      placeholder="Search items..."
+                      placeholder="Search cosmetics..."
                       placeholderTextColor={colors.textSecondary}
                       value={searchQuery}
                       onChangeText={setSearchQuery}
@@ -501,18 +783,6 @@ function ShopModal({
                       </Pressable>
                     )}
                   </View>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.filterButton,
-                      {
-                        backgroundColor: colors.card,
-                        borderColor: colors.border,
-                        opacity: pressed ? 0.8 : 1,
-                      },
-                    ]}
-                  >
-                    <Ionicons name="options-outline" size={16} color={colors.text} />
-                  </Pressable>
                 </View>
 
                 {/* Category Filters */}
@@ -522,7 +792,7 @@ function ShopModal({
                   style={styles.categoryContainer}
                   contentContainerStyle={styles.categoryContent}
                 >
-                  {(["all", "decoration", "furniture", "accessory"] as ItemCategory[]).map(
+                  {(["all", "decoration", "accessory", "furniture"] as ItemCategory[]).map(
                     (category) => (
                       <Pressable
                         key={category}
@@ -583,11 +853,15 @@ function ShopModal({
                   numColumns={2}
                   key={`flatlist-${selectedCategory}`}
                   keyExtractor={(item) => item.id}
-                  renderItem={({ item, index }) => {
+                  renderItem={({ item }) => {
                     const owned = isOwned(item.id);
                     const equipped = isEquipped(item.id);
                     const rarityColor = getRarityColor(item.rarity);
                     const borderWidth = getRarityBorderWidth(item.rarity);
+                    // No shop item is rendered on the avatar yet, so none are
+                    // purchasable — they show as "Coming Soon" instead of
+                    // letting users spend coins on an invisible item
+                    const comingSoon = !itemAffectsAvatar(item.id);
 
                     return (
                       <View style={styles.itemCardWrapper}>
@@ -599,11 +873,17 @@ function ShopModal({
                           colors={colors}
                           rarityColor={rarityColor}
                           borderWidth={borderWidth}
+                          comingSoon={comingSoon}
+                          busy={busyItemId === item.id}
+                          disabled={loading || Boolean(busyItemId)}
                           onPress={() => {
+                            if (comingSoon || loading || busyItemId) {
+                              return;
+                            }
                             if (owned) {
                               handleEquip(item.id);
-                            } else if (coins >= item.cost) {
-                              handleBuy(item.id, item.cost);
+                            } else {
+                              handleBuy(item.id);
                             }
                           }}
                         />
@@ -627,31 +907,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  placeholderArea: {
-    flex: 1,
+  roomArea: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    padding: Spacing.xl,
-  },
-  placeholderBox: {
-    width: "100%",
-    maxWidth: 400,
-    aspectRatio: 1,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  placeholderText: {
-    fontSize: 12,
-    fontFamily: "Outfit-Bold",
-    marginBottom: 4,
-    zIndex: 1,
-  },
-  comingSoonText: {
-    fontSize: 10,
-    fontFamily: "Outfit-Regular",
-    opacity: 0.8,
-    zIndex: 1,
+    backgroundColor: "#141311",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -664,9 +924,12 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   iconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: "rgba(240, 238, 230, 0.16)",
+    backgroundColor: "rgba(24, 23, 21, 0.82)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -685,22 +948,40 @@ const styles = StyleSheet.create({
   shopContainer: {
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.sm,
     paddingBottom: Spacing.lg,
-    maxHeight: "90%",
+    maxHeight: "92%",
     flex: 1,
+  },
+  shopHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: Spacing.md,
+    opacity: 0.8,
   },
   shopHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
+    gap: Spacing.md,
+  },
+  shopTitleBlock: {
+    flex: 1,
   },
   shopTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontFamily: "Outfit-Bold",
-    letterSpacing: 0.5,
+    letterSpacing: 0,
+  },
+  shopSubtitle: {
+    fontSize: 12,
+    fontFamily: "Outfit-Regular",
+    lineHeight: 16,
+    marginTop: 2,
   },
   headerRight: {
     flexDirection: "row",
@@ -711,8 +992,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 9,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
@@ -728,26 +1009,73 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1.5,
   },
+  shopSummaryRow: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  summaryPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  summaryText: {
+    fontSize: 11,
+    fontFamily: "Outfit-SemiBold",
+  },
+  noticeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Outfit-SemiBold",
+    lineHeight: 16,
+  },
   shopMainContent: {
     flex: 1,
     paddingHorizontal: Spacing.lg,
   },
-  // Character Section (Top) - Max 25% of screen
   characterSection: {
-    padding: Spacing.sm,
+    padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
+    alignItems: "stretch",
+    minHeight: 154,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
     alignItems: "center",
-    maxHeight: "25%",
-    minHeight: 120,
+    justifyContent: "space-between",
+    gap: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   sectionTitle: {
     fontSize: 12,
     fontFamily: "Outfit-Bold",
-    marginBottom: Spacing.xs,
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     alignSelf: "flex-start",
+    textTransform: "uppercase",
+  },
+  sectionMeta: {
+    flexShrink: 1,
+    fontSize: 10,
+    fontFamily: "Outfit-Regular",
+    textAlign: "right",
   },
   characterContent: {
     width: "100%",
@@ -760,7 +1088,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   character3DPlaceholder: {
-    width: 120,
+    width: 112,
     aspectRatio: 1,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
@@ -799,6 +1127,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: Spacing.xs,
   },
+  swatchRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginVertical: Spacing.xs,
+  },
+  swatch: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
   statChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -834,11 +1172,10 @@ const styles = StyleSheet.create({
   // Items Section (Bottom) - Takes 60-65% of screen
   itemsSection: {
     flex: 1,
-    minHeight: "60%",
   },
   searchFilterSection: {
-    marginBottom: Spacing.sm,
-    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   searchRow: {
     flexDirection: "row",
@@ -849,7 +1186,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
+    paddingVertical: 10,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     flex: 1,
@@ -862,24 +1199,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Outfit-Regular",
   },
-  filterButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   categoryContainer: {
-    maxHeight: 36,
+    flexGrow: 0,
   },
   categoryContent: {
     gap: Spacing.xs,
-    paddingRight: Spacing.md,
+    paddingRight: Spacing.lg,
+    paddingVertical: 2,
   },
   categoryButton: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
@@ -894,30 +1224,48 @@ const styles = StyleSheet.create({
   },
   itemsRow: {
     justifyContent: "flex-start",
-    gap: Spacing.md,
+    gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
   itemCardWrapper: {
-    width: "48%",
-    maxWidth: "48%",
+    width: "48.5%",
+    maxWidth: "48.5%",
   },
   itemCard: {
     width: "100%",
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    minHeight: 150,
+    minHeight: 204,
     ...Shadows.dark.sm,
   },
+  itemCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
   itemIconContainer: {
-    width: 60,
-    height: 60,
+    width: 54,
+    height: 54,
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    marginBottom: Spacing.sm,
-    alignSelf: "center",
+  },
+  costChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  costChipText: {
+    fontSize: 12,
+    fontFamily: "Outfit-Bold",
   },
   itemCardInfo: {
     gap: Spacing.sm,
@@ -928,34 +1276,63 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: Spacing.xs,
-    marginBottom: Spacing.xs,
   },
   itemCardName: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Outfit-SemiBold",
     flex: 1,
-    lineHeight: 16,
+    lineHeight: 18,
   },
-  rarityBadgeSmall: {
-    width: 20,
-    height: 20,
-    borderRadius: BorderRadius.sm,
-    alignItems: "center",
-    justifyContent: "center",
+  itemDescription: {
+    fontSize: 11,
+    fontFamily: "Outfit-Regular",
+    lineHeight: 15,
   },
-  rarityTextSmall: {
-    fontSize: 10,
-    fontFamily: "Outfit-Bold",
-  },
-  itemCardCost: {
+  itemMetaRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: Spacing.xs,
-    marginTop: Spacing.xs,
   },
-  itemCardCostText: {
-    fontSize: 13,
+  rarityBadge: {
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    alignSelf: "flex-start",
+  },
+  rarityBadgeText: {
+    fontSize: 9,
+    fontFamily: "Outfit-Bold",
+    letterSpacing: 0.5,
+  },
+  ownedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  ownedBadgeText: {
+    fontSize: 9,
+    fontFamily: "Outfit-Bold",
+    letterSpacing: 0.4,
+  },
+  actionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    paddingVertical: 9,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  actionPillText: {
+    fontSize: 11,
     fontFamily: "Outfit-SemiBold",
+    letterSpacing: 0.3,
   },
   statusBadge: {
     paddingHorizontal: Spacing.xs,
@@ -983,4 +1360,3 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 });
-
