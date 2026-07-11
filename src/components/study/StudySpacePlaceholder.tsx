@@ -269,7 +269,7 @@ export default function StudySpacePlaceholder({
       setCharacterState("idle");
       setSceneReady(false);
       task = InteractionManager.runAfterInteractions(() => {
-        timer = setTimeout(() => setSceneReady(true), 500);
+        timer = setTimeout(() => setSceneReady(true), 1600);
       });
     } else {
       setShowShop(false);

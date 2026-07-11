@@ -14,9 +14,14 @@ export default function StudyScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.contentContainer}
       >
-        <TopBar />
+        <TopBar
+          eyebrow="Deep work"
+          title="Focus"
+          subtitle="Time spent here becomes progress your companion can wear."
+        />
         {!showStudySpace && (
           <FocusTimer onStart={() => setShowStudySpace(true)} />
         )}
@@ -36,6 +41,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 120, // Space for tab bar
+    paddingBottom: 32,
   },
 });

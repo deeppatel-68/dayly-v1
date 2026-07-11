@@ -82,7 +82,26 @@ function AppContent() {
                   <ActivityIndicator size="large" color={colors.accent} />
                 </View>
               ) : onboardingComplete ? (
-                <Stack screenOptions={{ headerShown: false }} />
+                <Stack
+                  screenOptions={{
+                    contentStyle: { backgroundColor: colors.background },
+                    headerStyle: { backgroundColor: colors.background },
+                    headerTintColor: colors.text,
+                    headerTitleStyle: { fontFamily: "Outfit-SemiBold" },
+                    headerShadowVisible: false,
+                  }}
+                >
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="customise"
+                    options={{ title: "Customise", headerBackTitle: "Home" }}
+                  />
+                  <Stack.Screen
+                    name="profile"
+                    options={{ title: "Profile", headerBackTitle: "Home" }}
+                  />
+                  <Stack.Screen name="auth" options={{ headerShown: false }} />
+                </Stack>
               ) : (
                 <OnboardingFlow
                   onComplete={() => {

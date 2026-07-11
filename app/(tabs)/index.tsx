@@ -8,6 +8,7 @@ import HabitItem from "@/components/habits/HabitItem";
 import StudySpacePlaceholder from "@/components/study/StudySpacePlaceholder";
 import { Spacing } from "@/constants/Spacing";
 import { useHabits } from "@/context/HabitsContext";
+import { useCharacter } from "@/context/CharacterContext";
 import { useTheme } from "@/context/ThemeContext";
 import { AvatarState } from "@/components/avatar/avatarTypes";
 import { useRouter } from "expo-router";
@@ -17,6 +18,7 @@ export default function Index() {
   const router = useRouter();
   const { colors } = useTheme();
   const { habits, completedCount } = useHabits();
+  const { character } = useCharacter();
   const [showStudySpace, setShowStudySpace] = useState(false);
   const [characterState, setCharacterState] = useState<AvatarState>("idle");
   const prevCompleted = useRef(completedCount);
@@ -37,14 +39,19 @@ export default function Index() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
+        contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <TopBar />
+        <TopBar
+          eyebrow="Your momentum"
+          title="Ready for today?"
+          subtitle={`${character.companionName || "Your companion"} grows with every habit and focus session.`}
+        />
         <FadeInView style={styles.arenaContainer}>
           <ArenaPlaceholder
             active={!showStudySpace}
             onOpenSpace={() => setShowStudySpace(true)}
-            onCustomise={() => router.push("/(tabs)/customise")}
+            onCustomise={() => router.push("/customise")}
             state={characterState}
           />
         </FadeInView>
@@ -101,7 +108,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: 140,
+    paddingBottom: Spacing.xl,
   },
   habitsSection: {
     marginTop: Spacing.lg,
@@ -111,15 +118,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   habitsTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontFamily: "Outfit-Bold",
     marginBottom: Spacing.xs,
-    letterSpacing: 0.5,
   },
   habitsSubtitle: {
     fontSize: 14,
     fontFamily: "Outfit-Regular",
-    letterSpacing: 0.5,
   },
   habitsList: {
     paddingHorizontal: Spacing.md,

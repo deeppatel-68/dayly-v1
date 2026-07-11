@@ -288,6 +288,8 @@ export function attachEquipment(
     const def = EQUIPMENT[id];
     if (!def || !slots.includes(def.slot)) continue;
     const object = def.build(materials);
+    object.userData.equipmentId = id;
+    object.userData.equipmentSlot = def.slot;
     if (def.slot === "pet" && targets.pet) targets.pet.add(object);
     else if (def.slot === "platform" && targets.platform)
       targets.platform.add(object);

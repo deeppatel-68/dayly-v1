@@ -1,5 +1,6 @@
 import { loadAsync } from "expo-three";
 import * as THREE from "three";
+import { createCompanionEvolution } from "./companionEvolution";
 import { PetRig } from "./petMotion";
 
 // Node names authored in the Blender source (assets/avatar/dayly-companion-build.py)
@@ -17,21 +18,36 @@ export const PET_NODES = [
   "VisorLip",
 ];
 
-// Parse the tiny bundled GLB per scene mount. Expo GL resources can retain
-// native-context state across renderer disposal, so sharing a parsed graph
-// made later previews intermittently clear to an empty canvas.
-export function loadCompanion(): Promise<THREE.Group> {
+// Parse the bundled GLB once. Scene instances deep-clone every geometry and
+// material below, so the cached source remains immutable and carries no
+// renderer/context ownership. Re-running expo-three's asset resolve + GLTF
+// parse for a second GL context can hang during dashboard-to-room handoff.
+let companionSourcePromise: Promise<THREE.Group> | null = null;
+
+function parseCompanion(): Promise<THREE.Group> {
   return loadAsync(
-    // Metro resolves bundled assets via static require
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require("../../../assets/avatar/dayly-companion.glb")
-  ).then((gltf: { scene: THREE.Group }) => gltf.scene);
+      // Metro resolves bundled assets via static require
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require("../../../assets/avatar/dayly-companion.glb")
+    )
+    .then((gltf: { scene: THREE.Group }) => gltf.scene);
+}
+
+export function loadCompanion(): Promise<THREE.Group> {
+  if (!companionSourcePromise) {
+    companionSourcePromise = parseCompanion().catch((error) => {
+      companionSourcePromise = null;
+      throw error;
+    });
+  }
+  return companionSourcePromise;
 }
 
 export interface CompanionOptions {
   accent: THREE.Color;
   bodyColor: string;
   levelTier: number;
+  streakTier: number;
 }
 
 export interface CompanionInstance {
@@ -46,7 +62,7 @@ export interface CompanionInstance {
 // per-instance materials cloned + tinted so scenes never cross-talk.
 export function createCompanionInstance(
   source: THREE.Group,
-  { accent, bodyColor, levelTier }: CompanionOptions
+  { accent, bodyColor, levelTier, streakTier }: CompanionOptions
 ): CompanionInstance {
   // expo-three may internally cache the parsed scene. Treat that source as
   // immutable and deep-clone all disposable resources for this GL context.
@@ -82,6 +98,8 @@ export function createCompanionInstance(
   const rightEye = petGroup.getObjectByName("RightEye") as THREE.Mesh | undefined;
   const core = petGroup.getObjectByName("EnergyCore") as THREE.Mesh | undefined;
   const halo = petGroup.getObjectByName("HaloCharm") as THREE.Mesh | undefined;
+  const leftFlipper = petGroup.getObjectByName("LeftFlipper");
+  const rightFlipper = petGroup.getObjectByName("RightFlipper");
   const visorLip = petGroup.getObjectByName("VisorLip") as THREE.Mesh | undefined;
   const ring = root.getObjectByName("PlatformRing") as THREE.Mesh | undefined;
 
@@ -111,6 +129,16 @@ export function createCompanionInstance(
   }
   if (levelTier >= 3 && halo) halo.scale.setScalar(1.25);
 
+  if (leftFlipper) leftFlipper.userData.baseRotationZ = leftFlipper.rotation.z;
+  if (rightFlipper) rightFlipper.userData.baseRotationZ = rightFlipper.rotation.z;
+
+  const evolution = createCompanionEvolution({
+    accent,
+    levelTier,
+    streakTier,
+  });
+  petGroup.add(evolution.root);
+
   // Tint the charcoal body parts (Body upper + flippers) with the user's
   // body colour. Matching by material name keeps Base_Black, the pod, eyes,
   // and accent parts untouched. The GLB's Body_Charcoal carries a clearcoat
@@ -135,8 +163,25 @@ export function createCompanionInstance(
 
   return {
     root,
-    rig: { petGroup, leftEye, rightEye, halo, eyeMat, coreMat, accentMat },
+    rig: {
+      petGroup,
+      leftEye,
+      rightEye,
+      leftFlipper,
+      rightFlipper,
+      halo,
+      leftFin: evolution.leftFin,
+      rightFin: evolution.rightFin,
+      orbitGroup: evolution.orbitGroup,
+      aura: evolution.aura,
+      eyeMat,
+      coreMat,
+      accentMat,
+      evolutionMat: evolution.evolutionMat,
+      auraMat: evolution.auraMat,
+    },
     dispose: () => {
+      evolution.dispose();
       ownedGeometries.forEach((geometry) => geometry.dispose());
       ownedMaterials.forEach((material) => material.dispose());
     },

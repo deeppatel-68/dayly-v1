@@ -14,10 +14,18 @@ export interface PetRig {
   petGroup: THREE.Group;
   leftEye?: THREE.Mesh;
   rightEye?: THREE.Mesh;
+  leftFlipper?: THREE.Object3D;
+  rightFlipper?: THREE.Object3D;
   halo?: THREE.Mesh;
+  leftFin?: THREE.Mesh;
+  rightFin?: THREE.Mesh;
+  orbitGroup?: THREE.Group;
+  aura?: THREE.Object3D;
   eyeMat?: THREE.MeshStandardMaterial | null;
   coreMat?: THREE.MeshStandardMaterial | null;
   accentMat?: THREE.MeshStandardMaterial | null;
+  evolutionMat?: THREE.MeshStandardMaterial | null;
+  auraMat?: THREE.MeshBasicMaterial | null;
 }
 
 export interface PetMotionOptions {
@@ -79,7 +87,7 @@ export function createPetMotionController(options: PetMotionOptions) {
     const scale = 1 + levelScale + pokeBounce * 0.06;
     petGroup.scale.setScalar(scale);
 
-    // Energy core heartbeat: quickens in focus, flashes on celebration
+    // Energy core heartbeat: quickens in focus, flashes on celebration.
     if (rig.coreMat) {
       rig.coreMat.emissiveIntensity =
         (glowBase +
@@ -98,19 +106,77 @@ export function createPetMotionController(options: PetMotionOptions) {
         TONE_BOOST;
     }
 
-    // Eyes: brighter in focus/celebration, soft blink when idle
+    // Eyes carry the expression: focus narrows, reward soft-squints, level-up
+    // opens wide. Idle retains the occasional quick blink.
     if (rig.eyeMat) {
       rig.eyeMat.emissiveIntensity =
         (state === "focus" ? 1.05 : celebrating ? 1.15 : 0.72) * TONE_BOOST;
     }
     if (rig.leftEye && rig.rightEye) {
       const blink = state === "idle" && t % 3.6 > 3.48 ? 0.1 : 1;
-      rig.leftEye.scale.y = blink;
-      rig.rightEye.scale.y = blink;
+      const expressionY =
+        state === "focus"
+          ? 0.7
+          : state === "reward"
+            ? 0.78 + Math.sin(t * 7) * 0.06
+            : state === "levelUp"
+              ? 1.14
+              : blink;
+      const expressionX = state === "focus" ? 0.9 : state === "levelUp" ? 1.08 : 1;
+      rig.leftEye.scale.set(expressionX, expressionY, 1);
+      rig.rightEye.scale.set(expressionX, expressionY, 1);
     }
 
-    // Halo charm: lazy spin (baked tilt makes it wobble like a charm)
-    if (rig.halo) rig.halo.rotation.y = t * 0.7;
+    // Flippers make state changes legible even when the face is small.
+    if (rig.leftFlipper && rig.rightFlipper) {
+      const leftBase = Number(rig.leftFlipper.userData.baseRotationZ ?? 0);
+      const rightBase = Number(rig.rightFlipper.userData.baseRotationZ ?? 0);
+      const wave = celebrating ? Math.sin(t * 8) * 0.55 : 0;
+      const focusTuck = state === "focus" ? 0.18 : 0;
+      rig.leftFlipper.rotation.z = leftBase + wave - focusTuck;
+      rig.rightFlipper.rotation.z = rightBase - wave + focusTuck;
+    }
+
+    // Evolution fins breathe at rest, tuck into focus, and flare for wins.
+    if (rig.leftFin && rig.rightFin) {
+      const flare = celebrating ? 0.32 + Math.sin(t * 7) * 0.12 : 0;
+      const focusFold = state === "focus" ? -0.18 : 0;
+      rig.leftFin.rotation.z = -0.9 - flare - focusFold;
+      rig.rightFin.rotation.z = 0.9 + flare + focusFold;
+    }
+
+    if (rig.evolutionMat) {
+      rig.evolutionMat.emissiveIntensity =
+        (0.42 + levelTier * 0.12 + streakBoost * 0.16 + (celebrating ? 0.4 : 0)) *
+        TONE_BOOST;
+    }
+
+    // Tier-two focus nodes orbit slowly at rest, lock in while focusing, and
+    // accelerate through reward/level-up moments.
+    if (rig.orbitGroup) {
+      const speed = state === "focus" ? 0.22 : celebrating ? 1.8 : 0.5;
+      rig.orbitGroup.rotation.z = t * speed;
+      rig.orbitGroup.rotation.y = Math.sin(t * 0.7) * 0.04;
+    }
+
+    // Streak aura remains restrained at rest and blooms only when momentum
+    // or a celebration calls for it.
+    if (rig.aura && rig.auraMat) {
+      const pulse = (Math.sin(t * 1.8) + 1) * 0.5;
+      rig.auraMat.opacity =
+        0.025 + streakBoost * 0.045 + pulse * 0.015 + (celebrating ? 0.055 : 0);
+      const auraScale = 1 + pulse * 0.035 + (state === "levelUp" ? 0.1 : 0);
+      rig.aura.scale.setScalar(auraScale);
+    }
+
+    // Halo charm: lazy spin at rest, intentional lock during focus, and a
+    // quick orbit during celebrations.
+    if (rig.halo) {
+      rig.halo.rotation.x = 1.05 + Math.sin(t * 0.8) * 0.05;
+      rig.halo.rotation.y = 0.12;
+      rig.halo.rotation.z =
+        -0.16 + t * (state === "focus" ? 0.2 : celebrating ? 2.1 : 0.7);
+    }
   }
 
   return { apply, poke, glowBase, streakBoost };

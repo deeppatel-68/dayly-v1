@@ -12,7 +12,7 @@ import { ItemCategory, ShopItem } from "@/types/shop";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -41,7 +41,6 @@ const RARITY_COLORS = {
 };
 
 export default function CustomiseScreen() {
-  const router = useRouter();
   const isFocused = useIsFocused();
   const { colors } = useTheme();
   const { character, updateCharacter, loading: characterLoading } =
@@ -107,31 +106,28 @@ export default function CustomiseScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <Stack.Screen
+        options={{
+          title: "Customise",
+          headerRight: () => (
+            <View
+              style={[
+                styles.coinBalance,
+                { borderColor: "transparent" },
+              ]}
+            >
+              <Ionicons name="star" size={14} color="#D4A27F" />
+              <Text style={[styles.coinText, { color: colors.text }]}>{coins}</Text>
+            </View>
+          ),
+        }}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            style={[styles.iconButton, { borderColor: colors.border }]}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Customise</Text>
-          <View
-            style={[
-              styles.coinBalance,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Ionicons name="star" size={14} color="#D4A27F" />
-            <Text style={[styles.coinText, { color: colors.text }]}>{coins}</Text>
-          </View>
-        </View>
-
         <View
           style={[
             styles.preview,
@@ -308,32 +304,14 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: {
     paddingHorizontal: Spacing.md,
-    paddingBottom: 140,
-  },
-  header: {
-    minHeight: 64,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontFamily: "Outfit-Bold",
-    fontSize: 20,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
   coinBalance: {
-    minWidth: 62,
-    height: 36,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
+    minWidth: 54,
+    height: 32,
+    paddingHorizontal: Spacing.xs,
+    borderWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

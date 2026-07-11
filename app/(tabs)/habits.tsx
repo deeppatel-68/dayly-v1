@@ -54,12 +54,17 @@ export default function HabitsScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
+          contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={styles.contentContainer}
         >
-          <TopBar />
+          <TopBar
+            eyebrow="Daily practice"
+            title="Habits"
+            subtitle={`${habits.filter((habit) => habit.completed).length} of ${habits.length} complete today`}
+          />
           <View style={styles.header}>
             <View style={styles.headerTop}>
-              <Text style={[styles.title, { color: colors.text }]}>HABITS</Text>
+              <Text style={[styles.title, { color: colors.text }]}>Your list</Text>
               {habits.length < MAX_HABITS && (
                 <Pressable
                   onPress={handleOpenAddModal}
@@ -76,9 +81,6 @@ export default function HabitsScreen() {
                 </Pressable>
               )}
             </View>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              BUILD DISCIPLINE DAILY
-            </Text>
           </View>
           <HabitStat />
           <ConsistencyCalender />
@@ -154,11 +156,11 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: 140,
+    paddingBottom: Spacing.xl,
   },
   header: {
     paddingHorizontal: Spacing.md,
-    marginTop: Spacing.md,
+    marginTop: 0,
   },
   headerTop: {
     flexDirection: "row",
@@ -167,9 +169,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   title: {
-    fontSize: 32,
+    fontSize: 20,
     fontFamily: "Outfit-Bold",
-    letterSpacing: 0.5,
   },
   addButton: {
     flexDirection: "row",

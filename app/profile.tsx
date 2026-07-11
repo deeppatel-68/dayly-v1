@@ -4,7 +4,7 @@ import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
@@ -20,7 +20,6 @@ import {
 } from "react-native";
 
 export default function ProfileScreen() {
-  const router = useRouter();
   const { colors, colorScheme, toggleTheme } = useTheme();
   const isDark = colorScheme === "dark";
   const { user, profile, signOut, updateUsername } = useAuth();
@@ -91,27 +90,12 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{ title: "Profile" }} />
       <ScrollView
         showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.contentContainer}
       >
-        {/* Header with Back Button */}
-        <View style={styles.headerBar}>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.backButton,
-              { backgroundColor: colors.card, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Profile
-          </Text>
-          <View style={styles.backButtonPlaceholder} />
-        </View>
-
         {/* Profile Header */}
         <View style={styles.header}>
           <View
@@ -345,30 +329,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: 100,
-  },
-  headerBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backButtonPlaceholder: {
-    width: 44,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 0.5,
+    paddingBottom: Spacing.xl,
   },
   header: {
     alignItems: "center",

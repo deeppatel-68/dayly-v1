@@ -24,16 +24,14 @@ import {
   Alert,
   Animated,
   AppState,
-  Dimensions,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
-const { width } = Dimensions.get("window");
-const TIMER_SIZE = width * 0.65;
 const STROKE_WIDTH = 8;
 
 interface FocusTimerProps {
@@ -54,6 +52,8 @@ interface SessionResult {
 }
 
 export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) {
+  const { width } = useWindowDimensions();
+  const timerSize = Math.min(292, Math.max(220, width - 96));
   const { colors } = useTheme();
   const { user } = useAuth();
   const { xp } = useXp();
@@ -251,18 +251,18 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
     setDisplaySeconds(0);
   };
 
-  const radius = (TIMER_SIZE - STROKE_WIDTH) / 2;
+  const radius = (timerSize - STROKE_WIDTH) / 2;
   const circumference = 2 * Math.PI * radius;
 
   return (
     <View style={styles.container}>
       {/* Timer Circle */}
       <View style={styles.timerContainer}>
-        <Svg width={TIMER_SIZE} height={TIMER_SIZE}>
+        <Svg width={timerSize} height={timerSize}>
           {/* Background Circle */}
           <Circle
-            cx={TIMER_SIZE / 2}
-            cy={TIMER_SIZE / 2}
+            cx={timerSize / 2}
+            cy={timerSize / 2}
             r={radius}
             stroke={colors.border}
             strokeWidth={STROKE_WIDTH}
@@ -271,8 +271,8 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
           {/* Progress Circle */}
           {displaySeconds > 0 && (
             <Circle
-              cx={TIMER_SIZE / 2}
-              cy={TIMER_SIZE / 2}
+              cx={timerSize / 2}
+              cy={timerSize / 2}
               r={radius}
               stroke={colors.accent}
               strokeWidth={STROKE_WIDTH}
@@ -281,7 +281,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
               strokeDashoffset={circumference * 0.25} // Shows progress
               strokeLinecap="round"
               rotation="-90"
-              origin={`${TIMER_SIZE / 2}, ${TIMER_SIZE / 2}`}
+              origin={`${timerSize / 2}, ${timerSize / 2}`}
             />
           )}
         </Svg>

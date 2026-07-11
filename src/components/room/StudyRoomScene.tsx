@@ -1,7 +1,4 @@
-import {
-  createCompanionInstance,
-  loadCompanion,
-} from "@/components/3d/companionModel";
+import { createProceduralCompanion } from "@/components/3d/proceduralCompanion";
 import {
   attachEquipment,
   createEquipmentMaterials,
@@ -23,11 +20,10 @@ import {
 import { AvatarState } from "@/components/avatar/avatarTypes";
 import { useAvatarData } from "@/components/avatar/useAvatarData";
 import CharacterScene from "@/components/character/CharacterScene";
-import { useTheme } from "@/context/ThemeContext";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { StyleSheet } from "react-native";
+import { AppState, StyleSheet } from "react-native";
 import * as THREE from "three";
 import { buildStudyRoom, ROOM_PET_POSITION } from "./roomBuilders";
 
@@ -40,11 +36,12 @@ interface StudyRoomSceneProps {
 // renders every equipped shop item — wearables on the pet, decorations by
 // the pod, wall art and furniture at room anchors.
 export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) {
-  const { colorScheme } = useTheme();
   const { accentColor, bodyColor, levelTier, streakTier, equippedItems } =
     useAvatarData({});
   const [failed, setFailed] = useState(false);
-  const frameRef = useRef<number | null>(null);
+  const frameRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appActiveRef = useRef(AppState.currentState === "active");
+  const setupGenerationRef = useRef(0);
   const cleanupRef = useRef<(() => void) | null>(null);
   const orbitRef = useRef<OrbitRig | null>(null);
   const petTapRef = useRef<
@@ -55,31 +52,38 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
   const stateRef = useRef<AvatarState>(state);
   stateRef.current = state;
 
-  const sceneKey = `${accentColor}|${bodyColor}|${colorScheme}|L${levelTier}|S${streakTier}|${equippedItems.join("+")}`;
-
   const stopAndDispose = () => {
+    setupGenerationRef.current += 1;
     if (frameRef.current !== null) {
-      cancelAnimationFrame(frameRef.current);
+      clearTimeout(frameRef.current);
       frameRef.current = null;
     }
     cleanupRef.current?.();
     cleanupRef.current = null;
   };
 
-  useEffect(() => stopAndDispose, []);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      appActiveRef.current = nextState === "active";
+    });
+    return () => {
+      subscription.remove();
+      stopAndDispose();
+    };
+  }, []);
 
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
-    let cancelled = false;
+    stopAndDispose();
+    const generation = setupGenerationRef.current;
 
     const setup = async () => {
-      stopAndDispose();
-
       const width = gl.drawingBufferWidth;
       const height = gl.drawingBufferHeight;
 
       const renderer = createSceneRenderer({
         gl,
         clearColor: "#141311",
+        exposure: 1.24,
       });
 
       const scene = new THREE.Scene();
@@ -107,33 +111,57 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       const accent = new THREE.Color(accentColor);
       const motion = createPetMotionController({ levelTier, streakTier });
 
-      // Room lighting: warm-sky/charcoal-ground hemisphere (replaces the flat
-      // ambient wash — gives walls/floor tonal variation), warm key, desk
-      // lamp, accent rim by the pet.
-      const hemi = new THREE.HemisphereLight(0xfff2e8, 0x1c1a18, 0.55);
-      const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.85);
+      // Warm-sky/charcoal-ground hemisphere, warm key and practical desk lamp.
+      const hemi = new THREE.HemisphereLight(0xfff2e8, 0x24211e, 0.72);
+      const keyLight = new THREE.DirectionalLight(0xfff0dd, 1.05);
       keyLight.position.set(2.5, 4, 3.5);
-      const petRim = new THREE.PointLight(
-        accent,
-        0.5 + motion.streakBoost * 0.3,
-        6
-      );
-      petRim.position.set(2.0, 1.5, 1.5);
-      scene.add(hemi, keyLight, petRim);
+      scene.add(hemi, keyLight);
 
       const room = buildStudyRoom(accent);
       scene.add(room.group);
 
-      const source = await loadCompanion();
-      if (cancelled) {
-        room.dispose();
-        return;
-      }
+      // One lifecycle-owned loop drives the complete room and companion.
+      const clock = new THREE.Clock();
+      let companionFrame: ((time: number) => void) | null = null;
+      let companionCleanup: (() => void) | null = null;
 
-      const companion = createCompanionInstance(source, {
+      const animate = () => {
+        frameRef.current = setTimeout(
+          animate,
+          appActiveRef.current ? 1000 / 30 : 250
+        );
+        if (!appActiveRef.current) return;
+        const t = clock.getElapsedTime();
+        const s = stateRef.current;
+        const celebrating = s === "reward" || s === "levelUp";
+
+        orbit.applyTo(camera, t);
+        companionFrame?.(t);
+
+        const lampTarget = s === "focus" ? 2.15 : celebrating ? 1.55 : 1.2;
+        room.lampLight.intensity +=
+          (lampTarget - room.lampLight.intensity) * 0.06;
+        room.stringMat.emissiveIntensity = celebrating
+          ? 1.8 + Math.sin(t * 8) * 0.65
+          : 1.1;
+
+        renderer.render(scene, camera);
+        gl.endFrameEXP();
+      };
+
+      cleanupRef.current = () => {
+        orbitRef.current = null;
+        petTapRef.current = null;
+        pokeRef.current = null;
+        companionCleanup?.();
+        room.dispose();
+        renderer.dispose();
+      };
+      const companion = createProceduralCompanion({
         accent,
         bodyColor,
         levelTier,
+        streakTier,
       });
       companion.root.position.copy(ROOM_PET_POSITION);
       companion.rig.petGroup.position.x = ROOM_PET_POSITION.x;
@@ -160,6 +188,18 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
           },
         }
       );
+      equipped.forEach((object) => {
+        if (object.parent !== companion.rig.petGroup) return;
+        const itemId = String(object.userData.equipmentId ?? "");
+        if (itemId === "focus-cap") {
+          object.scale.setScalar(0.9);
+          object.position.y = 0.19;
+        } else if (itemId === "neon-headphones") {
+          object.scale.setScalar(0.9);
+        } else if (itemId === "study-glasses") {
+          object.scale.setScalar(0.96);
+        }
+      });
 
       // Grounds the floating pet on its pod (puck top ≈ y 0.095)
       const shadow = createContactShadow(0.5);
@@ -170,58 +210,32 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       );
       scene.add(shadow.group);
 
-      const clock = new THREE.Clock();
-      const animate = () => {
-        frameRef.current = requestAnimationFrame(animate);
-        const t = clock.getElapsedTime();
+      companionFrame = (t) => {
         const s = stateRef.current;
-        const celebrating = s === "reward" || s === "levelUp";
-
-        orbit.applyTo(camera, t);
         motion.apply(companion.rig, s, t);
         shadow.setLift(companion.rig.petGroup.position.y);
-
-        // Desk lamp settles brighter while focusing. Values retuned ~1.3x
-        // hotter for ACES tone mapping (see sceneRenderer.ts).
-        const lampTarget = s === "focus" ? 2.15 : celebrating ? 1.55 : 1.2;
-        room.lampLight.intensity +=
-          (lampTarget - room.lampLight.intensity) * 0.06;
-
-        // String lights shimmer during celebrations (tone-mapped retune)
-        room.stringMat.emissiveIntensity = celebrating
-          ? 1.8 + Math.sin(t * 8) * 0.65
-          : 1.1;
-
-        renderer.render(scene, camera);
-        gl.endFrameEXP();
       };
-      animate();
 
-      cleanupRef.current = () => {
-        orbitRef.current = null;
-        petTapRef.current = null;
-        pokeRef.current = null;
+      companionCleanup = () => {
         shadow.dispose();
         disposeEquipment(equipped);
         equipMaterials.dispose();
         companion.dispose();
-        room.dispose();
-        renderer.dispose();
       };
+
+      // Expo GL can stall if new lit meshes are introduced after the first
+      // submitted frame. Assemble the complete scene, then begin one loop.
+      animate();
     };
 
     setup().catch((error) => {
       console.error("Error creating study room scene:", error);
-      if (!cancelled) setFailed(true);
+      if (generation === setupGenerationRef.current) setFailed(true);
     });
-
-    return () => {
-      cancelled = true;
-    };
   };
 
   if (failed) {
-    // Keep the space alive with the primitive pet if the room/GLB fails
+    // Keep the space alive with the legacy fallback if scene setup fails.
     return <CharacterScene variant="full" state={state} />;
   }
 
@@ -237,7 +251,6 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       onDrag={(delta) => orbitRef.current?.orbitBy(delta)}
     >
       <GLView
-        key={sceneKey}
         style={styles.glView}
         msaaSamples={4}
         onContextCreate={onContextCreate}

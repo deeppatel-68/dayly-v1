@@ -1,7 +1,4 @@
-import {
-  createCompanionInstance,
-  loadCompanion,
-} from "@/components/3d/companionModel";
+import { createProceduralCompanion } from "@/components/3d/proceduralCompanion";
 import {
   attachEquipment,
   createEquipmentMaterials,
@@ -20,26 +17,30 @@ import {
   createContactShadow,
   createPetLightRig,
   createSceneRenderer,
+  releaseSceneContext,
 } from "@/components/3d/sceneRenderer";
 import CharacterScene from "@/components/character/CharacterScene";
 import { useTheme } from "@/context/ThemeContext";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { StyleSheet } from "react-native";
+import { AppState, StyleSheet } from "react-native";
 import * as THREE from "three";
 import { AvatarRendererProps, AvatarState } from "./avatarTypes";
 import { useAvatarData } from "./useAvatarData";
 
-// Renders the Blender-authored Dayly companion model with equipped shop
-// items. Falls back to the primitive CharacterScene if the GLB fails.
-export default function AvatarGLB(props: AvatarRendererProps) {
+// Reliable scene-native Dayly companion for compact and customisation
+// surfaces. It shares the same motion/evolution/equipment rig as My Space.
+export default function Avatar3D(props: AvatarRendererProps) {
   const { variant = "dashboard", state = "idle" } = props;
   const { colors, colorScheme } = useTheme();
   const { accentColor, bodyColor, levelTier, streakTier, equippedItems } =
     useAvatarData(props);
   const [failed, setFailed] = useState(false);
-  const frameRef = useRef<number | null>(null);
+  const frameRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appActiveRef = useRef(AppState.currentState === "active");
+  const glRef = useRef<ExpoWebGLRenderingContext | null>(null);
+  const setupGenerationRef = useRef(0);
   const cleanupRef = useRef<(() => void) | null>(null);
   const orbitRef = useRef<OrbitRig | null>(null);
   const petTapRef = useRef<
@@ -56,22 +57,34 @@ export default function AvatarGLB(props: AvatarRendererProps) {
   const sceneKey = `${accentColor}|${bodyColor}|${colorScheme}|L${levelTier}|S${streakTier}|${equippedItems.join("+")}`;
 
   const stopAndDispose = () => {
+    setupGenerationRef.current += 1;
     if (frameRef.current !== null) {
-      cancelAnimationFrame(frameRef.current);
+      clearTimeout(frameRef.current);
       frameRef.current = null;
     }
     cleanupRef.current?.();
     cleanupRef.current = null;
+    const gl = glRef.current;
+    glRef.current = null;
+    if (gl) releaseSceneContext(gl);
   };
 
-  useEffect(() => stopAndDispose, []);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      appActiveRef.current = nextState === "active";
+    });
+    return () => {
+      subscription.remove();
+      stopAndDispose();
+    };
+  }, []);
 
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
-    let cancelled = false;
+    stopAndDispose();
+    glRef.current = gl;
+    const generation = setupGenerationRef.current;
 
     const setup = async () => {
-      stopAndDispose();
-
       const width = gl.drawingBufferWidth;
       const height = gl.drawingBufferHeight;
 
@@ -101,13 +114,11 @@ export default function AvatarGLB(props: AvatarRendererProps) {
 
       createPetLightRig(scene, accent, motion.streakBoost);
 
-      const source = await loadCompanion();
-      if (cancelled) return;
-
-      const companion = createCompanionInstance(source, {
+      const companion = createProceduralCompanion({
         accent,
         bodyColor,
         levelTier,
+        streakTier,
       });
       scene.add(companion.rig.petGroup, companion.root);
       petTapRef.current = createPetTapDetector(camera, companion.rig.petGroup);
@@ -130,7 +141,11 @@ export default function AvatarGLB(props: AvatarRendererProps) {
 
       const clock = new THREE.Clock();
       const animate = () => {
-        frameRef.current = requestAnimationFrame(animate);
+        frameRef.current = setTimeout(
+          animate,
+          appActiveRef.current ? 1000 / 30 : 250
+        );
+        if (!appActiveRef.current) return;
         const t = clock.getElapsedTime();
         orbit.applyTo(camera, t);
         motion.apply(companion.rig, stateRef.current, t);
@@ -153,13 +168,9 @@ export default function AvatarGLB(props: AvatarRendererProps) {
     };
 
     setup().catch((error) => {
-      console.error("Error loading Dayly companion GLB:", error);
-      if (!cancelled) setFailed(true);
+      console.error("Error creating Dayly companion scene:", error);
+      if (generation === setupGenerationRef.current) setFailed(true);
     });
-
-    return () => {
-      cancelled = true;
-    };
   };
 
   if (failed) {

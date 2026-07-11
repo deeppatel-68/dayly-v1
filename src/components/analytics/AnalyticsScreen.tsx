@@ -186,17 +186,14 @@ export default function AnalyticsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.contentContainer}
       >
-        <TopBar />
-
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>ANALYTICS</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            DISCIPLINE ENGINE
-          </Text>
-        </View>
+        <TopBar
+          eyebrow="Growth record"
+          title="Progress"
+          subtitle="See how your habits and focus compound over time."
+        />
 
         <PeriodSelector
           selected={selectedPeriod}
@@ -534,8 +531,6 @@ export default function AnalyticsScreen() {
           <AnalyticsInsightsCard insights={insights} />
         )}
 
-        {/* Bottom padding for tab bar */}
-        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
@@ -545,25 +540,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  // Bottom padding clears the floating nav
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: 140,
-  },
-  header: {
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: "Outfit-Bold",
-    marginBottom: Spacing.xs,
-    letterSpacing: 0.5,
-  },
-  subtitle: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
-    letterSpacing: 0.5,
+    paddingBottom: Spacing.xl,
   },
   card: {
     marginHorizontal: Spacing.md,

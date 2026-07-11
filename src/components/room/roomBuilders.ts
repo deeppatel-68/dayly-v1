@@ -5,7 +5,7 @@ import * as THREE from "three";
 // Coordinate frame: floor at y=0, back wall z≈-2, side wall x≈-2.6; the
 // companion's pod sits front-right at the ROOM_PET_POSITION.
 
-export const ROOM_PET_POSITION = new THREE.Vector3(1.05, 0, 0.1);
+export const ROOM_PET_POSITION = new THREE.Vector3(1.08, 0, -0.08);
 
 // Room anchors for "room"-slot equipment (see components/3d/equipment.ts)
 export const ROOM_ANCHORS: Record<
@@ -29,6 +29,7 @@ interface RoomPalette {
   leaf: THREE.MeshStandardMaterial;
   screen: THREE.MeshStandardMaterial;
   night: THREE.MeshStandardMaterial;
+  moon: THREE.MeshStandardMaterial;
   string: THREE.MeshStandardMaterial;
   lampGlow: THREE.MeshStandardMaterial;
   accentGlow: THREE.MeshStandardMaterial;
@@ -47,10 +48,10 @@ function createPalette(accent: THREE.Color): RoomPalette {
   // of the app chrome rather than an unrelated 3D scene, with floor darkest
   // (grounding, close to #1F1E1D) and rug lightest (close to #30302E) for depth.
   return {
-    wall: std(0x262421, 0.95),
-    floor: std(0x1c1a18, 0.9),
-    rug: std(0x322f2a, 0.95),
-    wood: std(0x584434, 0.7),
+    wall: std(0x312d29, 0.95),
+    floor: std(0x24211e, 0.9),
+    rug: std(0x3b3732, 0.95),
+    wood: std(0x684b37, 0.7),
     darkWood: std(0x3b2f26, 0.75),
     fabric: std(0x433d35, 0.9),
     metal: std(0x1f1f23, 0.45, { metalness: 0.3 }),
@@ -63,7 +64,11 @@ function createPalette(accent: THREE.Color): RoomPalette {
     }),
     night: std(0x0e1420, 0.6, {
       emissive: 0x24344d,
-      emissiveIntensity: 0.9,
+      emissiveIntensity: 1.05,
+    }),
+    moon: std(0xffe8b8, 0.75, {
+      emissive: 0xffd995,
+      emissiveIntensity: 1.35,
     }),
     string: std(0xf0b36a, 0.5, {
       emissive: 0xf0b36a,
@@ -126,15 +131,33 @@ function buildShell(p: RoomPalette): THREE.Group {
   const rug = cylinder(p.rug, 1.25, 1.25, 0.03, 1.0, 0.015, 0.2, 28);
   shell.add(rug);
 
-  // Window with a quiet night outside
+  // Recessed night window: moon, tiny skyline and a real sill create depth
+  // without textures or transparency.
   const win = new THREE.Group();
+  const moon = new THREE.Mesh(new THREE.CircleGeometry(0.12, 20), p.moon);
+  moon.position.set(0.25, 0.35, 0.055);
   win.add(
     box(p.darkWood, 1.15, 1.45, 0.06, 0, 0, 0),
     box(p.night, 1.0, 1.3, 0.04, 0, 0, 0.02),
     box(p.darkWood, 1.0, 0.05, 0.05, 0, 0, 0.035),
-    box(p.darkWood, 0.05, 1.3, 0.05, 0, 0, 0.035)
+    box(p.darkWood, 0.05, 1.3, 0.05, 0, 0, 0.035),
+    box(p.wood, 1.28, 0.08, 0.18, 0, -0.77, 0.08),
+    moon,
+    box(p.metal, 0.16, 0.3, 0.04, -0.38, -0.48, 0.05),
+    box(p.metal, 0.22, 0.2, 0.04, -0.15, -0.53, 0.05),
+    box(p.metal, 0.13, 0.38, 0.04, 0.08, -0.44, 0.05),
+    box(p.metal, 0.25, 0.24, 0.04, 0.34, -0.51, 0.05)
   );
-  win.position.set(1.25, 1.7, -2.0);
+  for (const [x, y] of [
+    [-0.34, 0.34],
+    [-0.16, 0.5],
+    [0.05, 0.18],
+  ]) {
+    const star = new THREE.Mesh(new THREE.CircleGeometry(0.018, 8), p.moon);
+    star.position.set(x, y, 0.056);
+    win.add(star);
+  }
+  win.position.set(0.58, 1.72, -2.0);
   shell.add(win);
 
   return shell;
@@ -160,7 +183,10 @@ function buildDesk(p: RoomPalette): THREE.Group {
   const lid = new THREE.Group();
   lid.add(
     box(p.metal, 0.52, 0.34, 0.015, 0, 0.17, 0),
-    box(p.screen, 0.47, 0.29, 0.017, 0, 0.17, 0.002)
+    box(p.screen, 0.47, 0.29, 0.017, 0, 0.17, 0.002),
+    box(p.accentGlow, 0.25, 0.018, 0.01, -0.06, 0.21, 0.014),
+    box(p.paper, 0.16, 0.012, 0.01, -0.105, 0.16, 0.014),
+    box(p.leaf, 0.1, 0.012, 0.01, -0.135, 0.12, 0.014)
   );
   lid.position.set(0, 0.02, -0.17);
   lid.rotation.x = 0.28;

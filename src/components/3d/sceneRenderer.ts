@@ -1,4 +1,4 @@
-import { ExpoWebGLRenderingContext } from "expo-gl";
+import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import { Renderer } from "expo-three";
 import * as THREE from "three";
 
@@ -30,6 +30,12 @@ export function createSceneRenderer({
   // expo-gl returns undefined shader logs, which crashes three's debug path
   renderer.debug.checkShaderErrors = false;
   return renderer;
+}
+
+export function releaseSceneContext(gl: ExpoWebGLRenderingContext): void {
+  GLView.destroyContextAsync(gl).catch(() => {
+    // Native view teardown may have already released this context.
+  });
 }
 
 // Three-point rig + hemisphere: warm key, cool low fill, accent rim, and a

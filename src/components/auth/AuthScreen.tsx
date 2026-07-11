@@ -3,16 +3,17 @@ import { FontFamilies, FontSizes } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { supabase } from "@/lib/supabase";
+import * as Linking from "expo-linking";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -43,7 +44,7 @@ export const AuthScreen = () => {
 
         // Show success message with instructions
         Alert.alert(
-          "Check Your Email! 📧",
+          "Check your email",
           `We've sent a confirmation link to:\n${email}\n\nPlease check your inbox (and spam folder) and click the link to activate your account.\n\nAfter confirming, come back here to sign in.`,
           [
             {
@@ -68,7 +69,7 @@ export const AuthScreen = () => {
 
       if (errorMessage.includes("Email not confirmed")) {
         Alert.alert(
-          "Email Not Confirmed ⚠️",
+          "Email not confirmed",
           `Please check your email (${email}) and click the confirmation link we sent you.\n\nDidn't receive it? Check your spam folder.`,
           [
             {
@@ -102,13 +103,13 @@ export const AuthScreen = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: "exp://127.0.0.1:8081/auth/reset-password",
+        redirectTo: Linking.createURL("/auth/reset-password"),
       });
 
       if (error) throw error;
 
       Alert.alert(
-        "Check Your Email! 📧",
+        "Check your email",
         `We've sent a password reset link to:\n${email}\n\nClick the link in the email to reset your password.\n\nThe link will expire in 1 hour.`,
         [{ text: "OK", onPress: () => setShowForgotPassword(false) }]
       );
@@ -124,10 +125,15 @@ export const AuthScreen = () => {
   if (showForgotPassword) {
     return (
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={process.env.EXPO_OS === "ios" ? "padding" : "height"}
         style={[styles.container, { backgroundColor: colors.background }]}
       >
-        <View style={styles.content}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.content}
+        >
+          <AuthBrand colors={colors} />
           <Text style={[styles.title, { color: colors.accent }]}>
             Reset Password
           </Text>
@@ -150,14 +156,16 @@ export const AuthScreen = () => {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            autoComplete="email"
             editable={!loading}
           />
 
-          <TouchableOpacity
-            style={[
+          <Pressable
+            style={({ pressed }) => [
               styles.button,
               { backgroundColor: colors.accent },
               loading && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
             ]}
             onPress={handleForgotPassword}
             disabled={loading}
@@ -167,9 +175,9 @@ export const AuthScreen = () => {
             ) : (
               <Text style={styles.buttonText}>Send Reset Link</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             onPress={() => setShowForgotPassword(false)}
             disabled={loading}
             style={styles.switchButton}
@@ -177,8 +185,8 @@ export const AuthScreen = () => {
             <Text style={[styles.switchText, { color: colors.textSecondary }]}>
               Back to Sign In
             </Text>
-          </TouchableOpacity>
-        </View>
+          </Pressable>
+        </ScrollView>
       </KeyboardAvoidingView>
     );
   }
@@ -186,17 +194,22 @@ export const AuthScreen = () => {
   // Main Auth Screen
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={process.env.EXPO_OS === "ios" ? "padding" : "height"}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <View style={styles.content}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.content}
+      >
+        <AuthBrand colors={colors} />
         <Text style={[styles.title, { color: colors.text }]}>
-          {isSignUp ? "Create Account" : "Welcome Back"}
+          {isSignUp ? "Create your Dayly" : "Welcome back"}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {isSignUp
-            ? "Start your habit tracking journey"
-            : "Continue your streak"}
+            ? "Build habits, focus deeply, and grow a companion of your own."
+            : "Your habits, focus history, and companion are waiting."}
         </Text>
 
         <TextInput
@@ -214,6 +227,7 @@ export const AuthScreen = () => {
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
+          autoComplete="email"
           editable={!loading}
         />
 
@@ -231,11 +245,12 @@ export const AuthScreen = () => {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          autoComplete={isSignUp ? "new-password" : "current-password"}
           editable={!loading}
         />
 
         {!isSignUp && (
-          <TouchableOpacity
+          <Pressable
             onPress={() => setShowForgotPassword(true)}
             style={styles.forgotPassword}
             disabled={loading}
@@ -243,14 +258,15 @@ export const AuthScreen = () => {
             <Text style={[styles.forgotPasswordText, { color: colors.accent }]}>
               Forgot Password?
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
 
-        <TouchableOpacity
-          style={[
+        <Pressable
+          style={({ pressed }) => [
             styles.button,
             { backgroundColor: colors.accent },
             loading && styles.buttonDisabled,
+            pressed && styles.buttonPressed,
           ]}
           onPress={handleAuth}
           disabled={loading}
@@ -262,9 +278,9 @@ export const AuthScreen = () => {
               {isSignUp ? "Sign Up" : "Sign In"}
             </Text>
           )}
-        </TouchableOpacity>
+        </Pressable>
 
-        <TouchableOpacity
+        <Pressable
           onPress={() => setIsSignUp(!isSignUp)}
           disabled={loading}
           style={styles.switchButton}
@@ -274,34 +290,51 @@ export const AuthScreen = () => {
               ? "Already have an account? Sign In"
               : "Don't have an account? Sign Up"}
           </Text>
-        </TouchableOpacity>
+        </Pressable>
 
         {isSignUp && (
           <Text style={[styles.noteText, { color: colors.textTertiary }]}>
             {"You'll be signed in automatically after creating your account"}
           </Text>
         )}
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
+
+function AuthBrand({ colors }: { colors: ReturnType<typeof useTheme>["colors"] }) {
+  return (
+    <View style={styles.brandRow}>
+      <View style={[styles.brandMark, { backgroundColor: colors.accent }]} />
+      <Text style={[styles.brand, { color: colors.text }]}>dayly</Text>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     padding: Spacing.lg,
     justifyContent: "center",
     gap: Spacing.md,
   },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  brandMark: { width: 9, height: 9, borderRadius: 5 },
+  brand: { fontFamily: FontFamilies.semibold, fontSize: 28 },
   title: {
-    fontSize: FontSizes["4xl"],
+    fontSize: FontSizes["3xl"],
     fontFamily: FontFamilies.bold,
     marginBottom: Spacing.xs,
     textAlign: "center",
-    letterSpacing: 0.5,
   },
   subtitle: {
     fontSize: FontSizes.base,
@@ -337,12 +370,12 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
+  buttonPressed: { opacity: 0.78 },
   buttonText: {
     color: "#fff",
     textAlign: "center",
     fontSize: FontSizes.lg,
     fontFamily: FontFamilies.semibold,
-    letterSpacing: 1,
   },
   switchButton: {
     marginTop: Spacing.md,
