@@ -14,6 +14,14 @@ import * as THREE from "three";
 //                anchor: wall art, furniture
 export type EquipmentSlot = "pet" | "platform" | "room";
 
+// Semantic room bays; each holds at most one equipped item (last wins)
+export type RoomAnchor =
+  | "desk"
+  | "lamp"
+  | "wall_art"
+  | "window_view"
+  | "floor_prop";
+
 export interface EquipmentMaterials {
   dark: THREE.MeshStandardMaterial;
   frame: THREE.MeshStandardMaterial;
@@ -73,6 +81,8 @@ export function createEquipmentMaterials(
 
 export interface EquipmentDef {
   slot: EquipmentSlot;
+  // Required for slot "room": which bay the item occupies
+  anchor?: RoomAnchor;
   build: (m: EquipmentMaterials) => THREE.Object3D;
 }
 
@@ -210,6 +220,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   },
   "motivational-poster": {
     slot: "room",
+    anchor: "wall_art",
     build: (m) => {
       const group = new THREE.Group();
       group.add(
@@ -223,6 +234,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   },
   bookshelf: {
     slot: "room",
+    anchor: "floor_prop",
     build: (m) => {
       const group = new THREE.Group();
       const frame = mesh(new THREE.BoxGeometry(0.9, 1.5, 0.28), m.wood, 0, 0.75, 0);
@@ -248,6 +260,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   },
   "gaming-desk": {
     slot: "room",
+    anchor: "desk",
     build: (m) => {
       // Upgrade kit for the desk: second monitor + LED strip along the edge
       const group = new THREE.Group();
@@ -262,6 +275,41 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
       monitor.rotation.y = -0.35;
       const led = mesh(new THREE.BoxGeometry(1.7, 0.02, 0.02), m.glow, 0, -0.045, 0.36);
       group.add(monitor, led);
+      return group;
+    },
+  },
+  "floor-plant": {
+    slot: "room",
+    anchor: "floor_prop",
+    build: (m) => {
+      const group = new THREE.Group();
+      const leafTall = mesh(new THREE.ConeGeometry(0.2, 0.55, 7), m.leaf, 0, 0.55, 0);
+      const leafRight = mesh(new THREE.ConeGeometry(0.13, 0.38, 7), m.leaf, 0.12, 0.44, 0.06);
+      leafRight.rotation.z = -0.25;
+      const leafLeft = mesh(new THREE.ConeGeometry(0.11, 0.32, 7), m.leaf, -0.1, 0.42, -0.05);
+      leafLeft.rotation.z = 0.22;
+      group.add(
+        mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.26, 12), m.wood, 0, 0.13, 0),
+        mesh(new THREE.CylinderGeometry(0.17, 0.16, 0.04, 12), m.dark, 0, 0.27, 0),
+        leafTall,
+        leafRight,
+        leafLeft
+      );
+      return group;
+    },
+  },
+  "fairy-window": {
+    slot: "room",
+    anchor: "window_view",
+    build: (m) => {
+      const group = new THREE.Group();
+      const bulbGeo = new THREE.SphereGeometry(0.03, 8, 6);
+      for (const x of [-0.62, 0.62]) {
+        group.add(mesh(new THREE.BoxGeometry(0.015, 1.5, 0.015), m.frame, x, 0.15, 0.04));
+        for (const y of [0.55, 0.15, -0.35]) {
+          group.add(mesh(bulbGeo, m.glow, x, y, 0.05));
+        }
+      }
       return group;
     },
   },
@@ -281,20 +329,41 @@ export function attachEquipment(
   targets: {
     pet?: THREE.Object3D;
     platform?: THREE.Object3D;
-    room?: (id: string, object: THREE.Object3D) => void;
+    room?: (anchor: RoomAnchor, object: THREE.Object3D) => void;
   }
 ): THREE.Object3D[] {
   const built: THREE.Object3D[] = [];
-  for (const id of equippedIds) {
+  // Each room anchor shows at most one item: the last-equipped one wins
+  // (equippedIds is in equip order).
+  const selectedRoomByAnchor = new Map<RoomAnchor, number>();
+
+  if (slots.includes("room")) {
+    equippedIds.forEach((id, index) => {
+      const def = EQUIPMENT[id];
+      if (def?.slot === "room" && def.anchor) {
+        selectedRoomByAnchor.set(def.anchor, index);
+      }
+    });
+  }
+
+  for (let index = 0; index < equippedIds.length; index++) {
+    const id = equippedIds[index];
     const def = EQUIPMENT[id];
     if (!def || !slots.includes(def.slot)) continue;
+    const roomAnchor = def.slot === "room" ? def.anchor : undefined;
+    if (def.slot === "room") {
+      if (!roomAnchor || selectedRoomByAnchor.get(roomAnchor) !== index) {
+        continue;
+      }
+    }
     const object = def.build(materials);
     object.userData.equipmentId = id;
     object.userData.equipmentSlot = def.slot;
     if (def.slot === "pet" && targets.pet) targets.pet.add(object);
     else if (def.slot === "platform" && targets.platform)
       targets.platform.add(object);
-    else if (def.slot === "room" && targets.room) targets.room(id, object);
+    else if (def.slot === "room" && targets.room && roomAnchor)
+      targets.room(roomAnchor, object);
     else continue;
     built.push(object);
   }

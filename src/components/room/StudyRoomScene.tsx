@@ -225,6 +225,27 @@ export default function StudyRoomScene({
             ? Math.sin(t * 8) * 0.22
             : 0);
 
+        // Fake-bloom halos track the same environment drivers as the
+        // emissives; reward/levelUp throbs them in phase with the flash.
+        const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+        const pulse =
+          celebrating && !reducedMotionRef.current
+            ? Math.sin(t * 8) * 0.5 + 0.5
+            : 0;
+        room.stringGlowMat.opacity = clamp01(
+          environment.stringIntensity * 0.32 + rewardBlend * 0.18 * pulse
+        );
+        room.lampHaloMat.opacity = clamp01(
+          environment.lampIntensity * 0.26 + rewardBlend * 0.1 * pulse
+        );
+        room.moonGlowMat.opacity = clamp01(
+          environment.celestialIntensity * 0.2 * environment.starOpacity
+        );
+        const glowScale = 1 + rewardBlend * (0.25 + 0.1 * pulse);
+        room.glowPulseGroup.children.forEach((c) =>
+          c.scale.setScalar(0.16 * glowScale)
+        );
+
         renderer.render(scene, camera);
         gl.endFrameEXP();
         if (!didNotifyReady) {
@@ -271,11 +292,10 @@ export default function StudyRoomScene({
         {
           pet: companion.rig.petGroup,
           platform: companion.root,
-          room: (id, object) => {
-            const anchor = room.anchorFor(id);
-            if (!anchor) return;
-            object.position.set(...anchor.position);
-            object.rotation.y = anchor.rotationY;
+          room: (anchor, object) => {
+            const placement = room.anchorFor(anchor);
+            object.position.set(...placement.position);
+            object.rotation.y = placement.rotationY;
             scene.add(object);
           },
         }

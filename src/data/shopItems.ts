@@ -29,6 +29,24 @@ export const shopItems: ShopItem[] = [
     rarity: "common",
     description: "Inspire yourself with daily motivation",
   },
+  {
+    id: "floor-plant",
+    name: "Floor Plant",
+    icon: "leaf-outline",
+    cost: 90,
+    category: "decoration",
+    rarity: "rare",
+    description: "A tall leafy friend to green up your corner",
+  },
+  {
+    id: "fairy-window",
+    name: "Fairy Window Lights",
+    icon: "sparkles-outline",
+    cost: 110,
+    category: "decoration",
+    rarity: "rare",
+    description: "Twinkling lights framing your window view",
+  },
   // Furniture Items
   {
     id: "bookshelf",

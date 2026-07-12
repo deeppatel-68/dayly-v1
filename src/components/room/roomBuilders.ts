@@ -1,3 +1,4 @@
+import type { RoomAnchor } from "@/components/3d/equipment";
 import * as THREE from "three";
 
 // Builders for the cozy study-nook scene: a stylised desk corner, not a
@@ -7,14 +8,70 @@ import * as THREE from "three";
 
 export const ROOM_PET_POSITION = new THREE.Vector3(1.08, 0, -0.08);
 
-// Room anchors for "room"-slot equipment (see components/3d/equipment.ts)
+// Fake bloom: shared 64x64 radial-falloff DataTexture (expo-gl has no DOM
+// canvas) sampled by additive MeshBasicMaterial planes — no EffectComposer.
+function createGlowTexture(): THREE.DataTexture {
+  const size = 64;
+  const center = (size - 1) / 2;
+  const data = new Uint8Array(size * size * 4);
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot(x - center, y - center) / 32;
+      const core = Math.max(0, 1 - d / 0.22) ** 2 * 0.55;
+      const halo = Math.max(0, 1 - d) ** 2.4;
+      const f = Math.min(1, halo + core);
+      const value = Math.round(f * 255);
+      const offset = (y * size + x) * 4;
+      data[offset] = value;
+      data[offset + 1] = value;
+      data[offset + 2] = value;
+      data[offset + 3] = value;
+    }
+  }
+
+  const texture = new THREE.DataTexture(
+    data,
+    size,
+    size,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType
+  );
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createGlowMaterial(
+  map: THREE.DataTexture,
+  color: number
+): THREE.MeshBasicMaterial {
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    map,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0,
+  });
+  // ACES tone mapping would crush the additive halos back to grey
+  material.toneMapped = false;
+  return material;
+}
+
+// Semantic room anchors for "room"-slot equipment: one equipped item per
+// anchor (see components/3d/equipment.ts for the item→anchor mapping).
 export const ROOM_ANCHORS: Record<
-  string,
+  RoomAnchor,
   { position: [number, number, number]; rotationY: number }
 > = {
-  "motivational-poster": { position: [0.05, 1.62, -1.96], rotationY: 0 },
-  bookshelf: { position: [-2.42, 0, 0.75], rotationY: Math.PI / 2 },
-  "gaming-desk": { position: [-0.85, 0.77, -1.45], rotationY: 0 },
+  desk: { position: [-0.85, 0.77, -1.45], rotationY: 0 },
+  lamp: { position: [-0.15, 0.77, -1.55], rotationY: -0.5 },
+  wall_art: { position: [0.05, 1.62, -1.96], rotationY: 0 },
+  window_view: { position: [0.58, 1.72, -1.9], rotationY: 0 },
+  floor_prop: { position: [-2.42, 0, 0.75], rotationY: Math.PI / 2 },
 };
 
 interface RoomPalette {
@@ -124,7 +181,11 @@ const cylinder = (
   return out;
 };
 
-function buildShell(p: RoomPalette): THREE.Group {
+function buildShell(
+  p: RoomPalette,
+  glowPlaneGeo: THREE.PlaneGeometry,
+  moonGlowMat: THREE.MeshBasicMaterial
+): THREE.Group {
   const shell = new THREE.Group();
   shell.add(
     box(p.floor, 7, 0.1, 6, 0.4, -0.05, 0.6), // floor
@@ -143,12 +204,17 @@ function buildShell(p: RoomPalette): THREE.Group {
   const win = new THREE.Group();
   const moon = new THREE.Mesh(new THREE.CircleGeometry(0.12, 20), p.moon);
   moon.position.set(0.25, 0.35, 0.055);
+  const moonGlow = new THREE.Mesh(glowPlaneGeo, moonGlowMat);
+  moonGlow.position.set(0.25, 0.35, 0.09);
+  moonGlow.scale.setScalar(0.42);
+  moonGlow.renderOrder = 10;
   win.add(
     box(p.darkWood, 1.15, 1.45, 0.06, 0, 0, 0),
     box(p.night, 1.0, 1.3, 0.04, 0, 0, 0.02),
     box(p.darkWood, 1.0, 0.05, 0.05, 0, 0, 0.035),
     box(p.darkWood, 0.05, 1.3, 0.05, 0, 0, 0.035),
     box(p.wood, 1.28, 0.08, 0.18, 0, -0.77, 0.08),
+    moonGlow,
     moon,
     box(p.metal, 0.16, 0.3, 0.04, -0.38, -0.48, 0.05),
     box(p.metal, 0.22, 0.2, 0.04, -0.15, -0.53, 0.05),
@@ -217,9 +283,14 @@ function buildDesk(p: RoomPalette): THREE.Group {
 }
 
 // Desk lamp with a real light the scene can dim/brighten by focus state
-function buildDeskLamp(p: RoomPalette): {
+function buildDeskLamp(
+  p: RoomPalette,
+  glowPlaneGeo: THREE.PlaneGeometry,
+  lampHaloMat: THREE.MeshBasicMaterial
+): {
   group: THREE.Group;
   light: THREE.PointLight;
+  halo: THREE.Mesh;
 } {
   const group = new THREE.Group();
   group.add(
@@ -236,10 +307,14 @@ function buildDeskLamp(p: RoomPalette): {
   head.rotation.x = 2.5;
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 8), p.lampGlow);
   bulb.position.set(0, 0.4, 0.21);
+  const halo = new THREE.Mesh(glowPlaneGeo, lampHaloMat);
+  halo.position.set(0, 0.4, 0.24);
+  halo.scale.setScalar(0.34);
+  halo.renderOrder = 10;
   const light = new THREE.PointLight(0xf5d9a8, 0.9, 4.5, 1.6);
   light.position.set(0, 0.38, 0.24);
-  group.add(arm, head, bulb, light);
-  return { group, light };
+  group.add(arm, head, bulb, halo, light);
+  return { group, light, halo };
 }
 
 function buildChair(p: RoomPalette): THREE.Group {
@@ -276,17 +351,29 @@ function buildShelf(p: RoomPalette): THREE.Group {
 }
 
 // Warm string lights along the back wall; the scene flashes them on rewards
-function buildStringLights(p: RoomPalette): THREE.Group {
+function buildStringLights(
+  p: RoomPalette,
+  glowPlaneGeo: THREE.PlaneGeometry,
+  stringGlowMat: THREE.MeshBasicMaterial
+): { group: THREE.Group; glowPulseGroup: THREE.Group } {
   const lights = new THREE.Group();
+  const glowPulseGroup = new THREE.Group();
   const bulbGeo = new THREE.SphereGeometry(0.024, 8, 6);
   for (let i = 0; i < 9; i++) {
     const x = -2.2 + i * 0.55;
     const droop = Math.sin((i / 8) * Math.PI * 2) * 0.06;
+    const y = 2.45 + droop;
     const bulb = new THREE.Mesh(bulbGeo, p.string);
-    bulb.position.set(x, 2.45 + droop, -1.94);
+    bulb.position.set(x, y, -1.94);
+    const glow = new THREE.Mesh(glowPlaneGeo, stringGlowMat);
+    glow.position.set(x, y, -1.91);
+    glow.scale.setScalar(0.16);
+    glow.renderOrder = 10;
     lights.add(bulb);
+    glowPulseGroup.add(glow);
   }
-  return lights;
+  lights.add(glowPulseGroup);
+  return { group: lights, glowPulseGroup };
 }
 
 export interface StudyRoom {
@@ -298,18 +385,30 @@ export interface StudyRoom {
   starMat: THREE.MeshStandardMaterial;
   screenMat: THREE.MeshStandardMaterial;
   lampGlowMat: THREE.MeshStandardMaterial;
-  anchorFor: (id: string) => { position: [number, number, number]; rotationY: number } | undefined;
+  stringGlowMat: THREE.MeshBasicMaterial;
+  lampHaloMat: THREE.MeshBasicMaterial;
+  moonGlowMat: THREE.MeshBasicMaterial;
+  glowPulseGroup: THREE.Group;
+  anchorFor: (anchor: RoomAnchor) => {
+    position: [number, number, number];
+    rotationY: number;
+  };
   dispose: () => void;
 }
 
 export function buildStudyRoom(accent: THREE.Color): StudyRoom {
   const p = createPalette(accent);
   const group = new THREE.Group();
+  const glowTexture = createGlowTexture();
+  const glowPlaneGeo = new THREE.PlaneGeometry(1, 1);
+  const stringGlowMat = createGlowMaterial(glowTexture, 0xf0b36a);
+  const lampHaloMat = createGlowMaterial(glowTexture, 0xf5d9a8);
+  const moonGlowMat = createGlowMaterial(glowTexture, 0xffd995);
 
-  const shell = buildShell(p);
+  const shell = buildShell(p, glowPlaneGeo, moonGlowMat);
   const desk = buildDesk(p);
   desk.position.set(-0.85, 0, -1.45);
-  const lamp = buildDeskLamp(p);
+  const lamp = buildDeskLamp(p, glowPlaneGeo, lampHaloMat);
   lamp.group.position.set(-0.15, 0.77, -1.55);
   lamp.group.rotation.y = -0.5;
   const chair = buildChair(p);
@@ -317,9 +416,13 @@ export function buildStudyRoom(accent: THREE.Color): StudyRoom {
   chair.rotation.y = 0.35;
   const shelf = buildShelf(p);
   shelf.position.set(-2.56, 0, -0.6);
-  const strings = buildStringLights(p);
+  const strings = buildStringLights(p, glowPlaneGeo, stringGlowMat);
 
-  group.add(shell, desk, lamp.group, chair, shelf, strings);
+  group.add(shell, desk, lamp.group, chair, shelf, strings.group);
+  // Face the lamp halo toward the home camera once; the bounded orbit
+  // (±0.6 rad) keeps off-axis foreshortening of the blob invisible.
+  group.updateMatrixWorld(true);
+  lamp.halo.lookAt(0.72, 1.3, 4.8);
 
   return {
     group,
@@ -330,12 +433,23 @@ export function buildStudyRoom(accent: THREE.Color): StudyRoom {
     starMat: p.stars,
     screenMat: p.screen,
     lampGlowMat: p.lampGlow,
-    anchorFor: (id) => ROOM_ANCHORS[id],
+    stringGlowMat,
+    lampHaloMat,
+    moonGlowMat,
+    glowPulseGroup: strings.glowPulseGroup,
+    anchorFor: (anchor) => ROOM_ANCHORS[anchor],
     dispose: () => {
       group.traverse((child) => {
-        if (child instanceof THREE.Mesh) child.geometry.dispose();
+        if (child instanceof THREE.Mesh && child.geometry !== glowPlaneGeo) {
+          child.geometry.dispose();
+        }
       });
+      glowPlaneGeo.dispose();
       Object.values(p).forEach((mat) => mat.dispose());
+      stringGlowMat.dispose();
+      lampHaloMat.dispose();
+      moonGlowMat.dispose();
+      glowTexture.dispose();
     },
   };
 }

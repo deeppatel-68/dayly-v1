@@ -28,11 +28,12 @@ export function createProceduralCompanion({
 
   const bodyMat = material({
     color: new THREE.Color(bodyColor),
-    roughness: 0.44,
+    roughness: 0.5,
     metalness: 0.08,
   });
   const darkMat = material({ color: 0x17171a, roughness: 0.48, metalness: 0.16 });
-  const faceMat = material({ color: 0x08090c, roughness: 0.2, metalness: 0.3 });
+  const faceMat = material({ color: 0x08090c, roughness: 0.12, metalness: 0.15 });
+  const pupilMat = material({ color: 0x212125, roughness: 0.25, metalness: 0 });
   const browMat = material({ color: 0x5d554f, roughness: 0.58, metalness: 0.08 });
   const eyeMat = material({
     color: 0xffe3bd,
@@ -57,6 +58,18 @@ export function createProceduralCompanion({
     emissive: 0xd97757,
     emissiveIntensity: 0.58,
     roughness: 0.42,
+  });
+  const catchlightMat = material({
+    color: 0xffffff,
+    emissive: 0xffffff,
+    emissiveIntensity: 2.5,
+    roughness: 0.3,
+  });
+  const blushMat = material({
+    color: 0xe5907c,
+    emissive: 0xe79881,
+    emissiveIntensity: 0.25,
+    roughness: 0.7,
   });
   const podMat = material({ color: 0x202024, roughness: 0.7, metalness: 0.12 });
 
@@ -95,17 +108,43 @@ export function createProceduralCompanion({
     eye.userData.baseScale = eye.scale.clone();
   }
 
-  const pupilGeometry = new THREE.SphereGeometry(0.036, 12, 8);
+  const pupilGeometry = new THREE.SphereGeometry(0.04, 12, 8);
   geometries.add(pupilGeometry);
-  const leftPupil = new THREE.Mesh(pupilGeometry, faceMat);
-  leftPupil.scale.set(0.82, 1.08, 0.38);
-  leftPupil.position.set(-0.17, 0.84, 0.581);
-  const rightPupil = new THREE.Mesh(pupilGeometry, faceMat);
+  const leftPupil = new THREE.Mesh(pupilGeometry, pupilMat);
+  leftPupil.scale.set(1, 1, 0.35);
+  leftPupil.position.set(-0.165, 0.822, 0.575);
+  const rightPupil = new THREE.Mesh(pupilGeometry, pupilMat);
   rightPupil.scale.copy(leftPupil.scale);
-  rightPupil.position.set(0.17, 0.84, 0.581);
+  rightPupil.position.set(0.165, 0.822, 0.575);
   for (const pupil of [leftPupil, rightPupil]) {
     pupil.userData.basePosition = pupil.position.clone();
   }
+
+  // Catchlights ride the pupils (gaze offsets carry them for free); the
+  // child scale undoes the pupil's z-squash so they stay round.
+  const leftCatchlight = mesh(
+    new THREE.SphereGeometry(0.015, 10, 8),
+    catchlightMat
+  );
+  leftCatchlight.scale.set(1, 1, 1 / 0.35);
+  leftCatchlight.position.set(-0.03, 0.028, 0.015 / 0.35);
+  const rightCatchlight = mesh(
+    new THREE.SphereGeometry(0.012, 10, 8),
+    catchlightMat
+  );
+  rightCatchlight.scale.set(1, 1, 1 / 0.35);
+  rightCatchlight.position.copy(leftCatchlight.position);
+  leftPupil.add(leftCatchlight);
+  rightPupil.add(rightCatchlight);
+
+  const blushGeometry = new THREE.SphereGeometry(0.045, 12, 8);
+  geometries.add(blushGeometry);
+  const leftBlush = new THREE.Mesh(blushGeometry, blushMat);
+  leftBlush.scale.set(1, 0.7, 0.3);
+  leftBlush.position.set(-0.3, 0.755, 0.505);
+  const rightBlush = new THREE.Mesh(blushGeometry, blushMat);
+  rightBlush.scale.copy(leftBlush.scale);
+  rightBlush.position.set(0.3, 0.755, 0.505);
 
   const browGeometry = new THREE.BoxGeometry(0.115, 0.016, 0.018);
   geometries.add(browGeometry);
@@ -121,12 +160,12 @@ export function createProceduralCompanion({
   }
 
   const mouth = mesh(
-    new THREE.TorusGeometry(0.075, 0.009, 7, 18, Math.PI),
+    new THREE.TorusGeometry(0.21, 0.01, 7, 20, Math.PI),
     mouthMat
   );
-  mouth.position.set(0, 0.675, 0.558);
+  mouth.position.set(0, 0.68, 0.55);
   mouth.rotation.z = Math.PI;
-  mouth.scale.set(1, 0.62, 1);
+  mouth.scale.set(1, 0.24, 1);
   mouth.userData.baseScale = mouth.scale.clone();
 
   const core = mesh(new THREE.SphereGeometry(0.064, 14, 10), coreMat);
@@ -138,14 +177,16 @@ export function createProceduralCompanion({
   const flipperGeometry = new THREE.SphereGeometry(0.3, 14, 10);
   geometries.add(flipperGeometry);
   const leftFlipper = new THREE.Mesh(flipperGeometry, bodyMat);
-  leftFlipper.scale.set(0.28, 0.62, 0.4);
-  leftFlipper.position.set(-0.54, 0.52, 0);
-  leftFlipper.rotation.z = 0.25;
+  leftFlipper.scale.set(0.26, 0.62, 0.4);
+  leftFlipper.position.set(-0.6, 0.47, 0.12);
+  leftFlipper.rotation.x = 0.35;
+  leftFlipper.rotation.z = 0.45;
   leftFlipper.userData.baseRotationZ = leftFlipper.rotation.z;
   const rightFlipper = new THREE.Mesh(flipperGeometry, bodyMat);
   rightFlipper.scale.copy(leftFlipper.scale);
-  rightFlipper.position.set(0.54, 0.52, 0);
-  rightFlipper.rotation.z = -0.25;
+  rightFlipper.position.set(0.6, 0.47, 0.12);
+  rightFlipper.rotation.x = 0.35;
+  rightFlipper.rotation.z = -0.45;
   rightFlipper.userData.baseRotationZ = rightFlipper.rotation.z;
 
   const leftFoot = mesh(new THREE.SphereGeometry(0.17, 14, 10), darkMat);
@@ -182,6 +223,8 @@ export function createProceduralCompanion({
     rightEye,
     leftPupil,
     rightPupil,
+    leftBlush,
+    rightBlush,
     leftBrow,
     rightBrow,
     mouth,

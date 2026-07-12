@@ -35,10 +35,15 @@ def make_mat(name, color, roughness, metallic=0.0, emission=None,
 
 
 ORANGE = (1.0, 0.15, 0.035)  # ~#ff6b35 in linear
-mat_body = make_mat("Body_Charcoal", (0.052, 0.052, 0.06), 0.45, coat=0.25)
-mat_base = make_mat("Base_Black", (0.012, 0.012, 0.014), 0.22, metallic=0.1)
+mat_body = make_mat("Body_Charcoal", (0.052, 0.052, 0.06), 0.5)
+mat_base = make_mat("Base_Black", (0.012, 0.012, 0.014), 0.12, metallic=0.15)
 mat_eye = make_mat("Eye_White_Emission", (1.0, 0.89, 0.72), 0.42,
                    emission=(1.0, 0.78, 0.52), emission_strength=2.0)
+mat_pupil = make_mat("Pupil_Dark", (0.015, 0.015, 0.02), 0.25)
+mat_catch = make_mat("Catchlight_White", (1.0, 1.0, 1.0), 0.3,
+                     emission=(1.0, 1.0, 1.0), emission_strength=2.5)
+mat_blush = make_mat("Blush_Peach", (0.78, 0.28, 0.20), 0.7,
+                     emission=(0.80, 0.32, 0.22), emission_strength=0.25)
 mat_accent = make_mat("Accent_Orange_Emission", ORANGE, 0.4,
                       emission=ORANGE, emission_strength=4.5)
 mat_platform = make_mat("Platform_Dark", (0.02, 0.02, 0.022), 0.75)
@@ -80,6 +85,9 @@ face.data.materials.append(mat_base)
 smooth(face)
 
 # ---------- Eyes: warm, compact ovals with a gentle outward tilt ----------
+# Pupils + catchlights are parented to their eye (HaloBead pattern) so the
+# runtime pet-group reparenting and blink squash carry them for free.
+eyes = {}
 for name, x, roll in (("LeftEye", -0.165, -0.07), ("RightEye", 0.165, 0.07)):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.095,
                                          location=(x, -0.47, 0.83),
@@ -89,6 +97,49 @@ for name, x, roll in (("LeftEye", -0.165, -0.07), ("RightEye", 0.165, 0.07)):
     eye.scale = (1.18, 0.5, 1.15)
     eye.data.materials.append(mat_eye)
     smooth(eye)
+    eyes[name] = eye
+
+
+def parent_to(child, parent):
+    child.parent = parent
+    child.matrix_parent_inverse = parent.matrix_world.inverted()
+
+
+# Dark pupils, slightly proud of the eye surface, sitting a touch low = cute
+for name, x, side in (("LeftPupil", -0.165, "LeftEye"),
+                      ("RightPupil", 0.165, "RightEye")):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.040,
+                                         location=(x, -0.508, 0.822))
+    pupil = bpy.context.active_object
+    pupil.name = name
+    pupil.scale = (1.0, 0.35, 1.0)
+    pupil.data.materials.append(mat_pupil)
+    smooth(pupil)
+    parent_to(pupil, eyes[side])
+
+# Catchlights: upper-left on both pupils (one light source); right one a
+# touch smaller for asymmetric charm
+for name, x, r, side in (("LeftCatchlight", -0.195, 0.015, "LeftEye"),
+                         ("RightCatchlight", 0.135, 0.012, "RightEye")):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=8, radius=r,
+                                         location=(x, -0.522, 0.850))
+    catch = bpy.context.active_object
+    catch.name = name
+    catch.data.materials.append(mat_catch)
+    smooth(catch)
+    parent_to(catch, eyes[side])
+
+# ---------- Blush: two subtle warm dots low on the visor cheeks ----------
+face_panel = bpy.data.objects["FacePanel"]
+for name, x in (("LeftBlush", -0.30), ("RightBlush", 0.30)):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.045,
+                                         location=(x, -0.487, 0.755))
+    blush = bpy.context.active_object
+    blush.name = name
+    blush.scale = (1.0, 0.3, 0.7)
+    blush.data.materials.append(mat_blush)
+    smooth(blush)
+    parent_to(blush, face_panel)
 
 # ---------- EnergyCore: small framed heart on the chest ----------
 bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.055,
@@ -119,13 +170,14 @@ smooth(halo_bead)
 halo_bead.parent = halo
 halo_bead.matrix_parent_inverse = halo.matrix_world.inverted()
 
-# ---------- Flippers: soft rounded fins, readable in silhouette ----------
-for name, x, rot in (("LeftFlipper", -0.62, 0.35), ("RightFlipper", 0.62, -0.35)):
+# ---------- Flippers: tapered little arms, splayed and reaching forward ----------
+for name, x, rot in (("LeftFlipper", -0.60, 0.45), ("RightFlipper", 0.60, -0.45)):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.3,
-                                         location=(x, 0, 0.48), rotation=(0, rot, 0))
+                                         location=(x, -0.12, 0.47),
+                                         rotation=(0.35, rot, 0))
     flip = bpy.context.active_object
     flip.name = name
-    flip.scale = (0.30, 0.42, 0.55)
+    flip.scale = (0.26, 0.40, 0.62)
     flip.data.materials.append(mat_body)
     smooth(flip)
 
@@ -140,22 +192,22 @@ for name, x, roll in (("LeftFoot", -0.25, -0.1), ("RightFoot", 0.25, 0.1)):
     foot.data.materials.append(mat_body)
     smooth(foot)
 
-# ---------- Visor lip: thin emissive contour under the face ----------
-# A shallow curve keeps the visor readable in dark mode without turning the
-# companion into a neon robot. It shares the user-tinted accent material.
+# ---------- Visor lip: friendly smile arc (corners up, centre relaxed) ----------
+# Same node name + accent material as before so runtime tinting still works;
+# it just reads as a soft smile instead of a status bar.
 lip_curve = bpy.data.curves.new("VisorLip", type="CURVE")
 lip_curve.dimensions = "3D"
 lip_curve.resolution_u = 2
-lip_curve.bevel_depth = 0.009
+lip_curve.bevel_depth = 0.010
 lip_curve.bevel_resolution = 3
 lip_spline = lip_curve.splines.new("POLY")
 lip_points = 18
 lip_spline.points.add(lip_points - 1)
 for index, point in enumerate(lip_spline.points):
     progress = index / (lip_points - 1)
-    x = -0.34 + progress * 0.68
-    z = 0.695 - (1.0 - ((progress - 0.5) * 2.0) ** 2) * 0.025
-    point.co = (x, -0.525, z, 1.0)
+    x = -0.21 + progress * 0.42
+    z = 0.708 - (1.0 - ((progress - 0.5) * 2.0) ** 2) * 0.05
+    point.co = (x, -0.53, z, 1.0)
 visor_lip = bpy.data.objects.new("VisorLip", lip_curve)
 link(visor_lip)
 visor_lip.data.materials.append(mat_accent)
@@ -190,7 +242,9 @@ ring.name = "PlatformRing"
 ring.data.materials.append(mat_accent)
 smooth(ring)
 
-MODEL_OBJECTS = ["Body", "FacePanel", "LeftEye", "RightEye", "EnergyCore",
+MODEL_OBJECTS = ["Body", "FacePanel", "LeftEye", "RightEye",
+                 "LeftPupil", "RightPupil", "LeftCatchlight", "RightCatchlight",
+                 "LeftBlush", "RightBlush", "EnergyCore",
                  "HaloCharm", "HaloBead", "LeftFlipper", "RightFlipper",
                  "LeftFoot", "RightFoot", "VisorLip", "Platform",
                  "PlatformRing"]
