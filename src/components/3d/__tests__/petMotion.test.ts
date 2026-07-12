@@ -96,7 +96,7 @@ describe("pet motion", () => {
 
   it("turns the mouth from a focus line into a proud smile", () => {
     const mouth = new THREE.Mesh();
-    mouth.userData.baseScale = new THREE.Vector3(1, 0.62, 1);
+    mouth.userData.baseScale = new THREE.Vector3(1, 0.24, 1);
     const rig: PetRig = { petGroup: new THREE.Group(), mouth };
     const motion = createPetMotionController({ levelTier: 1, streakTier: 1 });
 
@@ -105,6 +105,6 @@ describe("pet motion", () => {
     motion.apply(rig, "reward", 1.2, "proud");
 
     expect(focusHeight).toBeLessThan(0.1);
-    expect(mouth.scale.y).toBeGreaterThan(0.6);
+    expect(mouth.scale.y).toBeGreaterThan(0.2);
   });
 });

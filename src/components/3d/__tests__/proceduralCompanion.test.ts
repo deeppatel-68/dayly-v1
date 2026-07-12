@@ -14,7 +14,7 @@ describe("procedural companion", () => {
     expect(companion.root.children).toHaveLength(3);
     expect(companion.rig.leftEye).toBeInstanceOf(THREE.Mesh);
     expect(companion.rig.mouth).toBeInstanceOf(THREE.Mesh);
-    expect(companion.rig.rightFlipper?.userData.baseRotationZ).toBe(-0.25);
+    expect(companion.rig.rightFlipper?.userData.baseRotationZ).toBe(-0.45);
     expect(companion.rig.orbitGroup?.children).toHaveLength(3);
     expect(companion.rig.aura).toBeInstanceOf(THREE.Mesh);
 
