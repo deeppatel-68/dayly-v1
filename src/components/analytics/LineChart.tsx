@@ -4,16 +4,22 @@ import Svg, { Polyline, Circle, Line } from "react-native-svg";
 
 export const LineChart = ({
   data,
-  color = "#ff6b35",
+  color = "#D97757",
   height = 150,
   showValues = true,
   label = "",
+  gridColor = "#333333",
+  axisColor = "#6b7280",
+  labelColor = "#ffffff",
 }: {
   data: { label: string; value: number }[];
   color?: string;
   height?: number;
   showValues?: boolean;
   label?: string;
+  gridColor?: string;
+  axisColor?: string;
+  labelColor?: string;
 }) => {
   const maxValue = Math.max(...data.map((d) => d.value), 1);
   const minValue = Math.min(...data.map((d) => d.value), 0);
@@ -50,7 +56,7 @@ export const LineChart = ({
   return (
     <View style={styles.container}>
       {label ? (
-        <Text style={[styles.label, { color: "white" }]}>{label}</Text>
+        <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
       ) : null}
       <View style={styles.chartWrapper}>
         {/* Y-axis labels */}
@@ -58,7 +64,7 @@ export const LineChart = ({
           {yAxisValues.reverse().map((value, index) => (
             <Text
               key={index}
-              style={[styles.yAxisLabel, { color: "#6b7280" }]}
+              style={[styles.yAxisLabel, { color: axisColor }]}
             >
               {Math.round(value)}
             </Text>
@@ -84,7 +90,7 @@ export const LineChart = ({
                   y1={yPos}
                   x2={chartWidth - padding}
                   y2={yPos}
-                  stroke="#333333"
+                  stroke={gridColor}
                   strokeWidth="1"
                 />
               );
@@ -140,7 +146,7 @@ export const LineChart = ({
         {points.map((point, index) => (
           <Text
             key={index}
-            style={[styles.xAxisLabel, { color: "#6b7280" }]}
+            style={[styles.xAxisLabel, { color: axisColor }]}
           >
             {point.label}
           </Text>

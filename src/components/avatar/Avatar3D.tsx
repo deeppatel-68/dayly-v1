@@ -21,19 +21,33 @@ import {
 } from "@/components/3d/sceneRenderer";
 import CharacterScene from "@/components/character/CharacterScene";
 import { useTheme } from "@/context/ThemeContext";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import { AppState, StyleSheet } from "react-native";
 import * as THREE from "three";
 import { AvatarRendererProps, AvatarState } from "./avatarTypes";
+import type {
+  CompanionMood,
+  CompanionReaction,
+  CompanionReactionToken,
+} from "@/components/companion/companionBehavior";
 import { useAvatarData } from "./useAvatarData";
 
 // Reliable scene-native Dayly companion for compact and customisation
 // surfaces. It shares the same motion/evolution/equipment rig as My Space.
 export default function Avatar3D(props: AvatarRendererProps) {
-  const { variant = "dashboard", state = "idle" } = props;
+  const {
+    variant = "dashboard",
+    state = "idle",
+    mood = "calm",
+    reactionToken = null,
+    onInteract,
+    onReady,
+  } = props;
   const { colors, colorScheme } = useTheme();
+  const reducedMotion = useReducedMotion();
   const { accentColor, bodyColor, levelTier, streakTier, equippedItems } =
     useAvatarData(props);
   const [failed, setFailed] = useState(false);
@@ -46,12 +60,34 @@ export default function Avatar3D(props: AvatarRendererProps) {
   const petTapRef = useRef<
     ((x: number, y: number, width: number, height: number) => boolean) | null
   >(null);
-  const pokeRef = useRef<(() => void) | null>(null);
+  const reactRef = useRef<((reaction: CompanionReaction) => void) | null>(null);
+  const appliedReactionIdRef = useRef(-1);
 
   // The render loop reads state through a ref so transitions animate live
   // without recreating the GL context
   const stateRef = useRef<AvatarState>(state);
   stateRef.current = state;
+  const moodRef = useRef<CompanionMood>(mood);
+  moodRef.current = mood;
+  const reducedMotionRef = useRef(reducedMotion);
+  reducedMotionRef.current = reducedMotion;
+  const reactionTokenRef = useRef<CompanionReactionToken | null>(reactionToken);
+  reactionTokenRef.current = reactionToken;
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  useEffect(() => {
+    if (failed) onReady?.();
+  }, [failed, onReady]);
+
+  useEffect(() => {
+    if (!reactionToken || reactionToken.id === appliedReactionIdRef.current) {
+      return;
+    }
+    if (!reactRef.current) return;
+    appliedReactionIdRef.current = reactionToken.id;
+    reactRef.current(reactionToken.reaction);
+  }, [reactionToken]);
 
   // Recreate the GL context only on customisation/theme/tier/equip changes
   const sceneKey = `${accentColor}|${bodyColor}|${colorScheme}|L${levelTier}|S${streakTier}|${equippedItems.join("+")}`;
@@ -105,6 +141,16 @@ export default function Avatar3D(props: AvatarRendererProps) {
         target: orbitTarget,
         radius: variant === "shop" ? 2.55 : 2.25,
         height: variant === "shop" ? 0.9 : 0.94,
+        ...(variant === "shop"
+          ? {
+              minElevation: (-12 * Math.PI) / 180,
+              maxElevation: (12 * Math.PI) / 180,
+            }
+          : {
+              minAzimuth: -0.45,
+              maxAzimuth: 0.45,
+              easeBackAfter: 1.5,
+            }),
       });
       orbit.applyTo(camera, 0);
       orbitRef.current = orbit;
@@ -122,7 +168,15 @@ export default function Avatar3D(props: AvatarRendererProps) {
       });
       scene.add(companion.rig.petGroup, companion.root);
       petTapRef.current = createPetTapDetector(camera, companion.rig.petGroup);
-      pokeRef.current = motion.poke;
+      reactRef.current = motion.react;
+      const pendingReaction = reactionTokenRef.current;
+      if (
+        pendingReaction &&
+        pendingReaction.id !== appliedReactionIdRef.current
+      ) {
+        appliedReactionIdRef.current = pendingReaction.id;
+        motion.react(pendingReaction.reaction);
+      }
 
       // Equipped shop items: wearables move with the pet, decorations sit
       // around the pod. Room-slot items only render in the study room scene.
@@ -140,6 +194,7 @@ export default function Avatar3D(props: AvatarRendererProps) {
       scene.add(shadow.group);
 
       const clock = new THREE.Clock();
+      let didNotifyReady = false;
       const animate = () => {
         frameRef.current = setTimeout(
           animate,
@@ -148,17 +203,23 @@ export default function Avatar3D(props: AvatarRendererProps) {
         if (!appActiveRef.current) return;
         const t = clock.getElapsedTime();
         orbit.applyTo(camera, t);
-        motion.apply(companion.rig, stateRef.current, t);
+        motion.apply(companion.rig, stateRef.current, t, moodRef.current, {
+          reducedMotion: reducedMotionRef.current,
+        });
         shadow.setLift(companion.rig.petGroup.position.y);
         renderer.render(scene, camera);
         gl.endFrameEXP();
+        if (!didNotifyReady) {
+          didNotifyReady = true;
+          onReadyRef.current?.();
+        }
       };
       animate();
 
       cleanupRef.current = () => {
         orbitRef.current = null;
         petTapRef.current = null;
-        pokeRef.current = null;
+        reactRef.current = null;
         shadow.dispose();
         disposeEquipment(equipped);
         equipMaterials.dispose();
@@ -185,14 +246,16 @@ export default function Avatar3D(props: AvatarRendererProps) {
 
   const handleTap = (event: SceneTapEvent) => {
     if (!petTapRef.current?.(event.x, event.y, event.width, event.height)) return;
-    pokeRef.current?.();
+    const reaction = onInteract?.() ?? "bounce";
+    reactRef.current?.(reaction);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
 
   return (
     <SceneTouchLayer
+      accessibilityLabel="Interact with companion"
       onTap={handleTap}
-      onDrag={(delta) => orbitRef.current?.orbitBy(delta)}
+      onDrag={(delta) => orbitRef.current?.orbitBy(delta.x, delta.y)}
     >
       <GLView
         key={sceneKey}

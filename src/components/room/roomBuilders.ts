@@ -30,6 +30,7 @@ interface RoomPalette {
   screen: THREE.MeshStandardMaterial;
   night: THREE.MeshStandardMaterial;
   moon: THREE.MeshStandardMaterial;
+  stars: THREE.MeshStandardMaterial;
   string: THREE.MeshStandardMaterial;
   lampGlow: THREE.MeshStandardMaterial;
   accentGlow: THREE.MeshStandardMaterial;
@@ -69,6 +70,12 @@ function createPalette(accent: THREE.Color): RoomPalette {
     moon: std(0xffe8b8, 0.75, {
       emissive: 0xffd995,
       emissiveIntensity: 1.35,
+    }),
+    stars: std(0xffe8b8, 0.75, {
+      emissive: 0xffd995,
+      emissiveIntensity: 1.2,
+      transparent: true,
+      opacity: 1,
     }),
     string: std(0xf0b36a, 0.5, {
       emissive: 0xf0b36a,
@@ -153,7 +160,7 @@ function buildShell(p: RoomPalette): THREE.Group {
     [-0.16, 0.5],
     [0.05, 0.18],
   ]) {
-    const star = new THREE.Mesh(new THREE.CircleGeometry(0.018, 8), p.moon);
+    const star = new THREE.Mesh(new THREE.CircleGeometry(0.018, 8), p.stars);
     star.position.set(x, y, 0.056);
     win.add(star);
   }
@@ -286,6 +293,11 @@ export interface StudyRoom {
   group: THREE.Group;
   lampLight: THREE.PointLight;
   stringMat: THREE.MeshStandardMaterial;
+  skyMat: THREE.MeshStandardMaterial;
+  celestialMat: THREE.MeshStandardMaterial;
+  starMat: THREE.MeshStandardMaterial;
+  screenMat: THREE.MeshStandardMaterial;
+  lampGlowMat: THREE.MeshStandardMaterial;
   anchorFor: (id: string) => { position: [number, number, number]; rotationY: number } | undefined;
   dispose: () => void;
 }
@@ -313,6 +325,11 @@ export function buildStudyRoom(accent: THREE.Color): StudyRoom {
     group,
     lampLight: lamp.light,
     stringMat: p.string,
+    skyMat: p.night,
+    celestialMat: p.moon,
+    starMat: p.stars,
+    screenMat: p.screen,
+    lampGlowMat: p.lampGlow,
     anchorFor: (id) => ROOM_ANCHORS[id],
     dispose: () => {
       group.traverse((child) => {

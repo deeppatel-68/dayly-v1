@@ -38,6 +38,7 @@ interface FocusTimerProps {
   onStart?: () => void;
   // Lets a surrounding scene mirror the session (character focus/reward states)
   onStateChange?: (state: "idle" | "focus" | "reward" | "levelUp") => void;
+  variant?: "default" | "immersive";
 }
 
 interface SessionResult {
@@ -51,9 +52,17 @@ interface SessionResult {
   endedAt: string;
 }
 
-export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) {
+export default function FocusTimer({
+  onStart,
+  onStateChange,
+  variant = "default",
+}: FocusTimerProps) {
   const { width } = useWindowDimensions();
-  const timerSize = Math.min(292, Math.max(220, width - 96));
+  const immersive = variant === "immersive";
+  const timerSize = immersive
+    ? Math.min(168, width - 48)
+    : Math.min(292, Math.max(220, width - 96));
+  const strokeWidth = immersive ? 6 : STROKE_WIDTH;
   const { colors } = useTheme();
   const { user } = useAuth();
   const { xp } = useXp();
@@ -251,13 +260,18 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
     setDisplaySeconds(0);
   };
 
-  const radius = (timerSize - STROKE_WIDTH) / 2;
+  const radius = (timerSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, immersive && styles.containerImmersive]}>
       {/* Timer Circle */}
-      <View style={styles.timerContainer}>
+      <View
+        style={[
+          styles.timerContainer,
+          immersive && styles.timerContainerImmersive,
+        ]}
+      >
         <Svg width={timerSize} height={timerSize}>
           {/* Background Circle */}
           <Circle
@@ -265,7 +279,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
             cy={timerSize / 2}
             r={radius}
             stroke={colors.border}
-            strokeWidth={STROKE_WIDTH}
+            strokeWidth={strokeWidth}
             fill="none"
           />
           {/* Progress Circle */}
@@ -275,7 +289,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
               cy={timerSize / 2}
               r={radius}
               stroke={colors.accent}
-              strokeWidth={STROKE_WIDTH}
+              strokeWidth={strokeWidth}
               fill="none"
               strokeDasharray={circumference}
               strokeDashoffset={circumference * 0.25} // Shows progress
@@ -288,13 +302,31 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
 
         {/* Timer Display */}
         <View style={styles.timerContent}>
-          <Text style={[styles.timerText, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.timerText,
+              immersive && styles.timerTextImmersive,
+              { color: colors.text },
+            ]}
+          >
             {formatTime(displaySeconds)}
           </Text>
-          <Text style={[styles.phaseText, { color: colors.textSecondary }]}>
+          <Text
+            style={[
+              styles.phaseText,
+              immersive && styles.phaseTextImmersive,
+              { color: colors.textSecondary },
+            ]}
+          >
             FOCUS PHASE
           </Text>
-          <Text style={[styles.xpText, { color: colors.accent }]}>
+          <Text
+            style={[
+              styles.xpText,
+              immersive && styles.xpTextImmersive,
+              { color: colors.accent },
+            ]}
+          >
             +{rewards.xp} XP{rewards.coins > 0 ? `  •  +${rewards.coins}` : ""}
             {rewards.coins > 0 ? " coins" : ""}
           </Text>
@@ -302,10 +334,14 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
       </View>
 
       {/* Controls */}
-      <View style={styles.controls}>
+      <View style={[styles.controls, immersive && styles.controlsImmersive]}>
         <Animated.View style={{ transform: [{ scale: playScale }] }}>
           <Pressable
-            style={[styles.playButton, { backgroundColor: colors.accent }]}
+            style={[
+              styles.playButton,
+              immersive && styles.playButtonImmersive,
+              { backgroundColor: colors.accent },
+            ]}
             disabled={isRestoring || isStarting || isFinishing}
             onPress={handlePlayPause}
           >
@@ -317,7 +353,7 @@ export default function FocusTimer({ onStart, onStateChange }: FocusTimerProps) 
                   ? "pause"
                   : "play"
               }
-              size={40}
+              size={immersive ? 28 : 40}
               color={colors.background}
               style={isRunning ? {} : { marginLeft: 4 }}
             />
@@ -368,11 +404,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: Spacing.xl,
   },
+  containerImmersive: {
+    paddingVertical: 0,
+  },
   timerContainer: {
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.xl,
+  },
+  timerContainerImmersive: {
+    marginBottom: Spacing.sm,
   },
   timerContent: {
     position: "absolute",
@@ -384,21 +426,37 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit-Bold",
     letterSpacing: 2,
   },
+  timerTextImmersive: {
+    fontSize: 34,
+    letterSpacing: 0,
+  },
   phaseText: {
     fontSize: 12,
     fontFamily: "Outfit-Medium",
     letterSpacing: 2,
     marginTop: Spacing.xs,
   },
+  phaseTextImmersive: {
+    fontSize: 9,
+    letterSpacing: 1.4,
+    marginTop: 2,
+  },
   xpText: {
     fontSize: 14,
     fontFamily: "Outfit-SemiBold",
     marginTop: Spacing.xs,
   },
+  xpTextImmersive: {
+    fontSize: 11,
+    marginTop: 2,
+  },
   controls: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.lg,
+  },
+  controlsImmersive: {
+    gap: Spacing.sm,
   },
   finishButton: {
     flexDirection: "row",
@@ -425,5 +483,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 10,
     elevation: 4,
+  },
+  playButtonImmersive: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
 });

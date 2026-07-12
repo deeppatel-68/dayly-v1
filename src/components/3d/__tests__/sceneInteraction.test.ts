@@ -38,6 +38,28 @@ describe("scene interaction", () => {
     expect(camera.position.z).toBeCloseTo(Math.cos(0.6) * 4);
   });
 
+  it("supports a free turntable with clamped vertical inspection", () => {
+    const target = new THREE.Vector3(0, 0.7, 0);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    const limit = (12 * Math.PI) / 180;
+    const orbit = createOrbitRig({
+      target,
+      radius: 2.5,
+      height: 0.95,
+      minElevation: -limit,
+      maxElevation: limit,
+    });
+
+    orbit.applyTo(camera, 0);
+    orbit.orbitBy(2, -10);
+    orbit.applyTo(camera, 0.1);
+
+    expect(camera.position.x).not.toBeCloseTo(0);
+    expect(camera.position.y).toBeGreaterThan(0.95);
+    const distance = camera.position.distanceTo(target);
+    expect(distance).toBeCloseTo(Math.hypot(2.5, 0.25));
+  });
+
   it("only reports taps whose ray intersects the pet", () => {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(0, 0, 3);

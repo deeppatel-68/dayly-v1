@@ -1,6 +1,12 @@
 // Shared contract every avatar renderer (2.5D assets, primitive 3D fallback,
 // future GLB) must satisfy. Screens depend only on this, never on a renderer.
 
+import type {
+  CompanionMood,
+  CompanionReaction,
+  CompanionReactionToken,
+} from "@/components/companion/companionBehavior";
+
 export type AvatarState = "idle" | "focus" | "reward" | "levelUp";
 export type AvatarVariant = "dashboard" | "study" | "shop";
 
@@ -17,6 +23,10 @@ export interface AvatarRendererProps {
   accentColor?: string;
   bodyColor?: string;
   equippedItems?: string[];
+  mood?: CompanionMood;
+  reactionToken?: CompanionReactionToken | null;
+  onInteract?: () => CompanionReaction | void;
+  onReady?: () => void;
 }
 
 // Resolved (no optionals) data passed to concrete renderers

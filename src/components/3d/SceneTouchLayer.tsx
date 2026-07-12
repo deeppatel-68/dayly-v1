@@ -8,14 +8,20 @@ export interface SceneTapEvent {
   height: number;
 }
 
+export interface SceneDragDelta {
+  x: number;
+  y: number;
+}
+
 interface SceneTouchLayerProps {
   children: React.ReactNode;
   // Fired on release when the finger barely moved
   onTap?: (event: SceneTapEvent) => void;
-  // Fired continuously while dragging; dx is normalised to view width
-  // (full-width swipe ≈ 1.0)
-  onDrag?: (dxNormalized: number) => void;
+  // Fired continuously while dragging; each axis is normalised to its view
+  // dimension (a full-width or full-height swipe is approximately 1.0).
+  onDrag?: (delta: SceneDragDelta) => void;
   style?: ViewStyle;
+  accessibilityLabel?: string;
 }
 
 const TAP_SLOP = 8;
@@ -28,10 +34,12 @@ export default function SceneTouchLayer({
   onTap,
   onDrag,
   style,
+  accessibilityLabel,
 }: SceneTouchLayerProps) {
   const size = useRef({ width: 1, height: 1 });
   const moved = useRef(0);
   const lastDx = useRef(0);
+  const lastDy = useRef(0);
 
   // PanResponder is created once; read the latest callbacks through a ref
   const callbacks = useRef({ onTap, onDrag });
@@ -44,16 +52,22 @@ export default function SceneTouchLayer({
       onPanResponderGrant: () => {
         moved.current = 0;
         lastDx.current = 0;
+        lastDy.current = 0;
       },
       onPanResponderMove: (_evt, gesture) => {
         const delta = gesture.dx - lastDx.current;
+        const deltaY = gesture.dy - lastDy.current;
         lastDx.current = gesture.dx;
+        lastDy.current = gesture.dy;
         moved.current = Math.max(
           moved.current,
           Math.abs(gesture.dx) + Math.abs(gesture.dy)
         );
         if (moved.current > TAP_SLOP) {
-          callbacks.current.onDrag?.(delta / size.current.width);
+          callbacks.current.onDrag?.({
+            x: delta / size.current.width,
+            y: deltaY / size.current.height,
+          });
         }
       },
       onPanResponderRelease: (evt) => {
@@ -71,6 +85,9 @@ export default function SceneTouchLayer({
 
   return (
     <View
+      accessible={Boolean(onTap)}
+      accessibilityRole={onTap ? "button" : undefined}
+      accessibilityLabel={accessibilityLabel}
       style={[styles.fill, style]}
       onLayout={(event) => {
         const { width, height } = event.nativeEvent.layout;

@@ -53,4 +53,58 @@ describe("pet motion", () => {
     expect(leftEye.scale.y).toBeCloseTo(1.14);
     expect(aura.scale.x).toBeGreaterThan(1);
   });
+
+  it("maps moods and contextual reactions onto brows, pupils, and motion", () => {
+    const leftBrow = new THREE.Group();
+    const rightBrow = new THREE.Group();
+    const leftPupil = new THREE.Mesh();
+    const rightPupil = new THREE.Mesh();
+    leftBrow.userData.baseY = 1;
+    rightBrow.userData.baseY = 1;
+    leftPupil.userData.basePosition = new THREE.Vector3(-0.1, 0.8, 0.5);
+    rightPupil.userData.basePosition = new THREE.Vector3(0.1, 0.8, 0.5);
+    const rig: PetRig = {
+      petGroup: new THREE.Group(),
+      leftBrow,
+      rightBrow,
+      leftPupil,
+      rightPupil,
+    };
+    const motion = createPetMotionController({ levelTier: 1, streakTier: 1 });
+
+    motion.apply(rig, "idle", 1, "curious");
+    expect(leftBrow.rotation.z).toBeGreaterThan(rightBrow.rotation.z);
+    expect(leftPupil.position.x).not.toBeCloseTo(-0.1);
+
+    motion.react("nod");
+    motion.apply(rig, "idle", 1.3, "encouraging");
+    expect(rig.petGroup.rotation.x).not.toBeCloseTo(0);
+  });
+
+  it("keeps reduced motion restrained", () => {
+    const rig: PetRig = { petGroup: new THREE.Group() };
+    const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+    motion.apply(rig, "idle", 0, "calm", { reducedMotion: true });
+    motion.react("bounce");
+    motion.apply(rig, "levelUp", 0.6, "celebrating", {
+      reducedMotion: true,
+    });
+
+    expect(Math.abs(rig.petGroup.rotation.y)).toBeLessThan(0.1);
+    expect(rig.petGroup.position.y).toBeLessThan(0.07);
+  });
+
+  it("turns the mouth from a focus line into a proud smile", () => {
+    const mouth = new THREE.Mesh();
+    mouth.userData.baseScale = new THREE.Vector3(1, 0.62, 1);
+    const rig: PetRig = { petGroup: new THREE.Group(), mouth };
+    const motion = createPetMotionController({ levelTier: 1, streakTier: 1 });
+
+    motion.apply(rig, "focus", 1, "focused");
+    const focusHeight = mouth.scale.y;
+    motion.apply(rig, "reward", 1.2, "proud");
+
+    expect(focusHeight).toBeLessThan(0.1);
+    expect(mouth.scale.y).toBeGreaterThan(0.6);
+  });
 });

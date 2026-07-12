@@ -18,27 +18,48 @@ import {
   createSceneRenderer,
 } from "@/components/3d/sceneRenderer";
 import { AvatarState } from "@/components/avatar/avatarTypes";
+import type {
+  CompanionMood,
+  CompanionReaction,
+  CompanionReactionToken,
+} from "@/components/companion/companionBehavior";
 import { useAvatarData } from "@/components/avatar/useAvatarData";
 import CharacterScene from "@/components/character/CharacterScene";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import { AppState, StyleSheet } from "react-native";
 import * as THREE from "three";
 import { buildStudyRoom, ROOM_PET_POSITION } from "./roomBuilders";
+import {
+  createEnvironmentProfile,
+  EnvironmentProfile,
+} from "./environmentProfile";
 
 interface StudyRoomSceneProps {
   state?: AvatarState;
+  mood?: CompanionMood;
+  reactionToken?: CompanionReactionToken | null;
+  onInteract?: () => CompanionReaction | void;
+  onReady?: () => void;
 }
 
 // The My Space scene: the companion at home in a cozy study nook. Reacts to
 // focus/reward/level-up states (pet motion, desk lamp, string lights) and
 // renders every equipped shop item — wearables on the pet, decorations by
 // the pod, wall art and furniture at room anchors.
-export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) {
+export default function StudyRoomScene({
+  state = "idle",
+  mood = "calm",
+  reactionToken = null,
+  onInteract,
+  onReady,
+}: StudyRoomSceneProps) {
   const { accentColor, bodyColor, levelTier, streakTier, equippedItems } =
     useAvatarData({});
   const [failed, setFailed] = useState(false);
+  const reducedMotion = useReducedMotion();
   const frameRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appActiveRef = useRef(AppState.currentState === "active");
   const setupGenerationRef = useRef(0);
@@ -47,10 +68,33 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
   const petTapRef = useRef<
     ((x: number, y: number, width: number, height: number) => boolean) | null
   >(null);
-  const pokeRef = useRef<(() => void) | null>(null);
+  const reactRef = useRef<((reaction: CompanionReaction) => void) | null>(null);
+  const appliedReactionIdRef = useRef(-1);
+  const environmentDateRef = useRef(new Date());
 
   const stateRef = useRef<AvatarState>(state);
   stateRef.current = state;
+  const moodRef = useRef<CompanionMood>(mood);
+  moodRef.current = mood;
+  const reducedMotionRef = useRef(reducedMotion);
+  reducedMotionRef.current = reducedMotion;
+  const reactionTokenRef = useRef<CompanionReactionToken | null>(reactionToken);
+  reactionTokenRef.current = reactionToken;
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  useEffect(() => {
+    if (failed) onReady?.();
+  }, [failed, onReady]);
+
+  useEffect(() => {
+    if (!reactionToken || reactionToken.id === appliedReactionIdRef.current) {
+      return;
+    }
+    if (!reactRef.current) return;
+    appliedReactionIdRef.current = reactionToken.id;
+    reactRef.current(reactionToken.reaction);
+  }, [reactionToken]);
 
   const stopAndDispose = () => {
     setupGenerationRef.current += 1;
@@ -65,9 +109,14 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       appActiveRef.current = nextState === "active";
+      if (nextState === "active") environmentDateRef.current = new Date();
     });
+    const environmentTimer = setInterval(() => {
+      environmentDateRef.current = new Date();
+    }, 30_000);
     return () => {
       subscription.remove();
+      clearInterval(environmentTimer);
       stopAndDispose();
     };
   }, []);
@@ -122,8 +171,13 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
 
       // One lifecycle-owned loop drives the complete room and companion.
       const clock = new THREE.Clock();
-      let companionFrame: ((time: number) => void) | null = null;
+      let companionFrame:
+        | ((time: number, environment: EnvironmentProfile) => void)
+        | null = null;
       let companionCleanup: (() => void) | null = null;
+      let rewardBlend = 0;
+      let previousTime = 0;
+      let didNotifyReady = false;
 
       const animate = () => {
         frameRef.current = setTimeout(
@@ -132,27 +186,57 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
         );
         if (!appActiveRef.current) return;
         const t = clock.getElapsedTime();
+        const deltaTime = Math.max(0, Math.min(0.1, t - previousTime));
+        previousTime = t;
         const s = stateRef.current;
         const celebrating = s === "reward" || s === "levelUp";
+        rewardBlend = celebrating
+          ? Math.min(1, rewardBlend + deltaTime / 1.2)
+          : Math.max(0, rewardBlend - deltaTime / 3);
+        const environment = createEnvironmentProfile(
+          environmentDateRef.current,
+          s,
+          rewardBlend
+        );
 
         orbit.applyTo(camera, t);
-        companionFrame?.(t);
+        companionFrame?.(t, environment);
 
-        const lampTarget = s === "focus" ? 2.15 : celebrating ? 1.55 : 1.2;
+        hemi.color.setRGB(...environment.hemisphereSky);
+        hemi.groundColor.setRGB(...environment.hemisphereGround);
+        hemi.intensity = environment.hemisphereIntensity;
+        keyLight.color.setRGB(...environment.key);
+        keyLight.intensity = environment.keyIntensity;
+        room.skyMat.color.setRGB(...environment.sky);
+        room.skyMat.emissive.setRGB(...environment.sky);
+        room.skyMat.emissiveIntensity = environment.skyIntensity;
+        room.celestialMat.color.setRGB(...environment.celestial);
+        room.celestialMat.emissive.setRGB(...environment.celestial);
+        room.celestialMat.emissiveIntensity = environment.celestialIntensity;
+        room.starMat.opacity = environment.starOpacity;
+        room.screenMat.emissiveIntensity = environment.screenIntensity;
+        room.lampGlowMat.emissiveIntensity =
+          0.85 + environment.lampIntensity * 0.48;
         room.lampLight.intensity +=
-          (lampTarget - room.lampLight.intensity) * 0.06;
-        room.stringMat.emissiveIntensity = celebrating
-          ? 1.8 + Math.sin(t * 8) * 0.65
-          : 1.1;
+          (environment.lampIntensity - room.lampLight.intensity) * 0.06;
+        room.stringMat.emissiveIntensity =
+          environment.stringIntensity +
+          (celebrating && !reducedMotionRef.current
+            ? Math.sin(t * 8) * 0.22
+            : 0);
 
         renderer.render(scene, camera);
         gl.endFrameEXP();
+        if (!didNotifyReady) {
+          didNotifyReady = true;
+          onReadyRef.current?.();
+        }
       };
 
       cleanupRef.current = () => {
         orbitRef.current = null;
         petTapRef.current = null;
-        pokeRef.current = null;
+        reactRef.current = null;
         companionCleanup?.();
         room.dispose();
         renderer.dispose();
@@ -168,7 +252,15 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       companion.rig.petGroup.position.z = ROOM_PET_POSITION.z;
       scene.add(companion.rig.petGroup, companion.root);
       petTapRef.current = createPetTapDetector(camera, companion.rig.petGroup);
-      pokeRef.current = motion.poke;
+      reactRef.current = motion.react;
+      const pendingReaction = reactionTokenRef.current;
+      if (
+        pendingReaction &&
+        pendingReaction.id !== appliedReactionIdRef.current
+      ) {
+        appliedReactionIdRef.current = pendingReaction.id;
+        motion.react(pendingReaction.reaction);
+      }
 
       // Equipped items: this scene renders every slot, including room decor
       const equipMaterials = createEquipmentMaterials(accent);
@@ -210,9 +302,13 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
       );
       scene.add(shadow.group);
 
-      companionFrame = (t) => {
+      companionFrame = (t, environment) => {
         const s = stateRef.current;
-        motion.apply(companion.rig, s, t);
+        motion.apply(companion.rig, s, t, moodRef.current, {
+          reducedMotion: reducedMotionRef.current,
+          environmentWarmth: environment.companionWarmth,
+          decorationMotion: environment.decorationMotion,
+        });
         shadow.setLift(companion.rig.petGroup.position.y);
       };
 
@@ -241,14 +337,16 @@ export default function StudyRoomScene({ state = "idle" }: StudyRoomSceneProps) 
 
   const handleTap = (event: SceneTapEvent) => {
     if (!petTapRef.current?.(event.x, event.y, event.width, event.height)) return;
-    pokeRef.current?.();
+    const reaction = onInteract?.() ?? "bounce";
+    reactRef.current?.(reaction);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
 
   return (
     <SceneTouchLayer
+      accessibilityLabel="Interact with companion in My Space"
       onTap={handleTap}
-      onDrag={(delta) => orbitRef.current?.orbitBy(delta)}
+      onDrag={(delta) => orbitRef.current?.orbitBy(delta.x, delta.y)}
     >
       <GLView
         style={styles.glView}
