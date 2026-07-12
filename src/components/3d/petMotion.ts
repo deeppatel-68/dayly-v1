@@ -11,6 +11,7 @@ const TWO_PI = Math.PI * 2;
 // compresses highlights — emissives must run hotter to read the same as the
 // pre-tone-mapped tuning.
 const TONE_BOOST = 1.35;
+const EMPTY_FRAME_OPTIONS: Readonly<PetMotionFrameOptions> = Object.freeze({});
 
 // Everything a scene must hand the controller so state-driven motion can be
 // applied. All fields optional-safe: scenes pass what their pet instance has.
@@ -34,9 +35,36 @@ export interface PetRig {
   mouthMat?: THREE.MeshStandardMaterial | null;
   coreMat?: THREE.MeshStandardMaterial | null;
   accentMat?: THREE.MeshStandardMaterial | null;
+  haloGlowMat?: THREE.SpriteMaterial | null;
+  coreGlowMat?: THREE.SpriteMaterial | null;
   evolutionMat?: THREE.MeshStandardMaterial | null;
   auraMat?: THREE.MeshBasicMaterial | null;
 }
+
+// Fake-bloom sprite opacity per state. Idle/focus pulse sinusoidally off the
+// shared animation clock; reward/levelUp flare to 1.0 then ease to baseline.
+// Chest dot runs CORE_HOTTER above the halo (clamped to 1). All tunable here.
+const GLOW_PULSE = {
+  idle: { min: 0.35, max: 0.55, period: 2.8 },
+  focus: { min: 0.55, max: 0.8, period: 1.6 },
+  celebrate: { baseline: 0.75, flareDuration: 0.7 },
+  coreHotter: 0.1,
+};
+
+// Idle hover tuning. The pet's rest pose sits its feet on the pod (petGroup
+// origin ≈ world y=0, pod/contact surface ≈ y=0.08–0.096). HOVER_BASELINE
+// lifts the whole bob so even its LOWEST point keeps daylight above the pod
+// top; amplitudes stay gentle. Invariant: HOVER_BASELINE − bobAmp must stay
+// comfortably positive (never sink toward the platform).
+const HOVER_BASELINE = 0.04;
+const BOB_AMP = { idle: 0.02, focus: 0.014, sleepy: 0.012 };
+
+// Flipper wave tuning. Waves are rectified so they only ever swing OUTWARD
+// from the resting pose (left rest = +z, right rest = −z ⇒ outward is +z for
+// left / −z for right); this guarantees a flipper never rotates inward across
+// the torso, which was the source of the clipping. Amplitudes are conservative
+// — a subtle wave is preferred over any body intersection.
+const FLIPPER_WAVE = { celebrate: 0.32, reaction: 0.4 };
 
 export interface PetMotionOptions {
   levelTier: number; // 0..3
@@ -60,16 +88,31 @@ export function createPetMotionController(options: PetMotionOptions) {
   const streakBoost = streakTier / 3;
   let rewardSpin = 0;
   let lastTime = 0;
+  let hasFrameTime = false;
+  let animationTime = 0;
   let reactionStartedAt = -Infinity;
   let activeReaction: CompanionReaction = "bounce";
+  let pendingBounce = false;
+  let glowFlareStartedAt = -Infinity;
+  let wasCelebrating = false;
+
+  function playBounce() {
+    activeReaction = "bounce";
+    reactionStartedAt = lastTime;
+    pendingBounce = !hasFrameTime;
+  }
 
   function react(reaction: CompanionReaction) {
+    if (reaction === "bounce") {
+      playBounce();
+      return;
+    }
     activeReaction = reaction;
     reactionStartedAt = lastTime;
   }
 
   function poke() {
-    react("bounce");
+    playBounce();
   }
 
   function apply(
@@ -77,10 +120,19 @@ export function createPetMotionController(options: PetMotionOptions) {
     state: AvatarState,
     t: number,
     mood: CompanionMood = "calm",
-    frame: PetMotionFrameOptions = {}
+    frame: PetMotionFrameOptions = EMPTY_FRAME_OPTIONS
   ) {
-    const deltaTime = Math.max(0, Math.min(0.1, t - lastTime));
+    const deltaTime = hasFrameTime
+      ? Math.max(0, Math.min(0.1, t - lastTime))
+      : 0;
+    if (!hasFrameTime) animationTime = t;
+    hasFrameTime = true;
     lastTime = t;
+    if (deltaTime > 0) animationTime += deltaTime;
+    if (pendingBounce) {
+      reactionStartedAt = t;
+      pendingBounce = false;
+    }
     const celebrating = state === "reward" || state === "levelUp";
     const reducedMotion = frame.reducedMotion ?? false;
     const environmentWarmth = frame.environmentWarmth ?? 0;
@@ -92,38 +144,57 @@ export function createPetMotionController(options: PetMotionOptions) {
     );
     const reacting = reactionProgress < 1;
     const reactionEase = reacting ? Math.sin(reactionProgress * Math.PI) : 0;
-    const reactionBounce =
-      activeReaction === "bounce" ? reactionEase : reactionEase * 0.2;
+    const bounceElapsed = Math.max(0, t - reactionStartedAt);
+    const bounceActive = activeReaction === "bounce" && bounceElapsed < 1.2;
+    const bounceSpring = bounceActive
+      ? Math.exp(-1.8 * bounceElapsed) *
+        Math.sin((Math.PI * bounceElapsed) / 1.2)
+      : 0;
+    const bounceImpact = bounceActive ? Math.exp(-18 * bounceElapsed) : 0;
+    const reactionLift = activeReaction === "bounce" ? 0 : reactionEase * 0.025;
     const ambientStrength = reducedMotion ? 0.22 : 1;
-    const breathing = Math.sin(t * 1.25) * 0.009 * ambientStrength;
+    const breathing =
+      Math.sin(animationTime * 1.25) * 0.009 * ambientStrength;
 
     // Bob: gentle idle float, calmer in focus, bouncy when celebrating
     if (celebrating && !reducedMotion) {
-      petGroup.position.y = baseY + Math.abs(Math.sin(t * 3.2)) * 0.1;
+      petGroup.position.y =
+        baseY + Math.abs(Math.sin(animationTime * 3.2)) * 0.1;
     } else {
       const bobAmp =
-        (state === "focus" ? 0.018 : mood === "sleepy" ? 0.015 : 0.034) *
-        ambientStrength;
+        (state === "focus"
+          ? BOB_AMP.focus
+          : mood === "sleepy"
+            ? BOB_AMP.sleepy
+            : BOB_AMP.idle) * ambientStrength;
       const bobFreq = state === "focus" ? 2.0 : 1.6;
-      petGroup.position.y = baseY + Math.sin(t * bobFreq) * bobAmp + 0.02;
+      petGroup.position.y =
+        baseY + HOVER_BASELINE + Math.sin(animationTime * bobFreq) * bobAmp;
     }
-    petGroup.position.y += reactionBounce * (reducedMotion ? 0.025 : 0.13);
+    petGroup.position.y +=
+      bounceSpring * (reducedMotion ? 0.07 : 0.38) + reactionLift;
 
     // Sway faces mostly forward; celebrations spin, then ease back to front
     if (state === "levelUp" && !reducedMotion) {
       rewardSpin += deltaTime * 3.6;
     } else if (rewardSpin % TWO_PI !== 0) {
       const target = Math.round(rewardSpin / TWO_PI) * TWO_PI;
-      rewardSpin += (target - rewardSpin) * 0.08;
+      const returnAlpha = 1 - Math.exp(-5 * deltaTime);
+      rewardSpin = THREE.MathUtils.lerp(rewardSpin, target, returnAlpha);
       if (Math.abs(target - rewardSpin) < 0.001) rewardSpin = target;
     }
     const sway =
       state === "focus"
         ? 0
-        : Math.sin(t * 0.48) * 0.2 * ambientStrength * decorationMotion;
+        : Math.sin(animationTime * 0.48) *
+          0.2 *
+          ambientStrength *
+          decorationMotion;
     petGroup.rotation.y = sway + rewardSpin;
     const moodTilt =
-      mood === "curious" ? Math.sin(t * 0.7) * 0.055 * ambientStrength : 0;
+      mood === "curious"
+        ? Math.sin(animationTime * 0.7) * 0.055 * ambientStrength
+        : 0;
     const interactionTilt =
       activeReaction === "tilt" ? reactionEase * 0.16 : 0;
     petGroup.rotation.x =
@@ -134,15 +205,28 @@ export function createPetMotionController(options: PetMotionOptions) {
 
     // Level-up celebration adds a scale pulse
     const levelScale =
-      state === "levelUp" && !reducedMotion ? Math.sin(t * 6) * 0.05 : 0;
-    const scale = 1 + levelScale + reactionBounce * 0.055;
-    petGroup.scale.set(scale - breathing * 0.4, scale + breathing, scale);
+      state === "levelUp" && !reducedMotion
+        ? Math.sin(animationTime * 6) * 0.05
+        : 0;
+    const scale = 1 + levelScale;
+    const bounceStrength = reducedMotion ? 0.35 : 1;
+    const squash =
+      (bounceSpring * 0.26 + bounceImpact * 0.1) * bounceStrength;
+    const stretch =
+      (bounceSpring * 0.38 - bounceImpact * 0.08) * bounceStrength;
+    const depthCompression =
+      (bounceImpact * 0.06 - bounceSpring * 0.18) * bounceStrength;
+    petGroup.scale.set(
+      scale + squash,
+      scale + breathing + stretch,
+      scale + depthCompression
+    );
 
     // Energy core heartbeat: quickens in focus, flashes on celebration.
     if (rig.coreMat) {
       rig.coreMat.emissiveIntensity =
         (glowBase +
-          Math.sin(t * (state === "focus" ? 3.4 : 1.6)) * 0.15 +
+          Math.sin(animationTime * (state === "focus" ? 3.4 : 1.6)) * 0.15 +
           (celebrating ? 0.8 : 0) +
           environmentWarmth * 0.18) *
         TONE_BOOST;
@@ -152,12 +236,33 @@ export function createPetMotionController(options: PetMotionOptions) {
     if (rig.accentMat) {
       rig.accentMat.emissiveIntensity =
         (glowBase +
-          Math.sin(t * (state === "focus" ? 3.0 : 1.8)) *
+          Math.sin(animationTime * (state === "focus" ? 3.0 : 1.8)) *
             (0.18 + streakBoost * 0.25) +
           (celebrating ? 0.9 : 0) +
           environmentWarmth * 0.12) *
         TONE_BOOST;
     }
+
+    // Fake-bloom sprites: sinusoidal at idle/focus (phase-locked to the shared
+    // clock), flaring to 1.0 and easing back on reward/level-up wins.
+    if (rig.haloGlowMat || rig.coreGlowMat) {
+      if (celebrating && !wasCelebrating) glowFlareStartedAt = t;
+      let haloGlow: number;
+      if (celebrating) {
+        const { baseline, flareDuration } = GLOW_PULSE.celebrate;
+        const flare = Math.max(0, 1 - (t - glowFlareStartedAt) / flareDuration);
+        haloGlow = baseline + (1 - baseline) * flare * flare;
+      } else {
+        const c = state === "focus" ? GLOW_PULSE.focus : GLOW_PULSE.idle;
+        const wave = Math.sin(animationTime * (TWO_PI / c.period)) * 0.5 + 0.5;
+        haloGlow = c.min + (c.max - c.min) * wave;
+      }
+      if (rig.haloGlowMat) rig.haloGlowMat.opacity = haloGlow;
+      if (rig.coreGlowMat) {
+        rig.coreGlowMat.opacity = Math.min(1, haloGlow + GLOW_PULSE.coreHotter);
+      }
+    }
+    wasCelebrating = celebrating;
 
     // Eyes carry the expression: focus narrows, reward soft-squints, level-up
     // opens wide. Idle retains the occasional quick blink.
@@ -168,8 +273,8 @@ export function createPetMotionController(options: PetMotionOptions) {
         (1 + environmentWarmth * 0.08);
     }
     if (rig.leftEye && rig.rightEye) {
-      const blinkPhase = t % 4.7;
-      const doubleBlink = Math.floor(t / 4.7) % 3 === 2;
+      const blinkPhase = animationTime % 4.7;
+      const doubleBlink = Math.floor(animationTime / 4.7) % 3 === 2;
       const blinking =
         state === "idle" &&
         (blinkPhase > 4.56 || (doubleBlink && blinkPhase > 4.28 && blinkPhase < 4.4));
@@ -178,13 +283,13 @@ export function createPetMotionController(options: PetMotionOptions) {
         state === "focus"
           ? 0.7
           : state === "reward"
-            ? 0.78 + Math.sin(t * 7) * 0.06
+            ? 0.78 + Math.sin(animationTime * 7) * 0.06
             : state === "levelUp"
               ? 1.14
               : mood === "sleepy"
                 ? 0.48
                 : mood === "proud"
-                  ? 0.82 + Math.sin(t * 2.4) * 0.03
+                  ? 0.82 + Math.sin(animationTime * 2.4) * 0.03
                   : mood === "curious"
                     ? 1.05
                     : blink;
@@ -209,14 +314,27 @@ export function createPetMotionController(options: PetMotionOptions) {
 
     if (rig.leftPupil && rig.rightPupil) {
       const glance =
-        Math.sin(t * 0.43) * 0.014 * ambientStrength * decorationMotion;
+        Math.sin(animationTime * 0.43) *
+        0.014 *
+        ambientStrength *
+        decorationMotion;
       const lift = mood === "curious" ? 0.008 : mood === "sleepy" ? -0.012 : 0;
-      for (const pupil of [rig.leftPupil, rig.rightPupil]) {
-        const base =
-          (pupil.userData.basePosition as THREE.Vector3 | undefined) ??
-          pupil.position;
-        pupil.position.set(base.x + glance, base.y + lift, base.z);
-      }
+      const leftBase =
+        (rig.leftPupil.userData.basePosition as THREE.Vector3 | undefined) ??
+        rig.leftPupil.position;
+      const rightBase =
+        (rig.rightPupil.userData.basePosition as THREE.Vector3 | undefined) ??
+        rig.rightPupil.position;
+      rig.leftPupil.position.set(
+        leftBase.x + glance,
+        leftBase.y + lift,
+        leftBase.z
+      );
+      rig.rightPupil.position.set(
+        rightBase.x + glance,
+        rightBase.y + lift,
+        rightBase.z
+      );
     }
 
     if (rig.leftBrow && rig.rightBrow) {
@@ -269,7 +387,8 @@ export function createPetMotionController(options: PetMotionOptions) {
         base?.z ?? 1
       );
       rig.mouth.rotation.z =
-        Math.PI + (mood === "curious" ? Math.sin(t * 0.7) * 0.08 : 0);
+        Math.PI +
+        (mood === "curious" ? Math.sin(animationTime * 0.7) * 0.08 : 0);
     }
 
     if (rig.mouthMat) {
@@ -282,26 +401,36 @@ export function createPetMotionController(options: PetMotionOptions) {
     if (rig.leftFlipper && rig.rightFlipper) {
       const leftBase = Number(rig.leftFlipper.userData.baseRotationZ ?? 0);
       const rightBase = Number(rig.rightFlipper.userData.baseRotationZ ?? 0);
-      const stateWave = celebrating && !reducedMotion ? Math.sin(t * 8) * 0.55 : 0;
+      // Rectified (abs) ⇒ outward-only swing; magnitude added on the outward
+      // side of each rest angle (+ for left, − for right) so the flipper never
+      // crosses inward into the torso.
+      const stateWave =
+        celebrating && !reducedMotion
+          ? Math.abs(Math.sin(animationTime * 8)) * FLIPPER_WAVE.celebrate
+          : 0;
       const reactionWave =
         activeReaction === "wave"
-          ? Math.sin(reactionProgress * Math.PI * 5) * reactionEase * 0.65
+          ? Math.abs(Math.sin(reactionProgress * Math.PI * 5)) *
+            reactionEase *
+            FLIPPER_WAVE.reaction
           : 0;
-      const idleCycle = t % 11;
+      const idleCycle = animationTime % 11;
       const stretch =
         state === "idle" && idleCycle > 8 && idleCycle < 9.3
           ? Math.sin(((idleCycle - 8) / 1.3) * Math.PI) * 0.12 * ambientStrength
           : 0;
       const focusTuck = state === "focus" ? 0.18 : 0;
-      rig.leftFlipper.rotation.z =
-        leftBase + stateWave + reactionWave + stretch - focusTuck;
+      const outward = stateWave + reactionWave;
+      rig.leftFlipper.rotation.z = leftBase + outward + stretch - focusTuck;
       rig.rightFlipper.rotation.z =
-        rightBase - stateWave + stretch * 0.45 + focusTuck;
+        rightBase - outward - stretch * 0.45 + focusTuck;
     }
 
     // Evolution fins breathe at rest, tuck into focus, and flare for wins.
     if (rig.leftFin && rig.rightFin) {
-      const flare = celebrating ? 0.32 + Math.sin(t * 7) * 0.12 : 0;
+      const flare = celebrating
+        ? 0.32 + Math.sin(animationTime * 7) * 0.12
+        : 0;
       const focusFold = state === "focus" ? -0.18 : 0;
       rig.leftFin.rotation.z = -0.9 - flare - focusFold;
       rig.rightFin.rotation.z = 0.9 + flare + focusFold;
@@ -319,14 +448,14 @@ export function createPetMotionController(options: PetMotionOptions) {
       const speed =
         (state === "focus" ? 0.22 : celebrating ? 1.8 : 0.5) *
         (reducedMotion ? 0.25 : decorationMotion);
-      rig.orbitGroup.rotation.z = t * speed;
-      rig.orbitGroup.rotation.y = Math.sin(t * 0.7) * 0.04;
+      rig.orbitGroup.rotation.z = animationTime * speed;
+      rig.orbitGroup.rotation.y = Math.sin(animationTime * 0.7) * 0.04;
     }
 
     // Streak aura remains restrained at rest and blooms only when momentum
     // or a celebration calls for it.
     if (rig.aura && rig.auraMat) {
-      const pulse = (Math.sin(t * 1.8) + 1) * 0.5;
+      const pulse = (Math.sin(animationTime * 1.8) + 1) * 0.5;
       rig.auraMat.opacity =
         0.025 + streakBoost * 0.045 + pulse * 0.015 + (celebrating ? 0.055 : 0);
       const auraScale = 1 + pulse * 0.035 + (state === "levelUp" ? 0.1 : 0);
@@ -337,15 +466,15 @@ export function createPetMotionController(options: PetMotionOptions) {
     // quick orbit during celebrations.
     if (rig.halo) {
       rig.halo.rotation.x =
-        1.05 + Math.sin(t * 0.8) * 0.05 * ambientStrength;
+        1.05 + Math.sin(animationTime * 0.8) * 0.05 * ambientStrength;
       rig.halo.rotation.y = 0.12;
       rig.halo.rotation.z =
         -0.16 +
-        t *
+        animationTime *
           (state === "focus" ? 0.2 : celebrating ? 2.1 : 0.7) *
           (reducedMotion ? 0.15 : decorationMotion);
     }
   }
 
-  return { apply, react, poke, glowBase, streakBoost };
+  return { apply, react, playBounce, poke, glowBase, streakBoost };
 }

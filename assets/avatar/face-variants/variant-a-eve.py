@@ -1,7 +1,7 @@
 import bmesh
 import bpy
 
-OUT_DIR = "/Users/deeppatel/dayly-v1/assets/avatar"
+OUT_DIR = "/Users/deeppatel/dayly-v1/assets/avatar/face-variants"
 
 # ---------- clean scene ----------
 bpy.ops.object.select_all(action="SELECT")
@@ -37,8 +37,8 @@ def make_mat(name, color, roughness, metallic=0.0, emission=None,
 ORANGE = (1.0, 0.15, 0.035)  # ~#ff6b35 in linear
 mat_body = make_mat("Body_Charcoal", (0.052, 0.052, 0.06), 0.5)
 mat_base = make_mat("Base_Black", (0.012, 0.012, 0.014), 0.12, metallic=0.15)
-mat_eye = make_mat("Eye_White_Emission", (1.0, 0.89, 0.72), 0.42,
-                   emission=(1.0, 0.78, 0.52), emission_strength=2.0)
+mat_eye = make_mat("Eye_White_Emission", (1.0, 0.86, 0.66), 0.14,
+                   emission=(1.0, 0.78, 0.50), emission_strength=3.3)
 mat_pupil = make_mat("Pupil_Dark", (0.015, 0.015, 0.02), 0.25)
 mat_catch = make_mat("Catchlight_White", (1.0, 1.0, 1.0), 0.3,
                      emission=(1.0, 1.0, 1.0), emission_strength=2.5)
@@ -84,17 +84,21 @@ face.scale = (1.12, 0.42, 0.62)
 face.data.materials.append(mat_base)
 smooth(face)
 
-# ---------- Eyes: warm, compact ovals with a gentle outward tilt ----------
+# ---------- Eyes: hero WALL-E "Eve" ovals — tall, glossy, wide-set, low ----------
+# Variant A carries ALL expression in the eyes (no mouth). They are large
+# vertical ovals (taller than wide), warm-glowing, glossy, spaced wider and
+# sitting low on the visor for a serene, friendly gaze.
 # Pupils + catchlights are parented to their eye (HaloBead pattern) so the
 # runtime pet-group reparenting and blink squash carry them for free.
 eyes = {}
-for name, x, roll in (("LeftEye", -0.165, -0.07), ("RightEye", 0.165, 0.07)):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.095,
-                                         location=(x, -0.47, 0.83),
+for name, x, roll in (("LeftEye", -0.205, -0.05), ("RightEye", 0.205, 0.05)):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=16, radius=0.125,
+                                         location=(x, -0.46, 0.775),
                                          rotation=(0, roll, 0))
     eye = bpy.context.active_object
     eye.name = name
-    eye.scale = (1.18, 0.5, 1.15)
+    # width < height -> vertical oval; shallow in Y so it hugs the visor
+    eye.scale = (0.86, 0.5, 1.42)
     eye.data.materials.append(mat_eye)
     smooth(eye)
     eyes[name] = eye
@@ -107,23 +111,25 @@ def parent_to(child, parent):
 
 # Dark pupils, slightly proud of the eye surface, sitting a touch low = cute.
 # Big irises fill most of the eye = kawaii; small beady pupils read vacant.
-for name, x, side in (("LeftPupil", -0.165, "LeftEye"),
-                      ("RightPupil", 0.165, "RightEye")):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.058,
-                                         location=(x, -0.508, 0.818))
+for name, x, side in (("LeftPupil", -0.205, "LeftEye"),
+                      ("RightPupil", 0.205, "RightEye")):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=18, ring_count=12, radius=0.064,
+                                         location=(x, -0.505, 0.758))
     pupil = bpy.context.active_object
     pupil.name = name
-    pupil.scale = (1.0, 0.35, 1.0)
+    # soft vertical iris, sitting a touch low = serene, friendly gaze
+    pupil.scale = (0.95, 0.35, 1.28)
     pupil.data.materials.append(mat_pupil)
     smooth(pupil)
     parent_to(pupil, eyes[side])
 
-# Catchlights: upper-left on both pupils (one light source); right one a
-# touch smaller for asymmetric charm
-for name, x, r, side in (("LeftCatchlight", -0.192, 0.023, "LeftEye"),
-                         ("RightCatchlight", 0.138, 0.019, "RightEye")):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=8, radius=r,
-                                         location=(x, -0.532, 0.852))
+# Catchlights: BIG glossy highlights, upper-inner on both eyes (one light
+# source); right one a touch smaller for asymmetric charm. These sell the
+# "glassy Eve eye" read, so they are deliberately large.
+for name, x, r, side in (("LeftCatchlight", -0.235, 0.05, "LeftEye"),
+                         ("RightCatchlight", 0.175, 0.042, "RightEye")):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=r,
+                                         location=(x, -0.545, 0.83))
     catch = bpy.context.active_object
     catch.name = name
     catch.data.materials.append(mat_catch)
@@ -193,30 +199,8 @@ for name, x, roll in (("LeftFoot", -0.25, -0.1), ("RightFoot", 0.25, 0.1)):
     foot.data.materials.append(mat_body)
     smooth(foot)
 
-# ---------- Visor lip: tiny shallow smile, tucked close under the eyes ----------
-# Kawaii rule: the mouth should be MUCH smaller than instinct says. Width here
-# is ~1/3 of the eye-to-eye span (0.33) and the arc is shallow with soft rounded
-# corners, so it reads as a gentle "u" rather than a wide, uncanny crescent.
-# Same node name + accent material as before so runtime tinting still works.
-lip_curve = bpy.data.curves.new("VisorLip", type="CURVE")
-lip_curve.dimensions = "3D"
-lip_curve.resolution_u = 3
-lip_curve.bevel_depth = 0.011
-lip_curve.bevel_resolution = 4
-lip_spline = lip_curve.splines.new("POLY")
-lip_points = 16
-lip_spline.points.add(lip_points - 1)
-lip_half_width = 0.058   # -> total width 0.116, ~1/3 of the eye-to-eye span
-lip_depth = 0.022        # shallow upward curve of the corners
-for index, point in enumerate(lip_spline.points):
-    progress = index / (lip_points - 1)
-    x = -lip_half_width + progress * (lip_half_width * 2.0)
-    # corners lift up, centre relaxed (a soft smile)
-    z = 0.706 - (1.0 - ((progress - 0.5) * 2.0) ** 2) * lip_depth
-    point.co = (x, -0.532, z, 1.0)
-visor_lip = bpy.data.objects.new("VisorLip", lip_curve)
-link(visor_lip)
-visor_lip.data.materials.append(mat_accent)
+# ---------- Mouth: intentionally omitted for variant A ("Eve") ----------
+# The eyes carry the entire expression, Among Us / WALL-E Eve style.
 
 # ---------- Platform: two-tier pod (joined into one named mesh) ----------
 bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.80, depth=0.04,
@@ -252,7 +236,7 @@ MODEL_OBJECTS = ["Body", "FacePanel", "LeftEye", "RightEye",
                  "LeftPupil", "RightPupil", "LeftCatchlight", "RightCatchlight",
                  "LeftBlush", "RightBlush", "EnergyCore",
                  "HaloCharm", "HaloBead", "LeftFlipper", "RightFlipper",
-                 "LeftFoot", "RightFoot", "VisorLip", "Platform",
+                 "LeftFoot", "RightFoot", "Platform",
                  "PlatformRing"]
 
 # ---------- normalize: apply scale/rotation, keep positions ----------
@@ -316,12 +300,12 @@ for engine in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
         continue
 scene.render.resolution_x = 900
 scene.render.resolution_y = 900
-scene.render.filepath = f"{OUT_DIR}/dayly-companion-preview.png"
+scene.render.filepath = f"{OUT_DIR}/variant-a-eve.png"
 bpy.ops.render.render(write_still=True)
 print("PREVIEW RENDERED")
 
 # ---------- save .blend ----------
-bpy.ops.wm.save_as_mainfile(filepath=f"{OUT_DIR}/dayly-companion.blend")
+bpy.ops.wm.save_as_mainfile(filepath=f"{OUT_DIR}/variant-a-eve.blend")
 print("BLEND SAVED")
 
 # ---------- export GLB (model objects only; no lights/camera/target) ----------
@@ -329,7 +313,7 @@ bpy.ops.object.select_all(action="DESELECT")
 for name in MODEL_OBJECTS:
     bpy.data.objects[name].select_set(True)
 bpy.ops.export_scene.gltf(
-    filepath=f"{OUT_DIR}/dayly-companion.glb",
+    filepath=f"{OUT_DIR}/variant-a-eve.glb",
     export_format="GLB",
     use_selection=True,
 )

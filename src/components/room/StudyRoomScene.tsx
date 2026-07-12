@@ -13,10 +13,11 @@ import {
   createPetTapDetector,
   OrbitRig,
 } from "@/components/3d/sceneInteraction";
+import { createSceneRenderer } from "@/components/3d/sceneRenderer";
 import {
-  createContactShadow,
-  createSceneRenderer,
-} from "@/components/3d/sceneRenderer";
+  createShadowMaterial,
+  createShadowTexture,
+} from "@/components/3d/glow";
 import { AvatarState } from "@/components/avatar/avatarTypes";
 import type {
   CompanionMood,
@@ -162,7 +163,7 @@ export default function StudyRoomScene({
 
       // Warm-sky/charcoal-ground hemisphere, warm key and practical desk lamp.
       const hemi = new THREE.HemisphereLight(0xfff2e8, 0x24211e, 0.72);
-      const keyLight = new THREE.DirectionalLight(0xfff0dd, 1.05);
+      const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.9);
       keyLight.position.set(2.5, 4, 3.5);
       scene.add(hemi, keyLight);
 
@@ -313,14 +314,19 @@ export default function StudyRoomScene({
         }
       });
 
-      // Grounds the floating pet on its pod (puck top ≈ y 0.095)
-      const shadow = createContactShadow(0.5);
-      shadow.group.position.set(
-        ROOM_PET_POSITION.x,
-        0.096,
-        ROOM_PET_POSITION.z
-      );
-      scene.add(shadow.group);
+      // Soft radial contact shadow grounding the companion. The art spec
+      // targets rug level (y 0.035), but this companion has an opaque pod
+      // base spanning y 0–0.08 that would fully enclose a rug-level plane,
+      // so it sits on the pod top (≈ y 0.095) where the pet actually casts.
+      const shadowTexture = createShadowTexture();
+      const shadowMaterial = createShadowMaterial(shadowTexture);
+      const shadowGeometry = new THREE.PlaneGeometry(1, 1);
+      const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.scale.setScalar(1.15);
+      shadow.position.set(ROOM_PET_POSITION.x, 0.096, ROOM_PET_POSITION.z);
+      shadow.renderOrder = 1;
+      scene.add(shadow);
 
       companionFrame = (t, environment) => {
         const s = stateRef.current;
@@ -329,11 +335,12 @@ export default function StudyRoomScene({
           environmentWarmth: environment.companionWarmth,
           decorationMotion: environment.decorationMotion,
         });
-        shadow.setLift(companion.rig.petGroup.position.y);
       };
 
       companionCleanup = () => {
-        shadow.dispose();
+        shadowGeometry.dispose();
+        shadowMaterial.dispose();
+        shadowTexture.dispose();
         disposeEquipment(equipped);
         equipMaterials.dispose();
         companion.dispose();

@@ -1,7 +1,7 @@
 import bmesh
 import bpy
 
-OUT_DIR = "/Users/deeppatel/dayly-v1/assets/avatar"
+OUT_DIR = "/Users/deeppatel/dayly-v1/assets/avatar/face-variants"
 
 # ---------- clean scene ----------
 bpy.ops.object.select_all(action="SELECT")
@@ -44,6 +44,9 @@ mat_catch = make_mat("Catchlight_White", (1.0, 1.0, 1.0), 0.3,
                      emission=(1.0, 1.0, 1.0), emission_strength=2.5)
 mat_blush = make_mat("Blush_Peach", (0.78, 0.28, 0.20), 0.7,
                      emission=(0.80, 0.32, 0.22), emission_strength=0.25)
+mat_mouth = make_mat("Mouth_Dark", (0.03, 0.015, 0.02), 0.45)
+mat_tongue = make_mat("Tongue_Pink", (0.92, 0.34, 0.42), 0.55,
+                      emission=(0.85, 0.28, 0.36), emission_strength=0.3)
 mat_accent = make_mat("Accent_Orange_Emission", ORANGE, 0.4,
                       emission=ORANGE, emission_strength=4.5)
 mat_platform = make_mat("Platform_Dark", (0.02, 0.02, 0.022), 0.75)
@@ -89,12 +92,12 @@ smooth(face)
 # runtime pet-group reparenting and blink squash carry them for free.
 eyes = {}
 for name, x, roll in (("LeftEye", -0.165, -0.07), ("RightEye", 0.165, 0.07)):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.095,
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.105,
                                          location=(x, -0.47, 0.83),
                                          rotation=(0, roll, 0))
     eye = bpy.context.active_object
     eye.name = name
-    eye.scale = (1.18, 0.5, 1.15)
+    eye.scale = (1.08, 0.5, 1.5)
     eye.data.materials.append(mat_eye)
     smooth(eye)
     eyes[name] = eye
@@ -109,21 +112,24 @@ def parent_to(child, parent):
 # Big irises fill most of the eye = kawaii; small beady pupils read vacant.
 for name, x, side in (("LeftPupil", -0.165, "LeftEye"),
                       ("RightPupil", 0.165, "RightEye")):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.058,
-                                         location=(x, -0.508, 0.818))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.072,
+                                         location=(x, -0.508, 0.822))
     pupil = bpy.context.active_object
     pupil.name = name
-    pupil.scale = (1.0, 0.35, 1.0)
+    pupil.scale = (1.0, 0.35, 1.35)
     pupil.data.materials.append(mat_pupil)
     smooth(pupil)
     parent_to(pupil, eyes[side])
 
-# Catchlights: upper-left on both pupils (one light source); right one a
-# touch smaller for asymmetric charm
-for name, x, r, side in (("LeftCatchlight", -0.192, 0.023, "LeftEye"),
-                         ("RightCatchlight", 0.138, 0.019, "RightEye")):
+# Catchlights: oversized DOUBLE sparkle per eye (one big upper-outer, one small
+# lower-inner) = classic plush-toy shine. Both parented to their eye.
+for name, x, z, r, side in (
+        ("LeftCatchlight", -0.198, 0.868, 0.036, "LeftEye"),
+        ("RightCatchlight", 0.132, 0.868, 0.036, "RightEye"),
+        ("LeftCatchlight2", -0.140, 0.788, 0.018, "LeftEye"),
+        ("RightCatchlight2", 0.190, 0.788, 0.018, "RightEye")):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=8, radius=r,
-                                         location=(x, -0.532, 0.852))
+                                         location=(x, -0.536, z))
     catch = bpy.context.active_object
     catch.name = name
     catch.data.materials.append(mat_catch)
@@ -133,11 +139,11 @@ for name, x, r, side in (("LeftCatchlight", -0.192, 0.023, "LeftEye"),
 # ---------- Blush: two subtle warm dots low on the visor cheeks ----------
 face_panel = bpy.data.objects["FacePanel"]
 for name, x in (("LeftBlush", -0.30), ("RightBlush", 0.30)):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.045,
-                                         location=(x, -0.487, 0.755))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.060,
+                                         location=(x, -0.487, 0.748))
     blush = bpy.context.active_object
     blush.name = name
-    blush.scale = (1.0, 0.3, 0.7)
+    blush.scale = (1.05, 0.3, 0.78)
     blush.data.materials.append(mat_blush)
     smooth(blush)
     parent_to(blush, face_panel)
@@ -193,30 +199,28 @@ for name, x, roll in (("LeftFoot", -0.25, -0.1), ("RightFoot", 0.25, 0.1)):
     foot.data.materials.append(mat_body)
     smooth(foot)
 
-# ---------- Visor lip: tiny shallow smile, tucked close under the eyes ----------
-# Kawaii rule: the mouth should be MUCH smaller than instinct says. Width here
-# is ~1/3 of the eye-to-eye span (0.33) and the arc is shallow with soft rounded
-# corners, so it reads as a gentle "u" rather than a wide, uncanny crescent.
-# Same node name + accent material as before so runtime tinting still works.
-lip_curve = bpy.data.curves.new("VisorLip", type="CURVE")
-lip_curve.dimensions = "3D"
-lip_curve.resolution_u = 3
-lip_curve.bevel_depth = 0.011
-lip_curve.bevel_resolution = 4
-lip_spline = lip_curve.splines.new("POLY")
-lip_points = 16
-lip_spline.points.add(lip_points - 1)
-lip_half_width = 0.058   # -> total width 0.116, ~1/3 of the eye-to-eye span
-lip_depth = 0.022        # shallow upward curve of the corners
-for index, point in enumerate(lip_spline.points):
-    progress = index / (lip_points - 1)
-    x = -lip_half_width + progress * (lip_half_width * 2.0)
-    # corners lift up, centre relaxed (a soft smile)
-    z = 0.706 - (1.0 - ((progress - 0.5) * 2.0) ** 2) * lip_depth
-    point.co = (x, -0.532, z, 1.0)
-visor_lip = bpy.data.objects.new("VisorLip", lip_curve)
-link(visor_lip)
-visor_lip.data.materials.append(mat_accent)
+# ---------- Mouth: tiny Kirby open-mouth oval, tucked close under the eyes ----
+# A small dark rounded oval — the mid-"hii!" open smile. Total width ~0.06 is
+# well under half the 0.33 eye gap; slightly taller than wide so it reads as a
+# happy open mouth, not a dot. Kept as node name "VisorLip" so runtime tinting
+# still resolves; a minuscule pink tongue nests inside the lower half.
+bpy.ops.mesh.primitive_uv_sphere_add(segments=18, ring_count=12, radius=0.041,
+                                     location=(0, -0.532, 0.734))
+mouth = bpy.context.active_object
+mouth.name = "VisorLip"
+mouth.scale = (1.05, 0.42, 0.86)
+mouth.data.materials.append(mat_mouth)
+smooth(mouth)
+
+# Tongue: little lighter blob filling the lower inside, proud of the mouth floor.
+bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.026,
+                                     location=(0, -0.556, 0.721))
+tongue = bpy.context.active_object
+tongue.name = "Tongue"
+tongue.scale = (0.95, 0.5, 0.55)
+tongue.data.materials.append(mat_tongue)
+smooth(tongue)
+parent_to(tongue, mouth)
 
 # ---------- Platform: two-tier pod (joined into one named mesh) ----------
 bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.80, depth=0.04,
@@ -250,9 +254,10 @@ smooth(ring)
 
 MODEL_OBJECTS = ["Body", "FacePanel", "LeftEye", "RightEye",
                  "LeftPupil", "RightPupil", "LeftCatchlight", "RightCatchlight",
+                 "LeftCatchlight2", "RightCatchlight2",
                  "LeftBlush", "RightBlush", "EnergyCore",
                  "HaloCharm", "HaloBead", "LeftFlipper", "RightFlipper",
-                 "LeftFoot", "RightFoot", "VisorLip", "Platform",
+                 "LeftFoot", "RightFoot", "VisorLip", "Tongue", "Platform",
                  "PlatformRing"]
 
 # ---------- normalize: apply scale/rotation, keep positions ----------
@@ -316,12 +321,12 @@ for engine in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
         continue
 scene.render.resolution_x = 900
 scene.render.resolution_y = 900
-scene.render.filepath = f"{OUT_DIR}/dayly-companion-preview.png"
+scene.render.filepath = f"{OUT_DIR}/variant-c-kirby.png"
 bpy.ops.render.render(write_still=True)
 print("PREVIEW RENDERED")
 
 # ---------- save .blend ----------
-bpy.ops.wm.save_as_mainfile(filepath=f"{OUT_DIR}/dayly-companion.blend")
+bpy.ops.wm.save_as_mainfile(filepath=f"{OUT_DIR}/variant-c-kirby.blend")
 print("BLEND SAVED")
 
 # ---------- export GLB (model objects only; no lights/camera/target) ----------
@@ -329,7 +334,7 @@ bpy.ops.object.select_all(action="DESELECT")
 for name in MODEL_OBJECTS:
     bpy.data.objects[name].select_set(True)
 bpy.ops.export_scene.gltf(
-    filepath=f"{OUT_DIR}/dayly-companion.glb",
+    filepath=f"{OUT_DIR}/variant-c-kirby.glb",
     export_format="GLB",
     use_selection=True,
 )

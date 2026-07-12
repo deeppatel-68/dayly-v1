@@ -47,6 +47,12 @@ mat_blush = make_mat("Blush_Peach", (0.78, 0.28, 0.20), 0.7,
 mat_accent = make_mat("Accent_Orange_Emission", ORANGE, 0.4,
                       emission=ORANGE, emission_strength=4.5)
 mat_platform = make_mat("Platform_Dark", (0.02, 0.02, 0.022), 0.75)
+# Variant B: OLED-style screen face
+mat_screen = make_mat("Screen_Glossy_Black", (0.004, 0.004, 0.006), 0.06,
+                      metallic=0.2)
+LED_WARM = (1.0, 0.32, 0.09)  # coral/amber
+mat_led = make_mat("LED_Coral_Emission", LED_WARM, 0.35,
+                   emission=LED_WARM, emission_strength=3.0)
 
 
 def smooth(obj):
@@ -76,28 +82,16 @@ for poly in mesh.polygons:
 smooth(body)
 
 # ---------- FacePanel: wide glossy visor, slightly proud of the body ----------
-bpy.ops.mesh.primitive_uv_sphere_add(segments=28, ring_count=16, radius=0.42,
-                                     location=(0, -0.34, 0.81))
+# Variant B: a dark, glossy OLED "screen" that curves with the head. Kept as a
+# spherical cap so it reads inset/curved rather than a flat billboard.
+bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=18, radius=0.44,
+                                     location=(0, -0.30, 0.81))
 face = bpy.context.active_object
 face.name = "FacePanel"
-face.scale = (1.12, 0.42, 0.62)
-face.data.materials.append(mat_base)
+face.scale = (1.14, 0.44, 0.66)
+face.data.materials.append(mat_screen)
 smooth(face)
-
-# ---------- Eyes: warm, compact ovals with a gentle outward tilt ----------
-# Pupils + catchlights are parented to their eye (HaloBead pattern) so the
-# runtime pet-group reparenting and blink squash carry them for free.
-eyes = {}
-for name, x, roll in (("LeftEye", -0.165, -0.07), ("RightEye", 0.165, 0.07)):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.095,
-                                         location=(x, -0.47, 0.83),
-                                         rotation=(0, roll, 0))
-    eye = bpy.context.active_object
-    eye.name = name
-    eye.scale = (1.18, 0.5, 1.15)
-    eye.data.materials.append(mat_eye)
-    smooth(eye)
-    eyes[name] = eye
+face_panel = face
 
 
 def parent_to(child, parent):
@@ -105,42 +99,49 @@ def parent_to(child, parent):
     child.matrix_parent_inverse = parent.matrix_world.inverted()
 
 
-# Dark pupils, slightly proud of the eye surface, sitting a touch low = cute.
-# Big irises fill most of the eye = kawaii; small beady pupils read vacant.
-for name, x, side in (("LeftPupil", -0.165, "LeftEye"),
-                      ("RightPupil", 0.165, "RightEye")):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.058,
-                                         location=(x, -0.508, 0.818))
-    pupil = bpy.context.active_object
-    pupil.name = name
-    pupil.scale = (1.0, 0.35, 1.0)
-    pupil.data.materials.append(mat_pupil)
-    smooth(pupil)
-    parent_to(pupil, eyes[side])
+# ---------- Screen face: flat emissive LED shapes proud of the glass ----------
+# Rounded-rectangle "squircle" eyes built from a heavily-beveled thin cube so
+# they read like OLED pixels. Geometry stays simple + flat so expressions can be
+# swapped at runtime. Parented to the FacePanel so the screen carries them.
+def make_led_tile(name, location, scale, roll=0.0, mat=mat_led):
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.bevel(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces),
+                    offset=0.34, segments=8, affect="EDGES", profile=0.6)
+    mesh = bpy.data.meshes.new(name)
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new(name, mesh)
+    link(obj)
+    obj.scale = scale
+    obj.location = location
+    obj.rotation_euler = (0, roll, 0)
+    mesh.materials.append(mat)
+    smooth(obj)
+    return obj
 
-# Catchlights: upper-left on both pupils (one light source); right one a
-# touch smaller for asymmetric charm
-for name, x, r, side in (("LeftCatchlight", -0.192, 0.023, "LeftEye"),
-                         ("RightCatchlight", 0.138, 0.019, "RightEye")):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=8, radius=r,
-                                         location=(x, -0.532, 0.852))
-    catch = bpy.context.active_object
-    catch.name = name
-    catch.data.materials.append(mat_catch)
-    smooth(catch)
-    parent_to(catch, eyes[side])
 
-# ---------- Blush: two subtle warm dots low on the visor cheeks ----------
-face_panel = bpy.data.objects["FacePanel"]
-for name, x in (("LeftBlush", -0.30), ("RightBlush", 0.30)):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.045,
-                                         location=(x, -0.487, 0.755))
+# Two large softly-rounded eyes, gentle friendly inward tilt, proud of the glass
+EYE_Y = -0.545
+make_led_tile("LeftEye", (-0.155, EYE_Y, 0.845), (0.15, 0.05, 0.235), roll=-0.06)
+make_led_tile("RightEye", (0.155, EYE_Y, 0.845), (0.15, 0.05, 0.235), roll=0.06)
+for nm in ("LeftEye", "RightEye"):
+    parent_to(bpy.data.objects[nm], face_panel)
+
+# Tiny simple mouth glyph: a small horizontal LED bar for warmth
+make_led_tile("ScreenMouth", (0.0, EYE_Y, 0.70), (0.075, 0.04, 0.028))
+parent_to(bpy.data.objects["ScreenMouth"], face_panel)
+
+# ---------- Blush: two subtle warm dots on the cheeks, outside the screen ----------
+for name, x in (("LeftBlush", -0.345), ("RightBlush", 0.345)):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=0.05,
+                                         location=(x, -0.44, 0.76))
     blush = bpy.context.active_object
     blush.name = name
-    blush.scale = (1.0, 0.3, 0.7)
+    blush.scale = (1.0, 0.35, 0.75)
     blush.data.materials.append(mat_blush)
     smooth(blush)
-    parent_to(blush, face_panel)
+    parent_to(blush, body)
 
 # ---------- EnergyCore: small framed heart on the chest ----------
 bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=0.055,
@@ -193,31 +194,6 @@ for name, x, roll in (("LeftFoot", -0.25, -0.1), ("RightFoot", 0.25, 0.1)):
     foot.data.materials.append(mat_body)
     smooth(foot)
 
-# ---------- Visor lip: tiny shallow smile, tucked close under the eyes ----------
-# Kawaii rule: the mouth should be MUCH smaller than instinct says. Width here
-# is ~1/3 of the eye-to-eye span (0.33) and the arc is shallow with soft rounded
-# corners, so it reads as a gentle "u" rather than a wide, uncanny crescent.
-# Same node name + accent material as before so runtime tinting still works.
-lip_curve = bpy.data.curves.new("VisorLip", type="CURVE")
-lip_curve.dimensions = "3D"
-lip_curve.resolution_u = 3
-lip_curve.bevel_depth = 0.011
-lip_curve.bevel_resolution = 4
-lip_spline = lip_curve.splines.new("POLY")
-lip_points = 16
-lip_spline.points.add(lip_points - 1)
-lip_half_width = 0.058   # -> total width 0.116, ~1/3 of the eye-to-eye span
-lip_depth = 0.022        # shallow upward curve of the corners
-for index, point in enumerate(lip_spline.points):
-    progress = index / (lip_points - 1)
-    x = -lip_half_width + progress * (lip_half_width * 2.0)
-    # corners lift up, centre relaxed (a soft smile)
-    z = 0.706 - (1.0 - ((progress - 0.5) * 2.0) ** 2) * lip_depth
-    point.co = (x, -0.532, z, 1.0)
-visor_lip = bpy.data.objects.new("VisorLip", lip_curve)
-link(visor_lip)
-visor_lip.data.materials.append(mat_accent)
-
 # ---------- Platform: two-tier pod (joined into one named mesh) ----------
 bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.80, depth=0.04,
                                     location=(0, 0, 0.02))
@@ -248,11 +224,10 @@ ring.name = "PlatformRing"
 ring.data.materials.append(mat_accent)
 smooth(ring)
 
-MODEL_OBJECTS = ["Body", "FacePanel", "LeftEye", "RightEye",
-                 "LeftPupil", "RightPupil", "LeftCatchlight", "RightCatchlight",
+MODEL_OBJECTS = ["Body", "FacePanel", "LeftEye", "RightEye", "ScreenMouth",
                  "LeftBlush", "RightBlush", "EnergyCore",
                  "HaloCharm", "HaloBead", "LeftFlipper", "RightFlipper",
-                 "LeftFoot", "RightFoot", "VisorLip", "Platform",
+                 "LeftFoot", "RightFoot", "Platform",
                  "PlatformRing"]
 
 # ---------- normalize: apply scale/rotation, keep positions ----------
@@ -316,12 +291,12 @@ for engine in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
         continue
 scene.render.resolution_x = 900
 scene.render.resolution_y = 900
-scene.render.filepath = f"{OUT_DIR}/dayly-companion-preview.png"
+scene.render.filepath = f"{OUT_DIR}/face-variants/variant-b-screen.png"
 bpy.ops.render.render(write_still=True)
 print("PREVIEW RENDERED")
 
 # ---------- save .blend ----------
-bpy.ops.wm.save_as_mainfile(filepath=f"{OUT_DIR}/dayly-companion.blend")
+bpy.ops.wm.save_as_mainfile(filepath=f"{OUT_DIR}/face-variants/variant-b-screen.blend")
 print("BLEND SAVED")
 
 # ---------- export GLB (model objects only; no lights/camera/target) ----------
@@ -329,7 +304,7 @@ bpy.ops.object.select_all(action="DESELECT")
 for name in MODEL_OBJECTS:
     bpy.data.objects[name].select_set(True)
 bpy.ops.export_scene.gltf(
-    filepath=f"{OUT_DIR}/dayly-companion.glb",
+    filepath=f"{OUT_DIR}/face-variants/variant-b-screen.glb",
     export_format="GLB",
     use_selection=True,
 )

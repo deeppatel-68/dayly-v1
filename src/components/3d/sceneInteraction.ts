@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+const TWO_PI = Math.PI * 2;
+
 // Camera orbit + pet hit-testing shared by the interactive scenes. The rig
 // owns the azimuth; scenes feed it drag deltas from SceneTouchLayer and call
 // applyTo(camera, t) every frame, so interaction never recreates a GL
@@ -20,8 +22,9 @@ export interface OrbitRigOptions {
   // vertical composition; pass limits for an inspectable turntable.
   minElevation?: number;
   maxElevation?: number;
-  // Drift back to initialAzimuth after this many idle seconds (0 = never)
+  // Wait this many idle seconds before easing back to the home composition.
   easeBackAfter?: number;
+  returnDamping?: number;
 }
 
 export interface OrbitRig {
@@ -32,6 +35,9 @@ export interface OrbitRig {
 // Full-width drag rotates ~200°
 const DRAG_SENSITIVITY = Math.PI * 1.1;
 const ELEVATION_SENSITIVITY = Math.PI * 0.72;
+const DEFAULT_RETURN_DELAY = 0.65;
+const DEFAULT_RETURN_DAMPING = 5.5;
+const SETTLE_EPSILON = 0.0005;
 
 export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
   const home = options.initialAzimuth ?? 0;
@@ -39,6 +45,7 @@ export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
   let elevation = 0;
   let lastInputT = -Infinity;
   let now = 0;
+  let lastFrameT: number | null = null;
   const authoredHeight = options.height - options.target.y;
   const cameraDistance = Math.hypot(options.radius, authoredHeight);
   const authoredElevation = Math.atan2(authoredHeight, options.radius);
@@ -48,6 +55,11 @@ export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
       azimuth += dxNormalized * DRAG_SENSITIVITY;
       if (options.minAzimuth !== undefined && options.maxAzimuth !== undefined) {
         azimuth = Math.max(options.minAzimuth, Math.min(options.maxAzimuth, azimuth));
+      } else {
+        azimuth =
+          home +
+          THREE.MathUtils.euclideanModulo(azimuth - home + Math.PI, TWO_PI) -
+          Math.PI;
       }
       elevation -= dyNormalized * ELEVATION_SENSITIVITY;
       if (
@@ -65,14 +77,17 @@ export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
     },
     applyTo(camera: THREE.PerspectiveCamera, t: number) {
       now = t;
-      const easeAfter = options.easeBackAfter ?? 0;
-      if (easeAfter > 0 && t - lastInputT > easeAfter && azimuth !== home) {
-        azimuth += (home - azimuth) * 0.02;
-        if (Math.abs(azimuth - home) < 0.001) azimuth = home;
-      }
-      if (easeAfter > 0 && t - lastInputT > easeAfter && elevation !== 0) {
-        elevation += (0 - elevation) * 0.02;
-        if (Math.abs(elevation) < 0.001) elevation = 0;
+      const deltaTime =
+        lastFrameT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastFrameT));
+      lastFrameT = t;
+      const easeAfter = options.easeBackAfter ?? DEFAULT_RETURN_DELAY;
+      if (t - lastInputT > easeAfter) {
+        const damping = options.returnDamping ?? DEFAULT_RETURN_DAMPING;
+        const alpha = 1 - Math.exp(-damping * deltaTime);
+        azimuth = THREE.MathUtils.lerp(azimuth, home, alpha);
+        elevation = THREE.MathUtils.lerp(elevation, 0, alpha);
+        if (Math.abs(azimuth - home) < SETTLE_EPSILON) azimuth = home;
+        if (Math.abs(elevation) < SETTLE_EPSILON) elevation = 0;
       }
       const verticalAngle = authoredElevation + elevation;
       const horizontalRadius = Math.cos(verticalAngle) * cameraDistance;
@@ -94,16 +109,18 @@ export function createPetTapDetector(
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const bounds = new THREE.Box3();
+  const intersections: THREE.Intersection[] = [];
 
   return (x: number, y: number, width: number, height: number): boolean => {
     ndc.set((x / width) * 2 - 1, -(y / height) * 2 + 1);
-    raycaster.setFromCamera(ndc, camera);
-    if (raycaster.intersectObject(petGroup, true).length > 0) return true;
-
-    // GLB face winding and material-side settings can make a valid mesh hit
-    // disappear on some exporters. A fresh world-space pet bound is a robust
-    // fallback and still rejects taps outside the companion silhouette area.
     petGroup.updateWorldMatrix(true, true);
+    raycaster.setFromCamera(ndc, camera);
+    intersections.length = 0;
+    raycaster.intersectObject(petGroup, true, intersections);
+    if (intersections.length > 0) return true;
+
+    // Some exported front-side meshes do not report intersections reliably.
+    // Reuse a world-space bound as a conservative fallback without allocating.
     bounds.setFromObject(petGroup);
     return !bounds.isEmpty() && raycaster.ray.intersectsBox(bounds);
   };

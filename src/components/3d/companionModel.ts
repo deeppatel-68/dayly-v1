@@ -1,7 +1,14 @@
 import { loadAsync } from "expo-three";
 import * as THREE from "three";
 import { createCompanionEvolution } from "./companionEvolution";
+import { createGlowSpriteMaterial, createGlowTexture } from "./glow";
 import { PetRig } from "./petMotion";
+
+// Fake-bloom sprite sizing, relative to each source mesh's bounding-sphere
+// diameter. Halo sprite is parented to the halo mesh, so its world size already
+// inherits the levelTier >= 3 1.25x halo scale.
+export const CORE_GLOW_SCALE = 2.6;
+export const HALO_GLOW_SCALE = 1.4;
 
 // Node names authored in the Blender source (assets/avatar/dayly-companion-build.py)
 export const PET_NODES = [
@@ -118,7 +125,10 @@ export function createCompanionInstance(
   if (eyeMat) {
     eyeMat.color.set(0xffe3bd);
     eyeMat.emissive.set(0xffbd78);
-    eyeMat.roughness = 0.42;
+    eyeMat.roughness = 0.3;
+    eyeMat.metalness = 0;
+    eyeMat.emissiveIntensity = 0.35;
+    eyeMat.envMapIntensity = 0.4;
   }
 
   // Tint accent parts with the user's customisation colour
@@ -126,11 +136,34 @@ export function createCompanionInstance(
     if (!mat) continue;
     mat.color.set(accent);
     mat.emissive.set(accent);
+    mat.roughness = 0.6;
+    mat.metalness = 0;
+    mat.emissiveIntensity = 0.12;
+    mat.envMapIntensity = 0.25;
   }
   if (levelTier >= 3 && halo) halo.scale.setScalar(1.25);
 
   if (leftFlipper) leftFlipper.userData.baseRotationZ = leftFlipper.rotation.z;
   if (rightFlipper) rightFlipper.userData.baseRotationZ = rightFlipper.rotation.z;
+
+  // Fake-bloom halos: one glow texture per instance (per-GL-context rule), two
+  // additive sprites parented to the halo + chest core so they track position.
+  const glowTexture = createGlowTexture();
+  const glowColor = accent.getHex();
+  const attachGlow = (mesh: THREE.Mesh, scaleFactor: number) => {
+    const mat = createGlowSpriteMaterial(glowTexture, glowColor);
+    ownedMaterials.add(mat);
+    const sprite = new THREE.Sprite(mat);
+    mesh.geometry.computeBoundingSphere();
+    const diameter = (mesh.geometry.boundingSphere?.radius ?? 0.1) * 2;
+    sprite.scale.setScalar(diameter * scaleFactor);
+    sprite.renderOrder = 10;
+    mesh.add(sprite);
+    return mat;
+  };
+  // EnergyCore is the chest dot; HaloCharm is the ring above the head.
+  const coreGlowMat = core ? attachGlow(core, CORE_GLOW_SCALE) : null;
+  const haloGlowMat = halo ? attachGlow(halo, HALO_GLOW_SCALE) : null;
 
   const evolution = createCompanionEvolution({
     accent,
@@ -152,8 +185,11 @@ export function createCompanionInstance(
     if (!bodyMat) {
       bodyMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(bodyColor),
-        roughness: 0.45,
-        metalness: 0.08,
+        roughness: 0.92,
+        metalness: 0.0,
+        emissive: new THREE.Color(bodyColor).multiplyScalar(0.5),
+        emissiveIntensity: 0.06,
+        envMapIntensity: 0.15,
       });
       bodyMat.name = "Body_Charcoal_Runtime";
       ownedMaterials.add(bodyMat);
@@ -177,11 +213,14 @@ export function createCompanionInstance(
       eyeMat,
       coreMat,
       accentMat,
+      haloGlowMat,
+      coreGlowMat,
       evolutionMat: evolution.evolutionMat,
       auraMat: evolution.auraMat,
     },
     dispose: () => {
       evolution.dispose();
+      glowTexture.dispose();
       ownedGeometries.forEach((geometry) => geometry.dispose());
       ownedMaterials.forEach((material) => material.dispose());
     },
