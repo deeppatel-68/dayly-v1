@@ -4,7 +4,7 @@ import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
@@ -170,6 +170,39 @@ export default function ProfileScreen() {
                 Day Streak
               </Text>
             </View>
+          </View>
+        </View>
+
+        {/* Friends Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            FRIENDS
+          </Text>
+          <View
+            style={[
+              styles.settingsCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Pressable
+              style={({ pressed }) => [
+                styles.settingRow,
+                { opacity: pressed ? 0.7 : 1, borderBottomColor: colors.border },
+              ]}
+              onPress={() => router.push("/friends")}
+            >
+              <View style={styles.settingLeft}>
+                <Ionicons name="people-outline" size={22} color={colors.text} />
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  Friends & Leaderboard
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textSecondary}
+              />
+            </Pressable>
           </View>
         </View>
 
