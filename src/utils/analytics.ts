@@ -260,6 +260,59 @@ export function buildStudyChartData(
   });
 }
 
+function completionPercentForDate(date: Date, habits: Habit[]): number {
+  const dateKey = toLocalDateKey(date);
+  const activeHabits = habits.filter((habit) => isHabitActiveOn(habit, dateKey));
+  if (activeHabits.length === 0) return 0;
+  const completed = activeHabits.filter(
+    (habit) => habit.completionHistory?.[dateKey] === true
+  ).length;
+  return Math.round((completed / activeHabits.length) * 100);
+}
+
+export function buildCompletionChartData(
+  habits: Habit[],
+  period: AnalyticsPeriod,
+  today = new Date()
+): ChartPoint[] {
+  if (period !== "3months") {
+    const dates = getDatesForPeriod(period, today);
+    return dates.map((date, index) => {
+      let label = "TODAY";
+      if (period === "week") {
+        label = date.toLocaleDateString("en", { weekday: "short" }).toUpperCase();
+      } else if (period === "month") {
+        label = index % 5 === 0 || index === dates.length - 1 ? `${date.getDate()}` : "";
+      }
+      return { label, value: completionPercentForDate(date, habits) };
+    });
+  }
+
+  const reference = atLocalMidnight(today);
+  return Array.from({ length: 13 }, (_, index) => {
+    const weeksAgo = 12 - index;
+    const end = addCalendarDays(reference, -weeksAgo * 7);
+    const start = addCalendarDays(end, -6);
+    const weekDates = Array.from({ length: 7 }, (_, dayIndex) =>
+      addCalendarDays(start, dayIndex)
+    );
+    const percentages = weekDates.map((date) =>
+      completionPercentForDate(date, habits)
+    );
+    const value = Math.round(
+      percentages.reduce((sum, value) => sum + value, 0) / percentages.length
+    );
+
+    return {
+      label:
+        index % 2 === 0 || index === 12
+          ? start.toLocaleDateString("en", { month: "short", day: "numeric" })
+          : "",
+      value,
+    };
+  });
+}
+
 export function calculateHabitStats(habit: Habit): HabitStats {
   const completedDays = Object.entries(habit.completionHistory ?? {})
     .filter(([, completed]) => completed)
@@ -297,7 +350,8 @@ export function calculateHabitStats(habit: Habit): HabitStats {
 export function generateInsights(
   habits: Habit[],
   _sessions: FocusSession[] = [],
-  periodStats: PeriodStats
+  periodStats: PeriodStats,
+  companionName?: string
 ): string[] {
   const insights: string[] = [];
   const bestHabit = habits
@@ -306,13 +360,21 @@ export function generateInsights(
 
   if (bestHabit && bestHabit.completionRate > 70) {
     insights.push(
-      `${bestHabit.name} is your strongest habit at ${Math.round(
-        bestHabit.completionRate
-      )}% completion.`
+      companionName
+        ? `${companionName} noticed ${bestHabit.name} is your strongest habit at ${Math.round(
+            bestHabit.completionRate
+          )}% completion.`
+        : `${bestHabit.name} is your strongest habit at ${Math.round(
+            bestHabit.completionRate
+          )}% completion.`
     );
   }
   if (periodStats.currentStreak > 3) {
-    insights.push(`Your active streak is ${periodStats.currentStreak} days.`);
+    insights.push(
+      companionName
+        ? `${companionName} loves your ${periodStats.currentStreak}-day streak.`
+        : `Your active streak is ${periodStats.currentStreak} days.`
+    );
   }
   if (periodStats.averageSessionMinutes >= 60) {
     insights.push(
@@ -326,22 +388,16 @@ export function generateInsights(
       `Habit completion improved ${Math.round(periodStats.periodChange)}% over the previous period.`
     );
   }
-  return insights;
-}
 
-export function getHabitHeatmapData(
-  habit: Habit,
-  weeks = 12
-): number[][] {
-  const today = atLocalMidnight(new Date());
-  const startOfWeek = addCalendarDays(today, -today.getDay());
-  return Array.from({ length: weeks }, (_, weekIndex) =>
-    Array.from({ length: 7 }, (_, dayIndex) => {
-      const weeksAgo = weeks - weekIndex - 1;
-      const date = addCalendarDays(startOfWeek, dayIndex - weeksAgo * 7);
-      return habit.completionHistory?.[toLocalDateKey(date)] ? 4 : 0;
-    })
-  );
+  if (insights.length === 0) {
+    insights.push(
+      companionName
+        ? `${companionName} believes your next streak starts today.`
+        : "Every streak starts with a single day. You've got this."
+    );
+  }
+
+  return insights;
 }
 
 export { calculateStreaks };

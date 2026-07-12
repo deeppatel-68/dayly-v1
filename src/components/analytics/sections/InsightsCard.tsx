@@ -4,7 +4,12 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-export const InsightsCard = ({ insights }: { insights: string[] }) => {
+interface InsightsCardProps {
+  insights: string[];
+  companionName?: string;
+}
+
+export default function InsightsCard({ insights }: InsightsCardProps) {
   const { colors } = useTheme();
   if (insights.length === 0) return null;
 
@@ -26,7 +31,7 @@ export const InsightsCard = ({ insights }: { insights: string[] }) => {
       </Text>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   card: {
@@ -54,5 +59,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
-
-export default InsightsCard;
