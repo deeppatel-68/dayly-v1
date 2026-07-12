@@ -33,6 +33,7 @@ export function createProceduralCompanion({
   });
   const darkMat = material({ color: 0x17171a, roughness: 0.48, metalness: 0.16 });
   const faceMat = material({ color: 0x08090c, roughness: 0.2, metalness: 0.3 });
+  const browMat = material({ color: 0x5d554f, roughness: 0.58, metalness: 0.08 });
   const eyeMat = material({
     color: 0xffe3bd,
     emissive: 0xffbd78,
@@ -50,6 +51,12 @@ export function createProceduralCompanion({
     emissive: accent,
     emissiveIntensity: 0.9,
     roughness: 0.3,
+  });
+  const mouthMat = material({
+    color: 0xffd6ad,
+    emissive: 0xd97757,
+    emissiveIntensity: 0.58,
+    roughness: 0.42,
   });
   const podMat = material({ color: 0x202024, roughness: 0.7, metalness: 0.12 });
 
@@ -73,17 +80,54 @@ export function createProceduralCompanion({
   seam.position.y = 0.54;
 
   const face = mesh(new THREE.SphereGeometry(0.405, 22, 16), faceMat);
-  face.scale.set(1, 0.74, 0.44);
-  face.position.set(0, 0.8, 0.29);
+  face.scale.set(0.96, 0.57, 0.12);
+  face.position.set(0, 0.82, 0.5);
 
   const eyeGeometry = new THREE.SphereGeometry(0.095, 14, 10);
   geometries.add(eyeGeometry);
   const leftEye = new THREE.Mesh(eyeGeometry, eyeMat);
   leftEye.scale.set(1, 1.25, 0.48);
-  leftEye.position.set(-0.17, 0.82, 0.515);
+  leftEye.position.set(-0.17, 0.84, 0.535);
   const rightEye = new THREE.Mesh(eyeGeometry, eyeMat);
   rightEye.scale.copy(leftEye.scale);
-  rightEye.position.set(0.17, 0.82, 0.515);
+  rightEye.position.set(0.17, 0.84, 0.535);
+  for (const eye of [leftEye, rightEye]) {
+    eye.userData.baseScale = eye.scale.clone();
+  }
+
+  const pupilGeometry = new THREE.SphereGeometry(0.036, 12, 8);
+  geometries.add(pupilGeometry);
+  const leftPupil = new THREE.Mesh(pupilGeometry, faceMat);
+  leftPupil.scale.set(0.82, 1.08, 0.38);
+  leftPupil.position.set(-0.17, 0.84, 0.581);
+  const rightPupil = new THREE.Mesh(pupilGeometry, faceMat);
+  rightPupil.scale.copy(leftPupil.scale);
+  rightPupil.position.set(0.17, 0.84, 0.581);
+  for (const pupil of [leftPupil, rightPupil]) {
+    pupil.userData.basePosition = pupil.position.clone();
+  }
+
+  const browGeometry = new THREE.BoxGeometry(0.115, 0.016, 0.018);
+  geometries.add(browGeometry);
+  const leftBrow = new THREE.Mesh(browGeometry, browMat);
+  leftBrow.position.set(-0.17, 0.965, 0.558);
+  leftBrow.rotation.z = 0.04;
+  const rightBrow = new THREE.Mesh(browGeometry, browMat);
+  rightBrow.position.set(0.17, 0.965, 0.558);
+  rightBrow.rotation.z = -0.04;
+  for (const brow of [leftBrow, rightBrow]) {
+    brow.userData.baseY = brow.position.y;
+    brow.userData.baseRotationZ = brow.rotation.z;
+  }
+
+  const mouth = mesh(
+    new THREE.TorusGeometry(0.075, 0.009, 7, 18, Math.PI),
+    mouthMat
+  );
+  mouth.position.set(0, 0.675, 0.558);
+  mouth.rotation.z = Math.PI;
+  mouth.scale.set(1, 0.62, 1);
+  mouth.userData.baseScale = mouth.scale.clone();
 
   const core = mesh(new THREE.SphereGeometry(0.064, 14, 10), coreMat);
   core.position.set(0, 0.37, 0.47);
@@ -116,6 +160,19 @@ export function createProceduralCompanion({
   halo.rotation.set(1.05, 0.12, -0.16);
   if (levelTier >= 3) halo.scale.setScalar(1.25);
 
+  // A quiet rear signature makes the 360-degree customisation view feel
+  // authored without pushing the companion back toward a generic robot.
+  const rearSeam = mesh(new THREE.RingGeometry(0.14, 0.17, 24), darkMat);
+  rearSeam.position.set(0, 0.7, -0.526);
+  rearSeam.rotation.y = Math.PI;
+  const rearEnergy = mesh(new THREE.BoxGeometry(0.17, 0.025, 0.018), accentMat);
+  rearEnergy.position.set(0, 0.7, -0.54);
+  const haloMount = mesh(
+    new THREE.CylinderGeometry(0.045, 0.06, 0.1, 12),
+    darkMat
+  );
+  haloMount.position.set(0, 1.31, -0.03);
+
   petGroup.add(
     body,
     lowerBody,
@@ -123,13 +180,21 @@ export function createProceduralCompanion({
     face,
     leftEye,
     rightEye,
+    leftPupil,
+    rightPupil,
+    leftBrow,
+    rightBrow,
+    mouth,
     core,
     coreFrame,
     leftFlipper,
     rightFlipper,
     leftFoot,
     rightFoot,
-    halo
+    halo,
+    rearSeam,
+    rearEnergy,
+    haloMount
   );
 
   const podBase = mesh(new THREE.CylinderGeometry(0.8, 0.86, 0.08, 28), podMat);
@@ -150,6 +215,11 @@ export function createProceduralCompanion({
       petGroup,
       leftEye,
       rightEye,
+      leftPupil,
+      rightPupil,
+      leftBrow,
+      rightBrow,
+      mouth,
       leftFlipper,
       rightFlipper,
       halo,
@@ -158,6 +228,7 @@ export function createProceduralCompanion({
       orbitGroup: evolution.orbitGroup,
       aura: evolution.aura,
       eyeMat,
+      mouthMat,
       coreMat,
       accentMat,
       evolutionMat: evolution.evolutionMat,

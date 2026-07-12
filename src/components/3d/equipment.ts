@@ -140,16 +140,17 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   // Lens size/position render-verified: the old radius (0.115) was smaller
   // than the eye's own height (0.283) so it couldn't ring it, and z=0.5 sat
   // behind the eye's front-most point (~0.522), embedding half the ring
-  // inside the head. Enlarged to 0.145 and pushed to z=0.57.
+  // inside the head. The living-companion visor seats the eyes slightly
+  // farther forward, so the frames sit at z=0.595 with a small air gap.
   "study-glasses": {
     slot: "pet",
     build: (m) => {
       const group = new THREE.Group();
       const lensGeo = new THREE.TorusGeometry(0.145, 0.018, 8, 20);
       group.add(
-        mesh(lensGeo, m.frame, -0.165, 0.83, 0.57),
-        mesh(lensGeo, m.frame, 0.165, 0.83, 0.57),
-        mesh(new THREE.BoxGeometry(0.08, 0.016, 0.016), m.frame, 0, 0.83, 0.575)
+        mesh(lensGeo, m.frame, -0.165, 0.84, 0.595),
+        mesh(lensGeo, m.frame, 0.165, 0.84, 0.595),
+        mesh(new THREE.BoxGeometry(0.08, 0.016, 0.016), m.frame, 0, 0.84, 0.6)
       );
       return group;
     },

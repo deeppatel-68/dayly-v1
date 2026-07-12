@@ -1,4 +1,6 @@
 import AvatarRenderer from "@/components/avatar/AvatarRenderer";
+import CompanionDialogue from "@/components/companion/CompanionDialogue";
+import { useCompanionPresence } from "@/components/companion/useCompanionPresence";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useCharacter } from "@/context/CharacterContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -27,13 +29,21 @@ function ArenaPlaceholder({
   const { character } = useCharacter();
   const isFocused = useIsFocused();
   const [sceneReady, setSceneReady] = useState(false);
+  const [rendererReady, setRendererReady] = useState(false);
+  const presence = useCompanionPresence({
+    state,
+    visible: active && isFocused && rendererReady,
+    suppressAutomatic: state === "focus",
+  });
 
   useEffect(() => {
     if (!active || !isFocused) {
       setSceneReady(false);
+      setRendererReady(false);
       return;
     }
 
+    setRendererReady(false);
     let timer = null;
     const task = InteractionManager.runAfterInteractions(() => {
       timer = setTimeout(() => setSceneReady(true), 500);
@@ -56,19 +66,38 @@ function ArenaPlaceholder({
     >
       <View style={styles.scene}>
         {active && isFocused && sceneReady ? (
-          <AvatarRenderer state={state} variant="dashboard" />
+          <AvatarRenderer
+            state={state}
+            variant="dashboard"
+            mood={presence.mood}
+            reactionToken={presence.reactionToken}
+            onInteract={presence.interact}
+            onReady={() => setRendererReady(true)}
+          />
         ) : (
           <View style={styles.sceneLoading}>
+            <ActivityIndicator size="small" color={colors.accent} />
+          </View>
+        )}
+        {sceneReady && !rendererReady && (
+          <View style={styles.sceneLoading} pointerEvents="none">
             <ActivityIndicator size="small" color={colors.accent} />
           </View>
         )}
       </View>
       <View style={styles.dock}>
         <View style={styles.identity}>
-          <Text style={styles.identityLabel}>COMPANION</Text>
-          <Text numberOfLines={1} style={styles.identityName}>
-            {character.companionName || "Your companion"}
-          </Text>
+          <View style={{ opacity: presence.cue ? 0 : 1 }}>
+            <Text style={styles.identityLabel}>COMPANION</Text>
+            <Text numberOfLines={1} style={styles.identityName}>
+              {character.companionName || "Your companion"}
+            </Text>
+          </View>
+          <CompanionDialogue
+            cue={presence.cue}
+            name={presence.companionName}
+            style={styles.dockDialogue}
+          />
         </View>
         <View style={styles.actions}>
           <SceneAction
@@ -120,6 +149,7 @@ const styles = StyleSheet.create({
     height: 168,
   },
   sceneLoading: {
+    ...StyleSheet.absoluteFillObject,
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -135,6 +165,18 @@ const styles = StyleSheet.create({
   identity: {
     flex: 1,
     minWidth: 0,
+    height: 40,
+    justifyContent: "center",
+  },
+  dockDialogue: {
+    top: 0,
+    left: 0,
+    minWidth: 0,
+    maxWidth: 245,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
   },
   identityLabel: {
     color: "#A5A29A",

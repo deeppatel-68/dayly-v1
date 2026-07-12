@@ -16,29 +16,50 @@ export interface OrbitRigOptions {
   // Clamp range (radians). Omit for a free 360° orbit.
   minAzimuth?: number;
   maxAzimuth?: number;
+  // Elevation offsets from the authored camera position. Omit to lock the
+  // vertical composition; pass limits for an inspectable turntable.
+  minElevation?: number;
+  maxElevation?: number;
   // Drift back to initialAzimuth after this many idle seconds (0 = never)
   easeBackAfter?: number;
 }
 
 export interface OrbitRig {
-  orbitBy: (dxNormalized: number) => void;
+  orbitBy: (dxNormalized: number, dyNormalized?: number) => void;
   applyTo: (camera: THREE.PerspectiveCamera, t: number) => void;
 }
 
 // Full-width drag rotates ~200°
 const DRAG_SENSITIVITY = Math.PI * 1.1;
+const ELEVATION_SENSITIVITY = Math.PI * 0.72;
 
 export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
   const home = options.initialAzimuth ?? 0;
   let azimuth = home;
+  let elevation = 0;
   let lastInputT = -Infinity;
   let now = 0;
+  const authoredHeight = options.height - options.target.y;
+  const cameraDistance = Math.hypot(options.radius, authoredHeight);
+  const authoredElevation = Math.atan2(authoredHeight, options.radius);
 
   return {
-    orbitBy(dxNormalized: number) {
+    orbitBy(dxNormalized: number, dyNormalized = 0) {
       azimuth += dxNormalized * DRAG_SENSITIVITY;
       if (options.minAzimuth !== undefined && options.maxAzimuth !== undefined) {
         azimuth = Math.max(options.minAzimuth, Math.min(options.maxAzimuth, azimuth));
+      }
+      elevation -= dyNormalized * ELEVATION_SENSITIVITY;
+      if (
+        options.minElevation !== undefined &&
+        options.maxElevation !== undefined
+      ) {
+        elevation = Math.max(
+          options.minElevation,
+          Math.min(options.maxElevation, elevation)
+        );
+      } else {
+        elevation = 0;
       }
       lastInputT = now;
     },
@@ -49,10 +70,16 @@ export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
         azimuth += (home - azimuth) * 0.02;
         if (Math.abs(azimuth - home) < 0.001) azimuth = home;
       }
+      if (easeAfter > 0 && t - lastInputT > easeAfter && elevation !== 0) {
+        elevation += (0 - elevation) * 0.02;
+        if (Math.abs(elevation) < 0.001) elevation = 0;
+      }
+      const verticalAngle = authoredElevation + elevation;
+      const horizontalRadius = Math.cos(verticalAngle) * cameraDistance;
       camera.position.set(
-        options.target.x + Math.sin(azimuth) * options.radius,
-        options.height,
-        options.target.z + Math.cos(azimuth) * options.radius
+        options.target.x + Math.sin(azimuth) * horizontalRadius,
+        options.target.y + Math.sin(verticalAngle) * cameraDistance,
+        options.target.z + Math.cos(azimuth) * horizontalRadius
       );
       camera.lookAt(options.target);
     },

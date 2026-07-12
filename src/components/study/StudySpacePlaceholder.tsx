@@ -22,6 +22,8 @@ import { RENDERED_EQUIPMENT_IDS } from "@/components/3d/equipment";
 import AvatarRenderer from "@/components/avatar/AvatarRenderer";
 import { AvatarState } from "@/components/avatar/avatarTypes";
 import StudyRoomScene from "@/components/room/StudyRoomScene";
+import CompanionDialogue from "@/components/companion/CompanionDialogue";
+import { useCompanionPresence } from "@/components/companion/useCompanionPresence";
 import FocusTimer from "@/components/study/FocusTimer";
 import { Spacing, BorderRadius, Shadows } from "@/constants/Spacing";
 import { AVATAR_BODY_COLORS } from "@/data/avatarColors";
@@ -259,6 +261,12 @@ export default function StudySpacePlaceholder({
   const [showShop, setShowShop] = useState(false);
   const [characterState, setCharacterState] = useState<AvatarState>("idle");
   const [sceneReady, setSceneReady] = useState(false);
+  const [rendererReady, setRendererReady] = useState(false);
+  const presence = useCompanionPresence({
+    state: characterState,
+    visible: visible && rendererReady,
+    suppressAutomatic: characterState === "focus",
+  });
 
   useEffect(() => {
     let task: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
@@ -268,12 +276,14 @@ export default function StudySpacePlaceholder({
       setShowShop(initialShopOpen);
       setCharacterState("idle");
       setSceneReady(false);
+      setRendererReady(false);
       task = InteractionManager.runAfterInteractions(() => {
         timer = setTimeout(() => setSceneReady(true), 1600);
       });
     } else {
       setShowShop(false);
       setSceneReady(false);
+      setRendererReady(false);
     }
     return () => {
       task?.cancel();
@@ -292,11 +302,28 @@ export default function StudySpacePlaceholder({
         {/* My Space: the companion at home in its study nook */}
         <View style={styles.roomArea}>
           {sceneReady ? (
-            <StudyRoomScene state={characterState} />
+            <StudyRoomScene
+              state={characterState}
+              mood={presence.mood}
+              reactionToken={presence.reactionToken}
+              onInteract={presence.interact}
+              onReady={() => setRendererReady(true)}
+            />
           ) : (
             <ActivityIndicator size="small" color="#D97757" />
           )}
+          {sceneReady && !rendererReady && (
+            <View style={styles.sceneLoading} pointerEvents="none">
+              <ActivityIndicator size="small" color="#D97757" />
+            </View>
+          )}
         </View>
+
+        <CompanionDialogue
+          cue={presence.cue}
+          name={presence.companionName}
+          style={styles.roomDialogue}
+        />
 
         {/* Overlay UI */}
         <View style={styles.overlay}>
@@ -321,7 +348,10 @@ export default function StudySpacePlaceholder({
           {/* Timer in center - only show if showTimer is true */}
           {showTimer && (
             <View style={styles.timerContainer}>
-              <FocusTimer onStateChange={setCharacterState} />
+              <FocusTimer
+                variant="immersive"
+                onStateChange={setCharacterState}
+              />
             </View>
           )}
         </View>
@@ -913,9 +943,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#141311",
   },
+  sceneLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     pointerEvents: "box-none",
+  },
+  roomDialogue: {
+    top: 112,
+    left: Spacing.md,
+    zIndex: 2,
   },
   topBar: {
     flexDirection: "row",
@@ -935,10 +975,10 @@ const styles = StyleSheet.create({
   },
   timerContainer: {
     position: "absolute",
-    bottom: 100,
-    left: 0,
-    right: 0,
-    alignItems: "center",
+    bottom: 72,
+    left: Spacing.md,
+    width: 176,
+    alignItems: "flex-start",
   },
   // Shop Styles - New Design
   shopOverlay: {

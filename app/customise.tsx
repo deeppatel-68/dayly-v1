@@ -59,6 +59,7 @@ export default function CustomiseScreen() {
   const [name, setName] = useState(character.companionName ?? "");
   const [showShop, setShowShop] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
+  const [rendererReady, setRendererReady] = useState(false);
 
   useEffect(() => {
     setName(character.companionName ?? "");
@@ -67,9 +68,11 @@ export default function CustomiseScreen() {
   useEffect(() => {
     if (!isFocused || showShop) {
       setSceneReady(false);
+      setRendererReady(false);
       return;
     }
 
+    setRendererReady(false);
     let timer: ReturnType<typeof setTimeout> | null = null;
     const task = InteractionManager.runAfterInteractions(() => {
       timer = setTimeout(() => setSceneReady(true), 500);
@@ -135,9 +138,18 @@ export default function CustomiseScreen() {
           ]}
         >
           {sceneReady ? (
-            <AvatarRenderer state="idle" variant="shop" />
+            <AvatarRenderer
+              state="idle"
+              variant="shop"
+              onReady={() => setRendererReady(true)}
+            />
           ) : (
             <View style={styles.previewLoading}>
+              <ActivityIndicator size="small" color={colors.accent} />
+            </View>
+          )}
+          {sceneReady && !rendererReady && (
+            <View style={styles.previewLoading} pointerEvents="none">
               <ActivityIndicator size="small" color={colors.accent} />
             </View>
           )}
