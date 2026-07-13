@@ -470,7 +470,7 @@ select throws_ok($$
   set equip_slot = 'room:rug'
   where user_id = '11111111-1111-4111-8111-111111111111'
     and item_id = 'focus-cap'
-$$, 'catalog metadata cannot be tampered with');
+$$, '23503', null, 'catalog metadata cannot be tampered with');
 
 update public.shop_catalog
 set active = false
