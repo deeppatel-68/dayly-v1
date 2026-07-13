@@ -36,9 +36,9 @@ export const ROOM_CAMERA_PROFILES: Readonly<
     fov: 58,
   },
   desk: {
-    position: [0.25, 1.5, 5.4],
-    target: [0.4, 0.9, -0.8],
-    fov: 58,
+    position: [0.15, 1.45, 4.3],
+    target: [0.25, 0.88, -0.95],
+    fov: 54,
   },
   windowShelf: {
     position: [0, 1.65, 7.2],

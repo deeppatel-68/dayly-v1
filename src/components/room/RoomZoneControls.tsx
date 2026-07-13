@@ -23,7 +23,7 @@ export default function RoomZoneControls({
   onChange: (view: RoomView) => void;
 }) {
   return (
-    <View style={styles.rail} accessibilityRole="tablist">
+    <View style={styles.rail} accessibilityRole="tablist" pointerEvents="auto">
       {ZONES.map((zone) => {
         const selected = value === zone.view;
         return (

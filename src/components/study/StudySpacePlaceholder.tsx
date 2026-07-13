@@ -378,7 +378,7 @@ export default function StudySpacePlaceholder({
         )}
 
         {/* Overlay UI */}
-        <View style={styles.overlay}>
+        <View style={styles.overlay} pointerEvents="box-none">
           {/* Top Bar */}
           <View style={styles.topBar}>
             <Pressable
@@ -1137,7 +1137,6 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    pointerEvents: "box-none",
   },
   roomDialogue: {
     top: 112,
