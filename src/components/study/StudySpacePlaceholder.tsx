@@ -22,12 +22,18 @@ import { RENDERED_EQUIPMENT_IDS } from "@/components/3d/equipment";
 import AvatarRenderer from "@/components/avatar/AvatarRenderer";
 import { AvatarState } from "@/components/avatar/avatarTypes";
 import StudyRoomScene from "@/components/room/StudyRoomScene";
+import RoomDecorSheet from "@/components/room/RoomDecorSheet";
+import RoomZoneControls from "@/components/room/RoomZoneControls";
+import {
+  getRoomViewForEquipSlot,
+  isHomeEquipSlot,
+} from "@/components/room/roomDecor";
+import type { RoomView } from "@/components/room/roomNavigation";
 import CompanionDialogue from "@/components/companion/CompanionDialogue";
 import { useCompanionPresence } from "@/components/companion/useCompanionPresence";
 import FocusTimer from "@/components/study/FocusTimer";
 import { Spacing, BorderRadius, Shadows } from "@/constants/Spacing";
 import { AVATAR_BODY_COLORS } from "@/data/avatarColors";
-import { shopItems } from "@/data/shopItems";
 import * as Haptics from "expo-haptics";
 import { ItemCategory, ItemRarity, ShopItem } from "@/types/shop";
 
@@ -56,6 +62,7 @@ interface ItemCardProps {
   comingSoon: boolean;
   busy: boolean;
   disabled: boolean;
+  viewInRoom: boolean;
   onPress: () => void;
 }
 
@@ -70,30 +77,37 @@ function ItemCard({
   comingSoon,
   busy,
   disabled,
+  viewInRoom,
   onPress,
 }: ItemCardProps) {
   const canAfford = coins >= item.cost;
   const locked = comingSoon || disabled || busy;
-  const actionLabel = comingSoon
-    ? "Preview soon"
-    : busy
-      ? "Working..."
+  const actionLabel = viewInRoom
+    ? equipped
+      ? "In room"
+      : "View in room"
+    : comingSoon
+      ? "Preview soon"
+      : busy
+        ? "Working..."
+        : equipped
+          ? "Equipped"
+          : owned
+            ? "Equip"
+            : canAfford
+              ? "Buy"
+              : `Need ${item.cost - coins}`;
+  const actionIcon = viewInRoom
+    ? "home-outline"
+    : comingSoon
+      ? "construct-outline"
       : equipped
-        ? "Equipped"
+        ? "checkmark"
         : owned
-          ? "Equip"
+          ? "shirt-outline"
           : canAfford
-            ? "Buy"
-            : `Need ${item.cost - coins}`;
-  const actionIcon = comingSoon
-    ? "construct-outline"
-    : equipped
-      ? "checkmark"
-      : owned
-        ? "shirt-outline"
-        : canAfford
-          ? "bag-add-outline"
-          : "lock-closed-outline";
+            ? "bag-add-outline"
+            : "lock-closed-outline";
   const actionColor = comingSoon
     ? colors.textSecondary
     : equipped
@@ -158,7 +172,9 @@ function ItemCard({
           <Text
             style={[
               styles.costChipText,
-              { color: canAfford || owned ? colors.text : colors.textSecondary },
+              {
+                color: canAfford || owned ? colors.text : colors.textSecondary,
+              },
             ]}
           >
             {item.cost}
@@ -260,6 +276,10 @@ export default function StudySpacePlaceholder({
   const { colors } = useTheme();
   const [showShop, setShowShop] = useState(false);
   const [characterState, setCharacterState] = useState<AvatarState>("idle");
+  const [roomView, setRoomView] = useState<RoomView>("home");
+  const [decorating, setDecorating] = useState(false);
+  const [selectedEquipSlot, setSelectedEquipSlot] = useState("room:rug");
+  const [previewItemId, setPreviewItemId] = useState<string | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
   const [rendererReady, setRendererReady] = useState(false);
   const presence = useCompanionPresence({
@@ -269,12 +289,17 @@ export default function StudySpacePlaceholder({
   });
 
   useEffect(() => {
-    let task: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
-      null;
+    let task: ReturnType<
+      typeof InteractionManager.runAfterInteractions
+    > | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     if (visible) {
       setShowShop(initialShopOpen);
       setCharacterState("idle");
+      setRoomView("home");
+      setDecorating(false);
+      setSelectedEquipSlot("room:rug");
+      setPreviewItemId(null);
       setSceneReady(false);
       setRendererReady(false);
       task = InteractionManager.runAfterInteractions(() => {
@@ -282,6 +307,8 @@ export default function StudySpacePlaceholder({
       });
     } else {
       setShowShop(false);
+      setDecorating(false);
+      setPreviewItemId(null);
       setSceneReady(false);
       setRendererReady(false);
     }
@@ -290,6 +317,25 @@ export default function StudySpacePlaceholder({
       if (timer) clearTimeout(timer);
     };
   }, [initialShopOpen, visible]);
+
+  const selectDecorSlot = (equipSlot: string) => {
+    setSelectedEquipSlot(equipSlot);
+    setPreviewItemId(null);
+    setRoomView(getRoomViewForEquipSlot(equipSlot));
+  };
+
+  const enterDecorateMode = (equipSlot = "room:rug", itemId?: string) => {
+    setShowShop(false);
+    setDecorating(true);
+    setSelectedEquipSlot(equipSlot);
+    setPreviewItemId(itemId ?? null);
+    setRoomView(getRoomViewForEquipSlot(equipSlot));
+  };
+
+  const handleCharacterState = (nextState: AvatarState) => {
+    setCharacterState(nextState);
+    if (nextState === "focus") setRoomView("desk");
+  };
 
   return (
     <Modal
@@ -308,6 +354,10 @@ export default function StudySpacePlaceholder({
               reactionToken={presence.reactionToken}
               onInteract={presence.interact}
               onReady={() => setRendererReady(true)}
+              view={roomView}
+              onViewChange={setRoomView}
+              previewItemId={previewItemId}
+              selectedEquipSlot={decorating ? selectedEquipSlot : null}
             />
           ) : (
             <ActivityIndicator size="small" color="#D97757" />
@@ -319,11 +369,13 @@ export default function StudySpacePlaceholder({
           )}
         </View>
 
-        <CompanionDialogue
-          cue={presence.cue}
-          name={presence.companionName}
-          style={styles.roomDialogue}
-        />
+        {!decorating && (
+          <CompanionDialogue
+            cue={presence.cue}
+            name={presence.companionName}
+            style={styles.roomDialogue}
+          />
+        )}
 
         {/* Overlay UI */}
         <View style={styles.overlay}>
@@ -336,30 +388,69 @@ export default function StudySpacePlaceholder({
             >
               <Ionicons name="close" size={22} color="#F0EEE6" />
             </Pressable>
-            <Pressable
-              accessibilityLabel="Open shop"
-              style={styles.iconButton}
-              onPress={() => setShowShop(true)}
-            >
-              <Ionicons name="storefront" size={22} color="#F0EEE6" />
-            </Pressable>
+            <View style={styles.topActions}>
+              <Pressable
+                accessibilityLabel="Decorate My Space"
+                accessibilityState={{ selected: decorating }}
+                style={[
+                  styles.iconButton,
+                  decorating && styles.iconButtonActive,
+                ]}
+                onPress={() =>
+                  decorating
+                    ? setDecorating(false)
+                    : enterDecorateMode(selectedEquipSlot)
+                }
+              >
+                <Ionicons
+                  name="color-palette-outline"
+                  size={21}
+                  color={decorating ? "#171512" : "#F0EEE6"}
+                />
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Open shop"
+                style={styles.iconButton}
+                onPress={() => setShowShop(true)}
+              >
+                <Ionicons name="storefront" size={22} color="#F0EEE6" />
+              </Pressable>
+            </View>
           </View>
 
+          {rendererReady && (
+            <RoomZoneControls value={roomView} onChange={setRoomView} />
+          )}
+
           {/* Timer in center - only show if showTimer is true */}
-          {showTimer && (
+          {showTimer && !decorating && (
             <View style={styles.timerContainer}>
               <FocusTimer
                 variant="immersive"
-                onStateChange={setCharacterState}
+                onStateChange={handleCharacterState}
               />
             </View>
           )}
         </View>
 
+        {decorating && (
+          <RoomDecorSheet
+            selectedSlot={selectedEquipSlot}
+            previewItemId={previewItemId}
+            onSelectSlot={selectDecorSlot}
+            onPreview={setPreviewItemId}
+            onClose={() => {
+              setDecorating(false);
+              setPreviewItemId(null);
+            }}
+          />
+        )}
+
         {/* Shop Modal */}
         <ShopModal
           visible={showShop}
           onClose={() => setShowShop(false)}
+          onViewInRoom={(item) => enterDecorateMode(item.equipSlot, item.id)}
         />
       </View>
     </Modal>
@@ -417,15 +508,18 @@ function ColorSwatch({
 function ShopModal({
   visible,
   onClose,
+  onViewInRoom,
 }: {
   visible: boolean;
   onClose: () => void;
+  onViewInRoom: (item: ShopItem) => void;
 }) {
   const { colors } = useTheme();
   const { character, updateCharacter } = useCharacter();
   const { coins } = useCoins();
   const { level } = useXp();
   const {
+    shopItems,
     isOwned,
     isEquipped,
     buyItem,
@@ -438,10 +532,15 @@ function ShopModal({
   } = useShop();
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [shopSegment, setShopSegment] = useState<"companion" | "home">(
+    "companion",
+  );
 
   // Verify shopItems is loaded
   if (!shopItems || shopItems.length === 0) {
-    console.error("shopItems is not loaded! Check import path: @/data/shopItems");
+    console.error(
+      "shopItems is not loaded! Check import path: @/data/shopItems",
+    );
   }
 
   // Get equipped accessories
@@ -450,11 +549,11 @@ function ShopModal({
       return (
         item.category === "accessory" &&
         ownedItems.some(
-          (ownedItem) => ownedItem.itemId === item.id && ownedItem.equipped
+          (ownedItem) => ownedItem.itemId === item.id && ownedItem.equipped,
         )
       );
     });
-  }, [ownedItems]);
+  }, [ownedItems, shopItems]);
 
   // Filter and search items
   const filteredItems = useMemo(() => {
@@ -464,15 +563,19 @@ function ShopModal({
       return [];
     }
     return items.filter((item) => {
+      const matchesSegment =
+        shopSegment === "home"
+          ? isHomeEquipSlot(item.equipSlot)
+          : item.equipSlot === "wearable:head";
       const matchesCategory =
         selectedCategory === "all" || item.category === selectedCategory;
       const matchesSearch =
         searchQuery === "" ||
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
+      return matchesSegment && matchesCategory && matchesSearch;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, shopItems, shopSegment]);
 
   // Sort by rarity (legendary > epic > rare > common) then by cost
   const sortedItems = useMemo(() => {
@@ -497,7 +600,7 @@ function ShopModal({
     Haptics.notificationAsync(
       bought
         ? Haptics.NotificationFeedbackType.Success
-        : Haptics.NotificationFeedbackType.Warning
+        : Haptics.NotificationFeedbackType.Warning,
     );
   };
 
@@ -539,20 +642,28 @@ function ShopModal({
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={[styles.shopOverlay, { backgroundColor: colors.background }]}>
-        <View style={[styles.shopContainer, { backgroundColor: colors.background }]}>
-          <View style={[styles.shopHandle, { backgroundColor: colors.border }]} />
+      <View
+        style={[styles.shopOverlay, { backgroundColor: colors.background }]}
+      >
+        <View
+          style={[styles.shopContainer, { backgroundColor: colors.background }]}
+        >
+          <View
+            style={[styles.shopHandle, { backgroundColor: colors.border }]}
+          />
 
           {/* Header */}
           <View style={styles.shopHeader}>
             <View style={styles.shopTitleBlock}>
               <Text style={[styles.shopTitle, { color: colors.text }]}>
-                Companion Shop
+                Companion & Home
               </Text>
               <Text
                 style={[styles.shopSubtitle, { color: colors.textSecondary }]}
               >
-                Spend focus coins on upgrades for your study companion.
+                {shopSegment === "companion"
+                  ? "Collect a look for your study companion."
+                  : "Make My Space feel like yours."}
               </Text>
             </View>
             <View style={styles.headerRight}>
@@ -582,6 +693,52 @@ function ShopModal({
             </View>
           </View>
 
+          <View
+            style={[
+              styles.shopSegmentControl,
+              { backgroundColor: colors.card },
+            ]}
+          >
+            {(["companion", "home"] as const).map((segment) => {
+              const selected = segment === shopSegment;
+              return (
+                <Pressable
+                  key={segment}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    setShopSegment(segment);
+                    setSelectedCategory("all");
+                  }}
+                  style={[
+                    styles.shopSegmentButton,
+                    selected && { backgroundColor: colors.accent },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      segment === "companion" ? "happy-outline" : "home-outline"
+                    }
+                    size={17}
+                    color={selected ? colors.background : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.shopSegmentText,
+                      {
+                        color: selected
+                          ? colors.background
+                          : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {segment === "companion" ? "Companion" : "Home"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <View style={styles.shopSummaryRow}>
             <View
               style={[
@@ -602,7 +759,16 @@ function ShopModal({
             >
               <Ionicons name="sparkles" size={13} color="#D4A27F" />
               <Text style={[styles.summaryText, { color: colors.text }]}>
-                {equippedAccessories.length} equipped
+                {shopSegment === "home"
+                  ? ownedItems.filter(
+                      (item) =>
+                        item.equipped &&
+                        Boolean(
+                          item.equipSlot && isHomeEquipSlot(item.equipSlot),
+                        ),
+                    ).length
+                  : equippedAccessories.length}{" "}
+                {shopSegment === "home" ? "placed" : "equipped"}
               </Text>
             </View>
             <View
@@ -630,11 +796,7 @@ function ShopModal({
                 {lastError}
               </Text>
               <Pressable onPress={clearShopError} hitSlop={8}>
-                <Ionicons
-                  name="close"
-                  size={16}
-                  color={colors.textSecondary}
-                />
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
               </Pressable>
             </View>
           )}
@@ -642,142 +804,155 @@ function ShopModal({
           {/* Main Content - Vertical Layout */}
           <View style={styles.shopMainContent}>
             {/* Top - Character Preview */}
-            <View
-              style={[
-                styles.characterSection,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Companion Setup
-                </Text>
-                <Text
-                  style={[styles.sectionMeta, { color: colors.textSecondary }]}
-                >
-                  Body colour syncs to your account
-                </Text>
-              </View>
-
-              <View style={styles.characterContent}>
-                {/* 3D Character preview */}
-                <View style={styles.characterPreview}>
-                  <View
-                    style={[
-                      styles.character3DPlaceholder,
-                      { borderColor: colors.border },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.character3DPlaceholderInner,
-                        { backgroundColor: colors.background },
-                      ]}
-                    >
-                      <AvatarRenderer variant="shop" />
-                    </View>
-                  </View>
-                </View>
-
-                {/* Character Details */}
-                <View style={styles.characterDetails}>
+            {shopSegment === "companion" && (
+              <View
+                style={[
+                  styles.characterSection,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                    Companion Setup
+                  </Text>
                   <Text
                     style={[
-                      styles.characterDescription,
+                      styles.sectionMeta,
                       { color: colors.textSecondary },
                     ]}
                   >
-                    Pick a body colour, then equip accessories you unlock from
-                    the shop below.
+                    Body colour syncs to your account
                   </Text>
+                </View>
 
-                  {/* Body colour swatches */}
-                  <View style={styles.swatchRow}>
-                    {AVATAR_BODY_COLORS.map((swatch) => (
-                      <ColorSwatch
-                        key={swatch.id}
-                        hex={swatch.hex}
-                        name={swatch.name}
-                        selected={character.bodyColor === swatch.hex}
-                        accentColor={colors.accent}
-                        borderColor={colors.border}
-                        onSelect={() => {
-                          Haptics.impactAsync(
-                            Haptics.ImpactFeedbackStyle.Light
-                          );
-                          updateCharacter({ bodyColor: swatch.hex });
-                        }}
-                      />
-                    ))}
-                  </View>
-
-                  <View style={styles.characterStatsRow}>
+                <View style={styles.characterContent}>
+                  {/* 3D Character preview */}
+                  <View style={styles.characterPreview}>
                     <View
                       style={[
-                        styles.statChip,
-                        { borderColor: colors.border, backgroundColor: colors.background },
+                        styles.character3DPlaceholder,
+                        { borderColor: colors.border },
                       ]}
                     >
-                      <Ionicons name="star" size={12} color={colors.accent} />
-                      <Text style={[styles.statChipText, { color: colors.text }]}>
-                        Level {level}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.statChip,
-                        { borderColor: colors.border, backgroundColor: colors.background },
-                      ]}
-                    >
-                      <Ionicons
-                        name="color-palette"
-                        size={12}
-                        color={colors.textSecondary}
-                      />
-                      <Text
+                      <View
                         style={[
-                          styles.statChipText,
-                          { color: colors.textSecondary },
+                          styles.character3DPlaceholderInner,
+                          { backgroundColor: colors.background },
                         ]}
                       >
-                        {AVATAR_BODY_COLORS.find(
-                          (c) => c.hex === character.bodyColor
-                        )?.name ?? "Custom"}
-                      </Text>
+                        <AvatarRenderer variant="shop" />
+                      </View>
                     </View>
                   </View>
 
-                  {equippedAccessories.length > 0 ? (
-                    <View style={styles.equippedBadges}>
-                      {equippedAccessories.map((item) => (
-                        <View
-                          key={item.id}
-                          style={[
-                            styles.equippedBadge,
-                            { backgroundColor: colors.accent + "20" },
-                          ]}
-                        >
-                          <Ionicons
-                            name={item.icon as any}
-                            size={10}
-                            color={colors.accent}
-                          />
-                        </View>
-                      ))}
-                    </View>
-                  ) : (
+                  {/* Character Details */}
+                  <View style={styles.characterDetails}>
                     <Text
                       style={[
-                        styles.emptyAccessoriesText,
+                        styles.characterDescription,
                         { color: colors.textSecondary },
                       ]}
                     >
-                      More ways to customise your companion are coming soon.
+                      Pick a body colour, then equip accessories you unlock from
+                      the shop below.
                     </Text>
-                  )}
+
+                    {/* Body colour swatches */}
+                    <View style={styles.swatchRow}>
+                      {AVATAR_BODY_COLORS.map((swatch) => (
+                        <ColorSwatch
+                          key={swatch.id}
+                          hex={swatch.hex}
+                          name={swatch.name}
+                          selected={character.bodyColor === swatch.hex}
+                          accentColor={colors.accent}
+                          borderColor={colors.border}
+                          onSelect={() => {
+                            Haptics.impactAsync(
+                              Haptics.ImpactFeedbackStyle.Light,
+                            );
+                            updateCharacter({ bodyColor: swatch.hex });
+                          }}
+                        />
+                      ))}
+                    </View>
+
+                    <View style={styles.characterStatsRow}>
+                      <View
+                        style={[
+                          styles.statChip,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: colors.background,
+                          },
+                        ]}
+                      >
+                        <Ionicons name="star" size={12} color={colors.accent} />
+                        <Text
+                          style={[styles.statChipText, { color: colors.text }]}
+                        >
+                          Level {level}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.statChip,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: colors.background,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name="color-palette"
+                          size={12}
+                          color={colors.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.statChipText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {AVATAR_BODY_COLORS.find(
+                            (c) => c.hex === character.bodyColor,
+                          )?.name ?? "Custom"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {equippedAccessories.length > 0 ? (
+                      <View style={styles.equippedBadges}>
+                        {equippedAccessories.map((item) => (
+                          <View
+                            key={item.id}
+                            style={[
+                              styles.equippedBadge,
+                              { backgroundColor: colors.accent + "20" },
+                            ]}
+                          >
+                            <Ionicons
+                              name={item.icon as any}
+                              size={10}
+                              color={colors.accent}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.emptyAccessoriesText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        More ways to customise your companion are coming soon.
+                      </Text>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
+            )}
 
             {/* Bottom - Items Grid */}
             <View style={styles.itemsSection}>
@@ -787,7 +962,10 @@ function ShopModal({
                   <View
                     style={[
                       styles.searchContainer,
-                      { backgroundColor: colors.card, borderColor: colors.border },
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
                     ]}
                   >
                     <Ionicons
@@ -798,7 +976,11 @@ function ShopModal({
                     />
                     <TextInput
                       style={[styles.searchInput, { color: colors.text }]}
-                      placeholder="Search cosmetics..."
+                      placeholder={
+                        shopSegment === "companion"
+                          ? "Search accessories..."
+                          : "Search home pieces..."
+                      }
                       placeholderTextColor={colors.textSecondary}
                       value={searchQuery}
                       onChangeText={setSearchQuery}
@@ -822,44 +1004,46 @@ function ShopModal({
                   style={styles.categoryContainer}
                   contentContainerStyle={styles.categoryContent}
                 >
-                  {(["all", "decoration", "accessory", "furniture"] as ItemCategory[]).map(
-                    (category) => (
-                      <Pressable
-                        key={category}
-                        style={({ pressed }) => [
-                          styles.categoryButton,
+                  {(shopSegment === "companion"
+                    ? (["all", "accessory"] as ItemCategory[])
+                    : (["all", "decoration", "furniture"] as ItemCategory[])
+                  ).map((category) => (
+                    <Pressable
+                      key={category}
+                      style={({ pressed }) => [
+                        styles.categoryButton,
+                        {
+                          backgroundColor:
+                            selectedCategory === category
+                              ? colors.accent
+                              : colors.card,
+                          borderColor:
+                            selectedCategory === category
+                              ? colors.accent
+                              : colors.border,
+                          opacity: pressed ? 0.8 : 1,
+                        },
+                      ]}
+                      onPress={() => setSelectedCategory(category)}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryText,
                           {
-                            backgroundColor:
+                            color:
                               selectedCategory === category
-                                ? colors.accent
-                                : colors.card,
-                            borderColor:
-                              selectedCategory === category
-                                ? colors.accent
-                                : colors.border,
-                            opacity: pressed ? 0.8 : 1,
+                                ? colors.background
+                                : colors.text,
                           },
                         ]}
-                        onPress={() => setSelectedCategory(category)}
                       >
-                        <Text
-                          style={[
-                            styles.categoryText,
-                            {
-                              color:
-                                selectedCategory === category
-                                  ? colors.background
-                                  : colors.text,
-                            },
-                          ]}
-                        >
-                          {category === "all"
-                            ? "All"
-                            : category.charAt(0).toUpperCase() + category.slice(1)}
-                        </Text>
-                      </Pressable>
-                    )
-                  )}
+                        {category === "all"
+                          ? "All"
+                          : category.charAt(0).toUpperCase() +
+                            category.slice(1)}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </ScrollView>
               </View>
 
@@ -881,7 +1065,7 @@ function ShopModal({
                 <FlatList
                   data={sortedItems}
                   numColumns={2}
-                  key={`flatlist-${selectedCategory}`}
+                  key={`flatlist-${shopSegment}-${selectedCategory}`}
                   keyExtractor={(item) => item.id}
                   renderItem={({ item }) => {
                     const owned = isOwned(item.id);
@@ -906,11 +1090,14 @@ function ShopModal({
                           comingSoon={comingSoon}
                           busy={busyItemId === item.id}
                           disabled={loading || Boolean(busyItemId)}
+                          viewInRoom={shopSegment === "home" && owned}
                           onPress={() => {
                             if (comingSoon || loading || busyItemId) {
                               return;
                             }
-                            if (owned) {
+                            if (shopSegment === "home" && owned) {
+                              onViewInRoom(item);
+                            } else if (owned) {
                               handleEquip(item.id);
                             } else {
                               handleBuy(item.id);
@@ -963,6 +1150,10 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     paddingTop: 60,
   },
+  topActions: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
   iconButton: {
     width: 44,
     height: 44,
@@ -972,6 +1163,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(24, 23, 21, 0.82)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  iconButtonActive: {
+    backgroundColor: "#D97757",
+    borderColor: "#D97757",
   },
   timerContainer: {
     position: "absolute",
@@ -1054,6 +1249,26 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
+  },
+  shopSegmentControl: {
+    flexDirection: "row",
+    padding: 4,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+  },
+  shopSegmentButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: BorderRadius.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+  },
+  shopSegmentText: {
+    fontFamily: "Outfit-SemiBold",
+    fontSize: 12,
   },
   summaryPill: {
     flexDirection: "row",

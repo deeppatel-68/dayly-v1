@@ -1,5 +1,6 @@
 import { loadAsync } from "expo-three";
 import * as THREE from "three";
+import { FaceStyle } from "@/data/faceStyles";
 import { createCompanionEvolution } from "./companionEvolution";
 import { createGlowSpriteMaterial, createGlowTexture } from "./glow";
 import { PetRig } from "./petMotion";
@@ -53,8 +54,18 @@ export function loadCompanion(): Promise<THREE.Group> {
 export interface CompanionOptions {
   accent: THREE.Color;
   bodyColor: string;
+  faceStyle: FaceStyle;
   levelTier: number;
   streakTier: number;
+}
+
+// "classic" -> "Face_Classic". The shipped GLB will hold one Face_* group per
+// style with a single one visible; older/current GLBs have no Face_* nodes.
+function applyFaceStyle(root: THREE.Object3D, faceStyle: FaceStyle) {
+  const target = `Face_${faceStyle.charAt(0).toUpperCase()}${faceStyle.slice(1)}`;
+  root.traverse((node) => {
+    if (node.name.startsWith("Face_")) node.visible = node.name === target;
+  });
 }
 
 export interface CompanionInstance {
@@ -69,11 +80,14 @@ export interface CompanionInstance {
 // per-instance materials cloned + tinted so scenes never cross-talk.
 export function createCompanionInstance(
   source: THREE.Group,
-  { accent, bodyColor, levelTier, streakTier }: CompanionOptions
+  { accent, bodyColor, faceStyle, levelTier, streakTier }: CompanionOptions
 ): CompanionInstance {
   // expo-three may internally cache the parsed scene. Treat that source as
   // immutable and deep-clone all disposable resources for this GL context.
   const root = source.clone(true);
+
+  // Show only the selected face group; no-ops on GLBs without Face_* nodes.
+  applyFaceStyle(root, faceStyle);
   const ownedGeometries = new Set<THREE.BufferGeometry>();
   const ownedMaterials = new Set<THREE.Material>();
 

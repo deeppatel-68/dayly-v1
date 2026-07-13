@@ -1,5 +1,6 @@
 import AvatarRenderer from "@/components/avatar/AvatarRenderer";
 import BodyColorPicker from "@/components/customise/BodyColorPicker";
+import FaceStylePicker from "@/components/customise/FaceStylePicker";
 import StudySpacePlaceholder from "@/components/study/StudySpacePlaceholder";
 import { RENDERED_EQUIPMENT_IDS } from "@/components/3d/equipment";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
@@ -7,7 +8,6 @@ import { useCharacter } from "@/context/CharacterContext";
 import { useCoins } from "@/context/CoinsContext";
 import { useShop } from "@/context/ShopContext";
 import { useTheme } from "@/context/ThemeContext";
-import { shopItems } from "@/data/shopItems";
 import { ItemCategory, ShopItem } from "@/types/shop";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
@@ -29,8 +29,6 @@ const NAME_MAX_LENGTH = 20;
 const RENDERED_IDS = new Set(RENDERED_EQUIPMENT_IDS);
 const GROUPS: { category: Exclude<ItemCategory, "all">; title: string }[] = [
   { category: "accessory", title: "Accessories" },
-  { category: "decoration", title: "Pod decor" },
-  { category: "furniture", title: "Room pieces" },
 ];
 
 const RARITY_COLORS = {
@@ -43,10 +41,14 @@ const RARITY_COLORS = {
 export default function CustomiseScreen() {
   const isFocused = useIsFocused();
   const { colors } = useTheme();
-  const { character, updateCharacter, loading: characterLoading } =
-    useCharacter();
+  const {
+    character,
+    updateCharacter,
+    loading: characterLoading,
+  } = useCharacter();
   const { coins } = useCoins();
   const {
+    shopItems,
     loading: shopLoading,
     busyItemId,
     lastError,
@@ -84,8 +86,12 @@ export default function CustomiseScreen() {
   }, [isFocused, showShop]);
 
   const renderedItems = useMemo(
-    () => shopItems.filter((item) => RENDERED_IDS.has(item.id)),
-    []
+    () =>
+      shopItems.filter(
+        (item) =>
+          RENDERED_IDS.has(item.id) && item.equipSlot === "wearable:head",
+      ),
+    [shopItems],
   );
 
   const saveName = () => {
@@ -113,14 +119,11 @@ export default function CustomiseScreen() {
         options={{
           title: "Customise",
           headerRight: () => (
-            <View
-              style={[
-                styles.coinBalance,
-                { borderColor: "transparent" },
-              ]}
-            >
+            <View style={[styles.coinBalance, { borderColor: "transparent" }]}>
               <Ionicons name="star" size={14} color="#D4A27F" />
-              <Text style={[styles.coinText, { color: colors.text }]}>{coins}</Text>
+              <Text style={[styles.coinText, { color: colors.text }]}>
+                {coins}
+              </Text>
             </View>
           ),
         }}
@@ -131,12 +134,7 @@ export default function CustomiseScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <View
-          style={[
-            styles.preview,
-            { borderColor: colors.border },
-          ]}
-        >
+        <View style={[styles.preview, { borderColor: colors.border }]}>
           {sceneReady ? (
             <AvatarRenderer
               state="idle"
@@ -161,7 +159,9 @@ export default function CustomiseScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Name</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Name
+          </Text>
           <TextInput
             value={name}
             onChangeText={setName}
@@ -185,7 +185,9 @@ export default function CustomiseScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Body colour</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Body colour
+          </Text>
           <BodyColorPicker
             value={character.bodyColor}
             onChange={(bodyColor) => updateCharacter({ bodyColor })}
@@ -194,9 +196,23 @@ export default function CustomiseScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Face
+          </Text>
+          <FaceStylePicker
+            value={character.faceStyle}
+            onChange={(faceStyle) => updateCharacter({ faceStyle })}
+          />
+        </View>
+
+        <View style={styles.section}>
           <View style={styles.sectionHeadingRow}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Equipment</Text>
-            {loading && <ActivityIndicator size="small" color={colors.accent} />}
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Accessories
+            </Text>
+            {loading && (
+              <ActivityIndicator size="small" color={colors.accent} />
+            )}
           </View>
 
           {lastError && (
@@ -214,7 +230,9 @@ export default function CustomiseScreen() {
 
           {GROUPS.map((group) => (
             <View key={group.category} style={styles.equipmentGroup}>
-              <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.groupTitle, { color: colors.textSecondary }]}
+              >
                 {group.title}
               </Text>
               <View style={styles.itemGrid}>
@@ -282,7 +300,12 @@ function EquipmentItem({
         },
       ]}
     >
-      <View style={[styles.itemIcon, { backgroundColor: colors.backgroundSecondary }]}>
+      <View
+        style={[
+          styles.itemIcon,
+          { backgroundColor: colors.backgroundSecondary },
+        ]}
+      >
         {busy ? (
           <ActivityIndicator size="small" color={colors.accent} />
         ) : (
@@ -290,7 +313,10 @@ function EquipmentItem({
         )}
       </View>
       <View style={styles.itemCopy}>
-        <Text numberOfLines={1} style={[styles.itemName, { color: colors.text }]}>
+        <Text
+          numberOfLines={1}
+          style={[styles.itemName, { color: colors.text }]}
+        >
           {item.name}
         </Text>
         <Text style={[styles.itemState, { color: colors.textSecondary }]}>

@@ -121,16 +121,18 @@ def make_led_tile(name, location, scale, roll=0.0, mat=mat_led):
     return obj
 
 
-# Two large softly-rounded eyes, gentle friendly inward tilt, proud of the glass
-EYE_Y = -0.545
-make_led_tile("LeftEye", (-0.155, EYE_Y, 0.845), (0.15, 0.05, 0.235), roll=-0.06)
-make_led_tile("RightEye", (0.155, EYE_Y, 0.845), (0.15, 0.05, 0.235), roll=0.06)
+# Two softly-rounded squircle eyes, gentle friendly tilt, proud of the glass
+EYE_Y = -0.55
+# Parent to Body (near-uniform scale) not FacePanel: FacePanel's strong 0.44
+# Y-scale would bake into children on transform_apply and squash the tiles.
+make_led_tile("LeftEye", (-0.15, EYE_Y, 0.82), (0.115, 0.05, 0.15), roll=-0.05)
+make_led_tile("RightEye", (0.15, EYE_Y, 0.82), (0.115, 0.05, 0.15), roll=0.05)
 for nm in ("LeftEye", "RightEye"):
-    parent_to(bpy.data.objects[nm], face_panel)
+    parent_to(bpy.data.objects[nm], body)
 
 # Tiny simple mouth glyph: a small horizontal LED bar for warmth
-make_led_tile("ScreenMouth", (0.0, EYE_Y, 0.70), (0.075, 0.04, 0.028))
-parent_to(bpy.data.objects["ScreenMouth"], face_panel)
+make_led_tile("ScreenMouth", (0.0, EYE_Y, 0.695), (0.06, 0.04, 0.025))
+parent_to(bpy.data.objects["ScreenMouth"], body)
 
 # ---------- Blush: two subtle warm dots on the cheeks, outside the screen ----------
 for name, x in (("LeftBlush", -0.345), ("RightBlush", 0.345)):

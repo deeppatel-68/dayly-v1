@@ -3,6 +3,11 @@ import {
   getUserCharacterData,
   setUserCharacterData,
 } from "@/services/settingsService";
+import {
+  DEFAULT_FACE_STYLE,
+  FaceStyle,
+  normalizeFaceStyle,
+} from "@/data/faceStyles";
 import { logSupabaseError } from "@/utils/supabaseErrors";
 import React, {
   createContext,
@@ -17,6 +22,7 @@ import { useAuth } from "./AuthContext";
 export interface CharacterData {
   color: string; // accent/glow colour
   bodyColor: string; // companion body colour
+  faceStyle: FaceStyle; // companion face variant
   accessories: string[];
   model?: string;
   companionName?: string; // user-chosen name from onboarding; optional/legacy-safe
@@ -32,6 +38,7 @@ interface CharacterContextType {
 const defaultCharacter: CharacterData = {
   color: "#D97757", // Claude terracotta accent/glow
   bodyColor: "#F3E7D3", // Soft Cream
+  faceStyle: DEFAULT_FACE_STYLE,
   accessories: [],
 };
 
@@ -53,6 +60,7 @@ const normalizeCharacterData = (value: unknown): CharacterData => {
   const nextCharacter: CharacterData = {
     ...defaultCharacter,
     ...parsed,
+    faceStyle: normalizeFaceStyle(parsed.faceStyle),
     accessories: Array.isArray(parsed.accessories)
       ? parsed.accessories.filter((item): item is string => typeof item === "string")
       : defaultCharacter.accessories,
@@ -75,6 +83,7 @@ const normalizeCharacterData = (value: unknown): CharacterData => {
 const toCharacterRecord = (characterData: CharacterData) => ({
   color: characterData.color,
   bodyColor: characterData.bodyColor,
+  faceStyle: characterData.faceStyle,
   accessories: characterData.accessories,
   ...(characterData.model ? { model: characterData.model } : {}),
   ...(characterData.companionName

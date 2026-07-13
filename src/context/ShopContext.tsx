@@ -5,38 +5,48 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import { shopItems } from "@/data/shopItems";
+import { shopItems as fallbackShopItems } from "@/data/shopItems";
 import {
   buyShopItem,
   equipShopItem,
+  loadShopCatalog,
   loadUserShopItems,
   unequipShopItem,
 } from "@/services/shopService";
-import { OwnedItem } from "@/types/shop";
+import { OwnedItem, ShopItem } from "@/types/shop";
 import { logSupabaseError } from "@/utils/supabaseErrors";
 import { useAuth } from "./AuthContext";
 import { useCoins } from "./CoinsContext";
 
 interface ShopContextType {
+  shopItems: ShopItem[];
   ownedItems: OwnedItem[];
   loading: boolean;
   busyItemId: string | null;
   lastError: string | null;
   clearShopError: () => void;
   buyItem: (itemId: string) => Promise<boolean>;
-  equipItem: (itemId: string) => Promise<void>;
-  unequipItem: (itemId: string) => Promise<void>;
+  equipItem: (itemId: string) => Promise<boolean>;
+  unequipItem: (itemId: string) => Promise<boolean>;
   isOwned: (itemId: string) => boolean;
   isEquipped: (itemId: string) => boolean;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
-const starterItems: OwnedItem[] = [{ itemId: "study-plant", equipped: true }];
+const starterItems: OwnedItem[] = [
+  {
+    itemId: "study-plant",
+    category: "decoration",
+    equipSlot: "platform:right",
+    equipped: true,
+  },
+];
 
 export function ShopProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { refreshCoins } = useCoins();
+  const [shopItems, setShopItems] = useState<ShopItem[]>(fallbackShopItems);
   const [ownedItems, setOwnedItems] = useState<OwnedItem[]>(starterItems);
   const [loading, setLoading] = useState(false);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
@@ -44,6 +54,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) {
+      setShopItems(fallbackShopItems);
       setOwnedItems(starterItems);
       setLoading(false);
       setBusyItemId(null);
@@ -54,11 +65,22 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     setLoading(true);
 
-    loadUserShopItems(user.id)
-      .then((items) => {
-        if (!cancelled) setOwnedItems(items);
+    Promise.allSettled([loadShopCatalog(), loadUserShopItems(user.id)])
+      .then(([catalogResult, ownedResult]) => {
+        if (cancelled) return;
+
+        if (catalogResult.status === "fulfilled") {
+          setShopItems(catalogResult.value.filter((item) => item.active));
+        } else {
+          logSupabaseError("Error loading shop catalog:", catalogResult.reason);
+        }
+
+        if (ownedResult.status === "fulfilled") {
+          setOwnedItems(ownedResult.value);
+        } else {
+          logSupabaseError("Error loading owned items:", ownedResult.reason);
+        }
       })
-      .catch((error) => logSupabaseError("Error loading owned items:", error))
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -77,21 +99,19 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    const item = shopItems.find((shopItem) => shopItem.id === itemId);
-    if (!item) {
-      setLastError("Item is not available.");
-      return false;
-    }
-
     try {
       setBusyItemId(itemId);
       setLastError(null);
-      const result = await buyShopItem(user.id, item.id);
+      const result = await buyShopItem(user.id, itemId);
       if (!result.success) {
         setLastError(
           result.reason === "insufficient_coins"
             ? "Not enough coins for that item."
-            : "Could not buy that item."
+            : result.reason === "owned"
+              ? "Item already owned."
+              : result.reason === "unavailable"
+                ? "Item is not available."
+                : "Could not buy that item.",
         );
         await refreshCoins();
         return false;
@@ -111,38 +131,36 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   };
 
   const equipItem = async (itemId: string) => {
-    if (!user || loading || busyItemId) return;
-
-    const item = shopItems.find((shopItem) => shopItem.id === itemId);
-    if (!item) {
-      setLastError("Item is not available.");
-      return;
-    }
+    if (!user || loading || busyItemId) return false;
 
     try {
       setBusyItemId(itemId);
       setLastError(null);
-      const items = await equipShopItem(user.id, item.id);
+      const items = await equipShopItem(user.id, itemId);
       setOwnedItems(items);
+      return true;
     } catch (error) {
       logSupabaseError("Error equipping item:", error);
       setLastError("Could not equip that item.");
+      return false;
     } finally {
       setBusyItemId(null);
     }
   };
 
   const unequipItem = async (itemId: string) => {
-    if (!user || loading || busyItemId) return;
+    if (!user || loading || busyItemId) return false;
 
     try {
       setBusyItemId(itemId);
       setLastError(null);
       const items = await unequipShopItem(user.id, itemId);
       setOwnedItems(items);
+      return true;
     } catch (error) {
       logSupabaseError("Error unequipping item:", error);
       setLastError("Could not unequip that item.");
+      return false;
     } finally {
       setBusyItemId(null);
     }
@@ -153,12 +171,11 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   };
 
   const isEquipped = (itemId: string): boolean => {
-    return ownedItems.some(
-      (item) => item.itemId === itemId && item.equipped
-    );
+    return ownedItems.some((item) => item.itemId === itemId && item.equipped);
   };
 
   const value = {
+    shopItems,
     ownedItems,
     loading,
     busyItemId,
@@ -171,9 +188,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     isEquipped,
   };
 
-  return (
-    <ShopContext.Provider value={value}>{children}</ShopContext.Provider>
-  );
+  return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }
 
 export function useShop() {

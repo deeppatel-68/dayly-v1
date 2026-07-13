@@ -11,7 +11,7 @@ grant insert on table tap_output to authenticated;
 grant usage, select on sequence tap_output_position_seq to authenticated;
 
 insert into tap_output (line)
-select plan(32);
+select plan(45);
 
 insert into auth.users (
   instance_id,
@@ -72,6 +72,80 @@ select is(
   ) and item_id = 'study-plant'),
   2,
   'new users receive the starter shop item'
+);
+
+insert into tap_output (line)
+select is(
+  (
+    select equip_slot
+    from public.user_shop_items
+    where user_id = '11111111-1111-4111-8111-111111111111'
+      and item_id = 'study-plant'
+  ),
+  'platform:right',
+  'starter inventory copies its trusted catalog slot'
+);
+
+insert into tap_output (line)
+select is(
+  (select count(*)::integer from public.shop_catalog where active),
+  16,
+  'the active catalog includes every room and wearable item'
+);
+
+insert into tap_output (line)
+select is(
+  (
+    select count(*)::integer
+    from public.shop_catalog
+    where (item_id = 'floor-plant' and equip_slot = 'room:floor_prop')
+      or (item_id = 'fairy-window' and equip_slot = 'room:window_view')
+  ),
+  2,
+  'the previously local-only room items are in the server catalog'
+);
+
+insert into tap_output (line)
+select is(
+  (select count(*)::integer from public.shop_catalog where equip_slot is null)
+    + (select count(*)::integer from public.user_shop_items where equip_slot is null),
+  0,
+  'catalog and owned inventory slots are required'
+);
+
+insert into tap_output (line)
+select ok(
+  (
+    select bool_and(
+      (item_id = 'warm-desk-lamp' and cost = 75)
+      or (item_id = 'woven-rug' and cost = 90)
+      or (item_id = 'daily-pinboard' and cost = 80)
+      or (item_id = 'soft-window-curtains' and cost = 110)
+      or (item_id = 'shelf-keepsakes' and cost = 70)
+      or (item_id = 'companion-cushion' and cost = 100)
+    ) and count(*) = 6
+    from public.shop_catalog
+    where item_id in (
+      'warm-desk-lamp',
+      'woven-rug',
+      'daily-pinboard',
+      'soft-window-curtains',
+      'shelf-keepsakes',
+      'companion-cushion'
+    )
+  ),
+  'new room catalog prices are seeded by the server'
+);
+
+insert into tap_output (line)
+select is(
+  (
+    select count(distinct equip_slot)::integer
+    from public.shop_catalog
+    where item_id in ('focus-cap', 'study-glasses', 'neon-headphones')
+  ),
+  1,
+  'all wearable head items retain one exclusive slot'
 );
 
 set local role authenticated;
@@ -297,7 +371,7 @@ select ok(
 reset role;
 
 update public.user_progress
-set coins = 500
+set coins = 1000
 where user_id = '11111111-1111-4111-8111-111111111111';
 
 set local role authenticated;
@@ -306,9 +380,18 @@ insert into tap_output (line)
 select lives_ok($$
   select public.buy_shop_item('neon-lamp');
   select public.buy_shop_item('motivational-poster');
+  select public.buy_shop_item('daily-pinboard');
+  select public.buy_shop_item('gaming-desk');
+  select public.buy_shop_item('floor-plant');
+  select public.buy_shop_item('study-glasses');
   select public.equip_shop_item('neon-lamp');
   select public.equip_shop_item('motivational-poster');
-$$, 'owned items can be equipped transactionally');
+  select public.equip_shop_item('daily-pinboard');
+  select public.equip_shop_item('gaming-desk');
+  select public.equip_shop_item('floor-plant');
+  select public.equip_shop_item('focus-cap');
+  select public.equip_shop_item('study-glasses');
+$$, 'owned items can be equipped transactionally by slot');
 
 insert into tap_output (line)
 select is(
@@ -316,12 +399,99 @@ select is(
     select item_id
     from public.user_shop_items
     where user_id = '11111111-1111-4111-8111-111111111111'
-      and category = 'decoration'
+      and equip_slot = 'room:wall_art'
       and equipped
   ),
-  'motivational-poster',
-  'equipping replaces the equipped item in the same category'
+  'daily-pinboard',
+  'equipping replaces only the item in the same room slot'
 );
+
+insert into tap_output (line)
+select ok(
+  exists (
+    select 1
+    from public.user_shop_items
+    where user_id = '11111111-1111-4111-8111-111111111111'
+      and item_id = 'neon-lamp'
+      and category = 'decoration'
+      and equip_slot = 'platform:left'
+      and equipped
+  ),
+  'same-category items in different slots stay equipped'
+);
+
+insert into tap_output (line)
+select is(
+  (
+    select item_id
+    from public.user_shop_items
+    where user_id = '11111111-1111-4111-8111-111111111111'
+      and equip_slot = 'wearable:head'
+      and equipped
+  ),
+  'study-glasses',
+  'the latest wearable replaces the previous head item'
+);
+
+insert into tap_output (line)
+select is(
+  (
+    select count(*)::integer
+    from public.user_shop_items
+    where user_id = '11111111-1111-4111-8111-111111111111'
+      and equip_slot in ('room:desk', 'room:floor_prop')
+      and equipped
+  ),
+  2,
+  'furniture in distinct room slots can be equipped together'
+);
+
+reset role;
+
+insert into tap_output (line)
+select is(
+  (
+    select count(*)::integer
+    from public.user_shop_items owned
+    join public.shop_catalog catalog on catalog.item_id = owned.item_id
+    where owned.user_id = '11111111-1111-4111-8111-111111111111'
+      and (
+        owned.category is distinct from catalog.category
+        or owned.equip_slot is distinct from catalog.equip_slot
+      )
+  ),
+  0,
+  'owned inventory metadata matches the catalog'
+);
+
+insert into tap_output (line)
+select throws_ok($$
+  update public.user_shop_items
+  set equip_slot = 'room:rug'
+  where user_id = '11111111-1111-4111-8111-111111111111'
+    and item_id = 'focus-cap'
+$$, 'catalog metadata cannot be tampered with');
+
+update public.shop_catalog
+set active = false
+where item_id = 'warm-desk-lamp';
+
+set local role authenticated;
+
+insert into tap_output (line)
+select is(
+  (select reason from public.buy_shop_item('warm-desk-lamp')),
+  'unavailable',
+  'inactive catalog items cannot be purchased'
+);
+
+reset role;
+
+update public.shop_catalog
+set active = true
+where item_id = 'warm-desk-lamp';
+
+set local role authenticated;
 
 set local "request.jwt.claim.sub" = '22222222-2222-4222-8222-222222222222';
 
@@ -355,7 +525,11 @@ select is(
       "total_focus_seconds": 120,
       "total_completed_habits": 2,
       "awards": [],
-      "shop_items": [{"item_id": "bookshelf", "equipped": true}],
+      "shop_items": [
+        {"item_id": "bookshelf", "equipped": true},
+        {"item_id": "focus-cap", "equipped": true},
+        {"item_id": "study-glasses", "equipped": true}
+      ],
       "sessions": [{
         "legacy_id": "legacy-session-1",
         "duration_seconds": 120,
@@ -394,6 +568,25 @@ select ok(
       )
   ),
   'legacy migration commits all payload sections together'
+);
+
+insert into tap_output (line)
+select ok(
+  (
+    select bool_and(
+      case
+        when item_id = 'study-glasses'
+          then equipped and equip_slot = 'wearable:head'
+        when item_id = 'focus-cap'
+          then not equipped and equip_slot = 'wearable:head'
+        else false
+      end
+    ) and count(*) = 2
+    from public.user_shop_items
+    where user_id = '22222222-2222-4222-8222-222222222222'
+      and item_id in ('focus-cap', 'study-glasses')
+  ),
+  'legacy equipment is deduplicated by trusted slot in payload order'
 );
 
 set local role authenticated;
