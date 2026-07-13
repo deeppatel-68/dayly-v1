@@ -48,8 +48,14 @@ export default function Avatar3D(props: AvatarRendererProps) {
   } = props;
   const { colors, colorScheme } = useTheme();
   const reducedMotion = useReducedMotion();
-  const { accentColor, bodyColor, levelTier, streakTier, equippedItems } =
-    useAvatarData(props);
+  const {
+    accentColor,
+    bodyColor,
+    faceStyle,
+    levelTier,
+    streakTier,
+    equippedItems,
+  } = useAvatarData(props);
   const [failed, setFailed] = useState(false);
   const frameRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appActiveRef = useRef(AppState.currentState === "active");
@@ -131,7 +137,11 @@ export default function Avatar3D(props: AvatarRendererProps) {
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-      const orbitTarget = new THREE.Vector3(0, variant === "shop" ? 0.7 : 0.66, 0);
+      const orbitTarget = new THREE.Vector3(
+        0,
+        variant === "shop" ? 0.7 : 0.66,
+        0,
+      );
       if (variant === "shop") {
         camera.position.set(0, 0.9, 2.55);
       } else {
@@ -163,6 +173,7 @@ export default function Avatar3D(props: AvatarRendererProps) {
       const companion = createProceduralCompanion({
         accent,
         bodyColor,
+        faceStyle,
         levelTier,
         streakTier,
       });
@@ -185,7 +196,7 @@ export default function Avatar3D(props: AvatarRendererProps) {
         equippedItems,
         ["pet", "platform"],
         equipMaterials,
-        { pet: companion.rig.petGroup, platform: companion.root }
+        { pet: companion.rig.petGroup, platform: companion.root },
       );
 
       // Grounds the floating pet on its pod (puck top sits at y≈0.095)
@@ -198,7 +209,7 @@ export default function Avatar3D(props: AvatarRendererProps) {
       const animate = () => {
         frameRef.current = setTimeout(
           animate,
-          appActiveRef.current ? 1000 / 30 : 250
+          appActiveRef.current ? 1000 / 30 : 250,
         );
         if (!appActiveRef.current) return;
         const t = clock.getElapsedTime();
@@ -245,7 +256,8 @@ export default function Avatar3D(props: AvatarRendererProps) {
   }
 
   const handleTap = (event: SceneTapEvent) => {
-    if (!petTapRef.current?.(event.x, event.y, event.width, event.height)) return;
+    if (!petTapRef.current?.(event.x, event.y, event.width, event.height))
+      return;
     const reaction = onInteract?.() ?? "bounce";
     reactRef.current?.(reaction);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});

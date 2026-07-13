@@ -13,6 +13,11 @@ export interface SceneDragDelta {
   y: number;
 }
 
+export interface SceneSwipeEvent {
+  x: number;
+  y: number;
+}
+
 interface SceneTouchLayerProps {
   children: React.ReactNode;
   // Fired on release when the finger barely moved
@@ -20,6 +25,9 @@ interface SceneTouchLayerProps {
   // Fired continuously while dragging; each axis is normalised to its view
   // dimension (a full-width or full-height swipe is approximately 1.0).
   onDrag?: (delta: SceneDragDelta) => void;
+  // Fired after a drag with the total movement in screen points.
+  onSwipe?: (event: SceneSwipeEvent) => void;
+  onDragEnd?: () => void;
   style?: ViewStyle;
   accessibilityLabel?: string;
 }
@@ -33,6 +41,8 @@ export default function SceneTouchLayer({
   children,
   onTap,
   onDrag,
+  onSwipe,
+  onDragEnd,
   style,
   accessibilityLabel,
 }: SceneTouchLayerProps) {
@@ -42,8 +52,8 @@ export default function SceneTouchLayer({
   const lastDy = useRef(0);
 
   // PanResponder is created once; read the latest callbacks through a ref
-  const callbacks = useRef({ onTap, onDrag });
-  callbacks.current = { onTap, onDrag };
+  const callbacks = useRef({ onTap, onDrag, onSwipe, onDragEnd });
+  callbacks.current = { onTap, onDrag, onSwipe, onDragEnd };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -61,7 +71,7 @@ export default function SceneTouchLayer({
         lastDy.current = gesture.dy;
         moved.current = Math.max(
           moved.current,
-          Math.abs(gesture.dx) + Math.abs(gesture.dy)
+          Math.abs(gesture.dx) + Math.abs(gesture.dy),
         );
         if (moved.current > TAP_SLOP) {
           callbacks.current.onDrag?.({
@@ -78,9 +88,16 @@ export default function SceneTouchLayer({
             width: size.current.width,
             height: size.current.height,
           });
+        } else {
+          callbacks.current.onSwipe?.({
+            x: lastDx.current,
+            y: lastDy.current,
+          });
+          callbacks.current.onDragEnd?.();
         }
       },
-    })
+      onPanResponderTerminate: () => callbacks.current.onDragEnd?.(),
+    }),
   ).current;
 
   return (

@@ -6,6 +6,7 @@ import type {
   CompanionReaction,
   CompanionReactionToken,
 } from "@/components/companion/companionBehavior";
+import type { FaceStyle } from "@/data/faceStyles";
 
 export type AvatarState = "idle" | "focus" | "reward" | "levelUp";
 export type AvatarVariant = "dashboard" | "study" | "shop";
@@ -22,6 +23,7 @@ export interface AvatarRendererProps {
   streak?: number;
   accentColor?: string;
   bodyColor?: string;
+  faceStyle?: FaceStyle;
   equippedItems?: string[];
   mood?: CompanionMood;
   reactionToken?: CompanionReactionToken | null;
@@ -38,6 +40,7 @@ export interface AvatarData {
   streakTier: number; // 0..3
   accentColor: string;
   bodyColor: string;
+  faceStyle: FaceStyle;
   equippedItems: string[];
 }
 

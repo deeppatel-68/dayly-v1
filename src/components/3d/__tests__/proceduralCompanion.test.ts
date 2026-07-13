@@ -7,6 +7,7 @@ describe("procedural companion", () => {
     const companion = createProceduralCompanion({
       accent: new THREE.Color("#D97757"),
       bodyColor: "#8F7AA8",
+      faceStyle: "classic",
       levelTier: 2,
       streakTier: 1,
     });

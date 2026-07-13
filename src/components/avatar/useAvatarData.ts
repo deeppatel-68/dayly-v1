@@ -3,7 +3,7 @@ import { useHabits } from "@/context/HabitsContext";
 import { useShop } from "@/context/ShopContext";
 import { useXp } from "@/context/XpContext";
 import { DEFAULT_BODY_COLOR } from "@/data/avatarColors";
-import { shopItems } from "@/data/shopItems";
+import { DEFAULT_FACE_STYLE } from "@/data/faceStyles";
 import { toLevelTier, toStreakTier } from "@/utils/progression";
 import { useMemo } from "react";
 import { AvatarData, AvatarRendererProps } from "./avatarTypes";
@@ -13,21 +13,16 @@ import { AvatarData, AvatarRendererProps } from "./avatarTypes";
 // level/streak/customisation signals.
 export function useAvatarData(props: AvatarRendererProps): AvatarData {
   const { character } = useCharacter();
-  const { isEquipped } = useShop();
+  const { ownedItems, shopItems } = useShop();
   const { level: contextLevel, progress } = useXp();
   const { currentStreak } = useHabits();
 
-  const contextEquipped = useMemo(
-    () =>
-      shopItems
-        .filter(
-          (item) =>
-            (item.category === "accessory" || item.category === "decoration") &&
-            isEquipped(item.id)
-        )
-        .map((item) => item.id),
-    [isEquipped]
-  );
+  const contextEquipped = useMemo(() => {
+    const activeItemIds = new Set(shopItems.map((item) => item.id));
+    return ownedItems
+      .filter((item) => item.equipped && activeItemIds.has(item.itemId))
+      .map((item) => item.itemId);
+  }, [ownedItems, shopItems]);
 
   const level = props.level ?? contextLevel;
   const streak = props.streak ?? currentStreak;
@@ -40,6 +35,7 @@ export function useAvatarData(props: AvatarRendererProps): AvatarData {
     streakTier: toStreakTier(streak),
     accentColor: props.accentColor ?? character.color ?? "#D97757",
     bodyColor: props.bodyColor ?? character.bodyColor ?? DEFAULT_BODY_COLOR,
+    faceStyle: props.faceStyle ?? character.faceStyle ?? DEFAULT_FACE_STYLE,
     equippedItems: props.equippedItems ?? contextEquipped,
   };
 }

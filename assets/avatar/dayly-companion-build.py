@@ -105,11 +105,12 @@ def parent_to(child, parent):
     child.matrix_parent_inverse = parent.matrix_world.inverted()
 
 
-# Dark pupils, slightly proud of the eye surface, sitting a touch low = cute
+# Dark pupils, slightly proud of the eye surface, sitting a touch low = cute.
+# Big irises fill most of the eye = kawaii; small beady pupils read vacant.
 for name, x, side in (("LeftPupil", -0.165, "LeftEye"),
                       ("RightPupil", 0.165, "RightEye")):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.040,
-                                         location=(x, -0.508, 0.822))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.058,
+                                         location=(x, -0.508, 0.818))
     pupil = bpy.context.active_object
     pupil.name = name
     pupil.scale = (1.0, 0.35, 1.0)
@@ -119,10 +120,10 @@ for name, x, side in (("LeftPupil", -0.165, "LeftEye"),
 
 # Catchlights: upper-left on both pupils (one light source); right one a
 # touch smaller for asymmetric charm
-for name, x, r, side in (("LeftCatchlight", -0.195, 0.015, "LeftEye"),
-                         ("RightCatchlight", 0.135, 0.012, "RightEye")):
+for name, x, r, side in (("LeftCatchlight", -0.192, 0.023, "LeftEye"),
+                         ("RightCatchlight", 0.138, 0.019, "RightEye")):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=8, radius=r,
-                                         location=(x, -0.522, 0.850))
+                                         location=(x, -0.532, 0.852))
     catch = bpy.context.active_object
     catch.name = name
     catch.data.materials.append(mat_catch)
@@ -192,22 +193,27 @@ for name, x, roll in (("LeftFoot", -0.25, -0.1), ("RightFoot", 0.25, 0.1)):
     foot.data.materials.append(mat_body)
     smooth(foot)
 
-# ---------- Visor lip: friendly smile arc (corners up, centre relaxed) ----------
-# Same node name + accent material as before so runtime tinting still works;
-# it just reads as a soft smile instead of a status bar.
+# ---------- Visor lip: tiny shallow smile, tucked close under the eyes ----------
+# Kawaii rule: the mouth should be MUCH smaller than instinct says. Width here
+# is ~1/3 of the eye-to-eye span (0.33) and the arc is shallow with soft rounded
+# corners, so it reads as a gentle "u" rather than a wide, uncanny crescent.
+# Same node name + accent material as before so runtime tinting still works.
 lip_curve = bpy.data.curves.new("VisorLip", type="CURVE")
 lip_curve.dimensions = "3D"
-lip_curve.resolution_u = 2
-lip_curve.bevel_depth = 0.010
-lip_curve.bevel_resolution = 3
+lip_curve.resolution_u = 3
+lip_curve.bevel_depth = 0.011
+lip_curve.bevel_resolution = 4
 lip_spline = lip_curve.splines.new("POLY")
-lip_points = 18
+lip_points = 16
 lip_spline.points.add(lip_points - 1)
+lip_half_width = 0.058   # -> total width 0.116, ~1/3 of the eye-to-eye span
+lip_depth = 0.022        # shallow upward curve of the corners
 for index, point in enumerate(lip_spline.points):
     progress = index / (lip_points - 1)
-    x = -0.21 + progress * 0.42
-    z = 0.708 - (1.0 - ((progress - 0.5) * 2.0) ** 2) * 0.05
-    point.co = (x, -0.53, z, 1.0)
+    x = -lip_half_width + progress * (lip_half_width * 2.0)
+    # corners lift up, centre relaxed (a soft smile)
+    z = 0.706 - (1.0 - ((progress - 0.5) * 2.0) ** 2) * lip_depth
+    point.co = (x, -0.532, z, 1.0)
 visor_lip = bpy.data.objects.new("VisorLip", lip_curve)
 link(visor_lip)
 visor_lip.data.materials.append(mat_accent)

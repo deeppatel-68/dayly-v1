@@ -99,10 +99,10 @@ export default function CharacterScene({
       const streakBoost = streakTier / 3;
 
       // Lights: soft key + dim accent rim, nothing expensive
-      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-      const keyLight = new THREE.DirectionalLight(0xfff4e8, 1.0);
+      const ambient = new THREE.AmbientLight(0xffffff, 0.72);
+      const keyLight = new THREE.DirectionalLight(0xfff4e8, 0.85);
       keyLight.position.set(2.5, 4, 4);
-      const rimLight = new THREE.PointLight(accent, 0.55 + streakBoost * 0.3, 10);
+      const rimLight = new THREE.PointLight(accent, 0.45 + streakBoost * 0.3, 10);
       rimLight.position.set(-2, 1.5, -2);
       scene.add(ambient, keyLight, rimLight);
       if (levelTier >= 3) {

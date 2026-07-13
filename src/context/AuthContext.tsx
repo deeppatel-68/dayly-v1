@@ -139,27 +139,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const updateUsername = async (username: string) => {
     if (!user) throw new Error("No user logged in");
 
-    // Validate username
-    if (username.length < 2) {
-      throw new Error("Username must be at least 2 characters");
-    }
-    if (username.length > 30) {
-      throw new Error("Username must be less than 30 characters");
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    // Mirror the set_username RPC's format rule for an instant local error
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
       throw new Error(
-        "Username can only contain letters, numbers, and underscores"
+        "Username must be 3-20 characters: letters, numbers, and underscores"
       );
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ username })
-      .eq("id", user.id)
-      .select()
-      .single();
+    // Usernames are unique (case-insensitive); the RPC owns that check
+    const { error } = await supabase.rpc("set_username", {
+      p_username: username,
+    });
 
-    if (error) throw error;
+    if (error) {
+      if (error.message?.includes("username_taken")) {
+        throw new Error("That username is already taken");
+      }
+      if (error.message?.includes("username_invalid")) {
+        throw new Error(
+          "Username must be 3-20 characters: letters, numbers, and underscores"
+        );
+      }
+      throw error;
+    }
 
     // Update local profile state
     setProfile((prev) => (prev ? { ...prev, username } : null));

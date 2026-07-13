@@ -1,22 +1,21 @@
 import { createProceduralCompanion } from "@/components/3d/proceduralCompanion";
 import {
   attachEquipment,
+  createHomeEquipmentPool,
   createEquipmentMaterials,
   disposeEquipment,
+  HomeEquipmentPool,
 } from "@/components/3d/equipment";
 import { createPetMotionController } from "@/components/3d/petMotion";
 import SceneTouchLayer, {
   SceneTapEvent,
 } from "@/components/3d/SceneTouchLayer";
+import { createPetTapDetector } from "@/components/3d/sceneInteraction";
+import { createSceneRenderer } from "@/components/3d/sceneRenderer";
 import {
-  createOrbitRig,
-  createPetTapDetector,
-  OrbitRig,
-} from "@/components/3d/sceneInteraction";
-import {
-  createContactShadow,
-  createSceneRenderer,
-} from "@/components/3d/sceneRenderer";
+  createShadowMaterial,
+  createShadowTexture,
+} from "@/components/3d/glow";
 import { AvatarState } from "@/components/avatar/avatarTypes";
 import type {
   CompanionMood,
@@ -25,17 +24,27 @@ import type {
 } from "@/components/companion/companionBehavior";
 import { useAvatarData } from "@/components/avatar/useAvatarData";
 import CharacterScene from "@/components/character/CharacterScene";
+import { useHabits } from "@/context/HabitsContext";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ExpoWebGLRenderingContext, GLView } from "expo-gl";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import { AppState, StyleSheet } from "react-native";
 import * as THREE from "three";
-import { buildStudyRoom, ROOM_PET_POSITION } from "./roomBuilders";
+import {
+  buildStudyRoom,
+  getEquipSlotMarkerPosition,
+  ROOM_PET_POSITION,
+} from "./roomBuilders";
 import {
   createEnvironmentProfile,
   EnvironmentProfile,
 } from "./environmentProfile";
+import {
+  createRoomNavigationController,
+  RoomNavigationController,
+  RoomView,
+} from "./roomNavigation";
 
 interface StudyRoomSceneProps {
   state?: AvatarState;
@@ -43,6 +52,10 @@ interface StudyRoomSceneProps {
   reactionToken?: CompanionReactionToken | null;
   onInteract?: () => CompanionReaction | void;
   onReady?: () => void;
+  view?: RoomView;
+  onViewChange?: (view: RoomView) => void;
+  previewItemId?: string | null;
+  selectedEquipSlot?: string | null;
 }
 
 // The My Space scene: the companion at home in a cozy study nook. Reacts to
@@ -55,22 +68,42 @@ export default function StudyRoomScene({
   reactionToken = null,
   onInteract,
   onReady,
+  view = "home",
+  onViewChange,
+  previewItemId = null,
+  selectedEquipSlot = null,
 }: StudyRoomSceneProps) {
-  const { accentColor, bodyColor, levelTier, streakTier, equippedItems } =
-    useAvatarData({});
+  const {
+    accentColor,
+    bodyColor,
+    faceStyle,
+    levelTier,
+    streakTier,
+    equippedItems,
+  } = useAvatarData({});
   const [failed, setFailed] = useState(false);
+  const { completedCount, totalCount } = useHabits();
   const reducedMotion = useReducedMotion();
   const frameRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appActiveRef = useRef(AppState.currentState === "active");
   const setupGenerationRef = useRef(0);
   const cleanupRef = useRef<(() => void) | null>(null);
-  const orbitRef = useRef<OrbitRig | null>(null);
+  const navigationRef = useRef<RoomNavigationController | null>(null);
+  const homeEquipmentRef = useRef<HomeEquipmentPool | null>(null);
+  const parallaxRef = useRef({ x: 0, y: 0 });
+  const decorMarkerRef = useRef<THREE.Mesh | null>(null);
   const petTapRef = useRef<
     ((x: number, y: number, width: number, height: number) => boolean) | null
   >(null);
   const reactRef = useRef<((reaction: CompanionReaction) => void) | null>(null);
   const appliedReactionIdRef = useRef(-1);
   const environmentDateRef = useRef(new Date());
+  const equippedItemsRef = useRef(equippedItems);
+  equippedItemsRef.current = equippedItems;
+  const previewItemRef = useRef<string | null>(previewItemId);
+  previewItemRef.current = previewItemId;
+  const selectedEquipSlotRef = useRef<string | null>(selectedEquipSlot);
+  selectedEquipSlotRef.current = selectedEquipSlot;
 
   const stateRef = useRef<AvatarState>(state);
   stateRef.current = state;
@@ -95,6 +128,27 @@ export default function StudyRoomScene({
     appliedReactionIdRef.current = reactionToken.id;
     reactRef.current(reactionToken.reaction);
   }, [reactionToken]);
+
+  useEffect(() => {
+    navigationRef.current?.setView(view);
+  }, [view]);
+
+  useEffect(() => {
+    homeEquipmentRef.current?.setSelection(equippedItems, previewItemId);
+  }, [equippedItems, previewItemId]);
+
+  useEffect(() => {
+    const marker = decorMarkerRef.current;
+    const position = selectedEquipSlot
+      ? getEquipSlotMarkerPosition(selectedEquipSlot)
+      : null;
+    if (!marker || !position) {
+      if (marker) marker.visible = false;
+      return;
+    }
+    marker.visible = true;
+    marker.position.set(...position);
+  }, [selectedEquipSlot]);
 
   const stopAndDispose = () => {
     setupGenerationRef.current += 1;
@@ -131,49 +185,49 @@ export default function StudyRoomScene({
 
       const renderer = createSceneRenderer({
         gl,
-        clearColor: "#141311",
+        clearColor: "#171614",
         exposure: 1.24,
       });
 
       const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x171614);
       // Portrait framing verified in the iOS simulator. Three's FOV is
       // vertical, so the narrow phone aspect needs a wider FOV and a target
       // close to the companion; the desk remains supporting context and can
       // be inspected with the bounded room orbit.
       const camera = new THREE.PerspectiveCamera(58, width / height, 0.1, 100);
       camera.position.set(0.72, 1.3, 4.8);
-      const orbitTarget = new THREE.Vector3(0.72, 0.82, -0.48);
-      const homeOffset = camera.position.clone().sub(orbitTarget);
-      const homeAzimuth = Math.atan2(homeOffset.x, homeOffset.z);
-      const orbit = createOrbitRig({
-        target: orbitTarget,
-        radius: Math.hypot(homeOffset.x, homeOffset.z),
-        height: camera.position.y,
-        initialAzimuth: homeAzimuth,
-        minAzimuth: homeAzimuth - 0.6,
-        maxAzimuth: homeAzimuth + 0.6,
-        easeBackAfter: 2.5,
+      const navigation = createRoomNavigationController({
+        initialView: view,
+        reducedMotion: reducedMotionRef.current,
       });
-      orbit.applyTo(camera, 0);
-      orbitRef.current = orbit;
+      const initialPose = navigation.update(0);
+      camera.position.copy(initialPose.position);
+      camera.lookAt(initialPose.target);
+      camera.fov = initialPose.fov;
+      camera.updateProjectionMatrix();
+      navigationRef.current = navigation;
 
       const accent = new THREE.Color(accentColor);
       const motion = createPetMotionController({ levelTier, streakTier });
 
       // Warm-sky/charcoal-ground hemisphere, warm key and practical desk lamp.
       const hemi = new THREE.HemisphereLight(0xfff2e8, 0x24211e, 0.72);
-      const keyLight = new THREE.DirectionalLight(0xfff0dd, 1.05);
+      const keyLight = new THREE.DirectionalLight(0xfff0dd, 0.9);
       keyLight.position.set(2.5, 4, 3.5);
       scene.add(hemi, keyLight);
 
-      const room = buildStudyRoom(accent);
+      const room = buildStudyRoom(accent, {
+        levelTier,
+        completedHabits: completedCount,
+        totalHabits: totalCount,
+      });
       scene.add(room.group);
 
       // One lifecycle-owned loop drives the complete room and companion.
       const clock = new THREE.Clock();
       let companionFrame:
-        | ((time: number, environment: EnvironmentProfile) => void)
-        | null = null;
+        ((time: number, environment: EnvironmentProfile) => void) | null = null;
       let companionCleanup: (() => void) | null = null;
       let rewardBlend = 0;
       let previousTime = 0;
@@ -182,7 +236,7 @@ export default function StudyRoomScene({
       const animate = () => {
         frameRef.current = setTimeout(
           animate,
-          appActiveRef.current ? 1000 / 30 : 250
+          appActiveRef.current ? 1000 / 30 : 250,
         );
         if (!appActiveRef.current) return;
         const t = clock.getElapsedTime();
@@ -196,10 +250,17 @@ export default function StudyRoomScene({
         const environment = createEnvironmentProfile(
           environmentDateRef.current,
           s,
-          rewardBlend
+          rewardBlend,
         );
 
-        orbit.applyTo(camera, t);
+        navigation.setReducedMotion(reducedMotionRef.current);
+        const cameraPose = navigation.update(deltaTime);
+        camera.position.copy(cameraPose.position);
+        camera.lookAt(cameraPose.target);
+        if (Math.abs(camera.fov - cameraPose.fov) > 0.01) {
+          camera.fov = cameraPose.fov;
+          camera.updateProjectionMatrix();
+        }
         companionFrame?.(t, environment);
 
         hemi.color.setRGB(...environment.hemisphereSky);
@@ -219,32 +280,46 @@ export default function StudyRoomScene({
           0.85 + environment.lampIntensity * 0.48;
         room.lampLight.intensity +=
           (environment.lampIntensity - room.lampLight.intensity) * 0.06;
+        room.lampPoolMat.opacity = Math.min(
+          0.42,
+          0.1 + environment.lampIntensity * 0.1,
+        );
         room.stringMat.emissiveIntensity =
           environment.stringIntensity +
           (celebrating && !reducedMotionRef.current
             ? Math.sin(t * 8) * 0.22
             : 0);
 
-        // Fake-bloom halos track the same environment drivers as the
-        // emissives; reward/levelUp throbs them in phase with the flash.
-        const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-        const pulse =
-          celebrating && !reducedMotionRef.current
-            ? Math.sin(t * 8) * 0.5 + 0.5
-            : 0;
-        room.stringGlowMat.opacity = clamp01(
-          environment.stringIntensity * 0.32 + rewardBlend * 0.18 * pulse
-        );
-        room.lampHaloMat.opacity = clamp01(
-          environment.lampIntensity * 0.26 + rewardBlend * 0.1 * pulse
-        );
-        room.moonGlowMat.opacity = clamp01(
-          environment.celestialIntensity * 0.2 * environment.starOpacity
-        );
-        const glowScale = 1 + rewardBlend * (0.25 + 0.1 * pulse);
-        room.glowPulseGroup.children.forEach((c) =>
-          c.scale.setScalar(0.16 * glowScale)
-        );
+        const localDate = environmentDateRef.current;
+        const dayProgress =
+          (localDate.getHours() * 60 + localDate.getMinutes()) / (24 * 60);
+        room.celestial.position.x = 0.36 - dayProgress * 0.72;
+        room.celestial.position.y =
+          0.24 + Math.sin(dayProgress * Math.PI) * 0.28;
+        const ambientSway = reducedMotionRef.current
+          ? 0
+          : environment.decorationMotion;
+        for (let i = 0; i < room.ambientObjects.length; i++) {
+          room.ambientObjects[i].rotation.z =
+            Math.sin(t * 0.55 + i * 1.4) * 0.018 * ambientSway;
+        }
+        const homeObjects = homeEquipmentRef.current?.objects ?? [];
+        for (let i = 0; i < homeObjects.length; i++) {
+          const amount = Number(homeObjects[i].userData.ambientSway ?? 0);
+          if (amount > 0) {
+            homeObjects[i].rotation.z =
+              Math.sin(t * 0.48 + i) * amount * ambientSway;
+          }
+        }
+        const decorMarker = decorMarkerRef.current;
+        if (decorMarker?.visible) {
+          decorMarker.lookAt(camera.position);
+          const markerBase =
+            selectedEquipSlotRef.current === "room:rug" ? 1.8 : 1;
+          decorMarker.scale.setScalar(
+            markerBase * (1 + Math.sin(t * 3.2) * 0.045),
+          );
+        }
 
         renderer.render(scene, camera);
         gl.endFrameEXP();
@@ -255,9 +330,11 @@ export default function StudyRoomScene({
       };
 
       cleanupRef.current = () => {
-        orbitRef.current = null;
+        navigationRef.current = null;
         petTapRef.current = null;
         reactRef.current = null;
+        homeEquipmentRef.current = null;
+        decorMarkerRef.current = null;
         companionCleanup?.();
         room.dispose();
         renderer.dispose();
@@ -265,6 +342,7 @@ export default function StudyRoomScene({
       const companion = createProceduralCompanion({
         accent,
         bodyColor,
+        faceStyle,
         levelTier,
         streakTier,
       });
@@ -283,23 +361,46 @@ export default function StudyRoomScene({
         motion.react(pendingReaction.reaction);
       }
 
-      // Equipped items: this scene renders every slot, including room decor
+      // Pet equipment is lightweight and fixed for the current scene.
       const equipMaterials = createEquipmentMaterials(accent);
-      const equipped = attachEquipment(
-        equippedItems,
-        ["pet", "platform", "room"],
-        equipMaterials,
-        {
-          pet: companion.rig.petGroup,
-          platform: companion.root,
-          room: (anchor, object) => {
-            const placement = room.anchorFor(anchor);
-            object.position.set(...placement.position);
-            object.rotation.y = placement.rotationY;
-            scene.add(object);
-          },
-        }
+      const equipped = attachEquipment(equippedItems, ["pet"], equipMaterials, {
+        pet: companion.rig.petGroup,
+      });
+      const homeEquipment = createHomeEquipmentPool(equipMaterials, {
+        platform: companion.root,
+        room: (anchor, object) => {
+          const placement = room.anchorFor(anchor);
+          object.position.set(...placement.position);
+          object.rotation.y = placement.rotationY;
+          scene.add(object);
+        },
+      });
+      homeEquipment.setSelection(
+        equippedItemsRef.current,
+        previewItemRef.current,
       );
+      homeEquipmentRef.current = homeEquipment;
+
+      const decorMarkerGeometry = new THREE.RingGeometry(0.16, 0.2, 24);
+      const decorMarkerMaterial = new THREE.MeshBasicMaterial({
+        color: 0xd97757,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+        depthTest: false,
+      });
+      const decorMarker = new THREE.Mesh(
+        decorMarkerGeometry,
+        decorMarkerMaterial,
+      );
+      decorMarker.renderOrder = 20;
+      const markerPosition = selectedEquipSlotRef.current
+        ? getEquipSlotMarkerPosition(selectedEquipSlotRef.current)
+        : null;
+      decorMarker.visible = Boolean(markerPosition);
+      if (markerPosition) decorMarker.position.set(...markerPosition);
+      scene.add(decorMarker);
+      decorMarkerRef.current = decorMarker;
       equipped.forEach((object) => {
         if (object.parent !== companion.rig.petGroup) return;
         const itemId = String(object.userData.equipmentId ?? "");
@@ -313,14 +414,19 @@ export default function StudyRoomScene({
         }
       });
 
-      // Grounds the floating pet on its pod (puck top ≈ y 0.095)
-      const shadow = createContactShadow(0.5);
-      shadow.group.position.set(
-        ROOM_PET_POSITION.x,
-        0.096,
-        ROOM_PET_POSITION.z
-      );
-      scene.add(shadow.group);
+      // Soft radial contact shadow grounding the companion. The art spec
+      // targets rug level (y 0.035), but this companion has an opaque pod
+      // base spanning y 0–0.08 that would fully enclose a rug-level plane,
+      // so it sits on the pod top (≈ y 0.095) where the pet actually casts.
+      const shadowTexture = createShadowTexture();
+      const shadowMaterial = createShadowMaterial(shadowTexture);
+      const shadowGeometry = new THREE.PlaneGeometry(1, 1);
+      const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.scale.setScalar(1.15);
+      shadow.position.set(ROOM_PET_POSITION.x, 0.096, ROOM_PET_POSITION.z);
+      shadow.renderOrder = 1;
+      scene.add(shadow);
 
       companionFrame = (t, environment) => {
         const s = stateRef.current;
@@ -329,12 +435,16 @@ export default function StudyRoomScene({
           environmentWarmth: environment.companionWarmth,
           decorationMotion: environment.decorationMotion,
         });
-        shadow.setLift(companion.rig.petGroup.position.y);
       };
 
       companionCleanup = () => {
-        shadow.dispose();
+        shadowGeometry.dispose();
+        shadowMaterial.dispose();
+        shadowTexture.dispose();
         disposeEquipment(equipped);
+        homeEquipment.dispose();
+        decorMarkerGeometry.dispose();
+        decorMarkerMaterial.dispose();
         equipMaterials.dispose();
         companion.dispose();
       };
@@ -356,17 +466,50 @@ export default function StudyRoomScene({
   }
 
   const handleTap = (event: SceneTapEvent) => {
-    if (!petTapRef.current?.(event.x, event.y, event.width, event.height)) return;
-    const reaction = onInteract?.() ?? "bounce";
-    reactRef.current?.(reaction);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (petTapRef.current?.(event.x, event.y, event.width, event.height)) {
+      const reaction = onInteract?.() ?? "bounce";
+      reactRef.current?.(reaction);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      return;
+    }
+
+    const nextView: RoomView =
+      event.y < event.height * 0.55
+        ? "windowShelf"
+        : event.x < event.width * 0.52
+          ? "desk"
+          : "home";
+    navigationRef.current?.setView(nextView);
+    onViewChange?.(nextView);
   };
 
   return (
     <SceneTouchLayer
       accessibilityLabel="Interact with companion in My Space"
       onTap={handleTap}
-      onDrag={(delta) => orbitRef.current?.orbitBy(delta.x, delta.y)}
+      onDrag={(delta) => {
+        parallaxRef.current.x = Math.max(
+          -1,
+          Math.min(1, parallaxRef.current.x + delta.x * 3),
+        );
+        parallaxRef.current.y = Math.max(
+          -1,
+          Math.min(1, parallaxRef.current.y + delta.y * 3),
+        );
+        navigationRef.current?.setParallax(
+          parallaxRef.current.x,
+          parallaxRef.current.y,
+        );
+      }}
+      onSwipe={(event) => {
+        const nextView = navigationRef.current?.selectFromSwipe(event.x);
+        if (nextView) onViewChange?.(nextView);
+      }}
+      onDragEnd={() => {
+        parallaxRef.current.x = 0;
+        parallaxRef.current.y = 0;
+        navigationRef.current?.resetParallax();
+      }}
     >
       <GLView
         style={styles.glView}

@@ -19,7 +19,7 @@ export interface SceneRendererOptions {
 export function createSceneRenderer({
   gl,
   clearColor,
-  exposure = 1.15,
+  exposure = 1.05,
 }: SceneRendererOptions): Renderer {
   const renderer = new Renderer({ gl, antialias: true });
   renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -45,12 +45,12 @@ export function createPetLightRig(
   accent: THREE.Color,
   streakBoost: number
 ): void {
-  const hemi = new THREE.HemisphereLight(0xfff0dd, 0x1f1e1d, 0.55);
-  const key = new THREE.DirectionalLight(0xfff4e8, 1.35);
+  const hemi = new THREE.HemisphereLight(0xfff0dd, 0x2a2622, 0.75);
+  const key = new THREE.DirectionalLight(0xfff1e2, 0.9);
   key.position.set(2.5, 4, 4);
-  const fill = new THREE.DirectionalLight(0xdce4f5, 0.35);
+  const fill = new THREE.DirectionalLight(0xe6ebff, 0.5);
   fill.position.set(-3, 2, 2.5);
-  const rim = new THREE.PointLight(accent, 0.6 + streakBoost * 0.3, 10);
+  const rim = new THREE.PointLight(accent, 0.45 + streakBoost * 0.25, 10);
   rim.position.set(-2, 1.5, -2);
   scene.add(hemi, key, fill, rim);
 }

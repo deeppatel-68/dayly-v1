@@ -20,7 +20,10 @@ export type RoomAnchor =
   | "lamp"
   | "wall_art"
   | "window_view"
-  | "floor_prop";
+  | "floor_prop"
+  | "rug"
+  | "shelf"
+  | "companion_corner";
 
 export interface EquipmentMaterials {
   dark: THREE.MeshStandardMaterial;
@@ -35,7 +38,7 @@ export interface EquipmentMaterials {
 // One set of shared materials per scene; builders reuse them so a scene adds
 // at most a handful of programs regardless of how much is equipped.
 export function createEquipmentMaterials(
-  accent: THREE.Color
+  accent: THREE.Color,
 ): EquipmentMaterials {
   const dark = new THREE.MeshStandardMaterial({
     color: 0x1f1f23,
@@ -81,6 +84,7 @@ export function createEquipmentMaterials(
 
 export interface EquipmentDef {
   slot: EquipmentSlot;
+  equipSlot: string;
   // Required for slot "room": which bay the item occupies
   anchor?: RoomAnchor;
   build: (m: EquipmentMaterials) => THREE.Object3D;
@@ -91,7 +95,7 @@ const mesh = (
   material: THREE.Material,
   x = 0,
   y = 0,
-  z = 0
+  z = 0,
 ) => {
   const out = new THREE.Mesh(geometry, material);
   out.position.set(x, y, z);
@@ -110,6 +114,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   // height and pushed forward so it reads as a bill.
   "focus-cap": {
     slot: "pet",
+    equipSlot: "wearable:head",
     build: (m) => {
       const group = new THREE.Group();
       const dome = mesh(
@@ -120,12 +125,12 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
           0,
           Math.PI * 2,
           0,
-          Math.PI / 2.25
+          Math.PI / 2.25,
         ),
         m.dark,
         0,
         1.02,
-        0
+        0,
       );
       dome.scale.set(0.94, 0.38, 0.92);
       const brim = mesh(
@@ -133,7 +138,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
         m.dark,
         0,
         1.055,
-        0.5
+        0.5,
       );
       brim.rotation.z = Math.PI / 2;
       const focusTag = mesh(
@@ -141,7 +146,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
         m.glow,
         0.18,
         1.085,
-        0.545
+        0.545,
       );
       group.add(dome, brim, focusTag);
       return group;
@@ -154,19 +159,21 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   // farther forward, so the frames sit at z=0.595 with a small air gap.
   "study-glasses": {
     slot: "pet",
+    equipSlot: "wearable:head",
     build: (m) => {
       const group = new THREE.Group();
       const lensGeo = new THREE.TorusGeometry(0.145, 0.018, 8, 20);
       group.add(
         mesh(lensGeo, m.frame, -0.165, 0.84, 0.595),
         mesh(lensGeo, m.frame, 0.165, 0.84, 0.595),
-        mesh(new THREE.BoxGeometry(0.08, 0.016, 0.016), m.frame, 0, 0.84, 0.6)
+        mesh(new THREE.BoxGeometry(0.08, 0.016, 0.016), m.frame, 0, 0.84, 0.6),
       );
       return group;
     },
   },
   "neon-headphones": {
     slot: "pet",
+    equipSlot: "wearable:head",
     build: (m) => {
       const group = new THREE.Group();
       const band = mesh(
@@ -174,7 +181,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
         m.dark,
         0,
         0.65,
-        0
+        0,
       );
       const earGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.07, 14);
       const leftEar = mesh(earGeo, m.glow, -0.6, 0.65, 0);
@@ -193,12 +200,19 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   // the puck beside the pet.
   "study-plant": {
     slot: "platform",
+    equipSlot: "platform:right",
     build: (m) => {
       const group = new THREE.Group();
       group.add(
-        mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.1, 10), m.dark, 0.46, 0.09, 0.2),
+        mesh(
+          new THREE.CylinderGeometry(0.07, 0.055, 0.1, 10),
+          m.dark,
+          0.46,
+          0.09,
+          0.2,
+        ),
         mesh(new THREE.ConeGeometry(0.09, 0.18, 8), m.leaf, 0.46, 0.23, 0.2),
-        mesh(new THREE.ConeGeometry(0.06, 0.12, 8), m.leaf, 0.4, 0.19, 0.26)
+        mesh(new THREE.ConeGeometry(0.06, 0.12, 8), m.leaf, 0.4, 0.19, 0.26),
       );
       return group;
     },
@@ -208,18 +222,32 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   // 0.023 — nudged in slightly for a safer margin against the base edge.
   "neon-lamp": {
     slot: "platform",
+    equipSlot: "platform:left",
     build: (m) => {
       const group = new THREE.Group();
       group.add(
-        mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.03, 10), m.dark, -0.64, 0.055, 0.26),
-        mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.38, 8), m.dark, -0.64, 0.26, 0.26),
-        mesh(new THREE.SphereGeometry(0.05, 12, 10), m.glow, -0.64, 0.48, 0.26)
+        mesh(
+          new THREE.CylinderGeometry(0.045, 0.06, 0.03, 10),
+          m.dark,
+          -0.64,
+          0.055,
+          0.26,
+        ),
+        mesh(
+          new THREE.CylinderGeometry(0.014, 0.014, 0.38, 8),
+          m.dark,
+          -0.64,
+          0.26,
+          0.26,
+        ),
+        mesh(new THREE.SphereGeometry(0.05, 12, 10), m.glow, -0.64, 0.48, 0.26),
       );
       return group;
     },
   },
   "motivational-poster": {
     slot: "room",
+    equipSlot: "room:wall_art",
     anchor: "wall_art",
     build: (m) => {
       const group = new THREE.Group();
@@ -227,29 +255,45 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
         mesh(new THREE.BoxGeometry(0.55, 0.72, 0.03), m.dark),
         mesh(new THREE.BoxGeometry(0.4, 0.05, 0.035), m.glow, 0, 0.16, 0.005),
         mesh(new THREE.BoxGeometry(0.3, 0.035, 0.035), m.frame, 0, 0.02, 0.005),
-        mesh(new THREE.BoxGeometry(0.34, 0.035, 0.035), m.frame, 0, -0.08, 0.005)
+        mesh(
+          new THREE.BoxGeometry(0.34, 0.035, 0.035),
+          m.frame,
+          0,
+          -0.08,
+          0.005,
+        ),
       );
       return group;
     },
   },
   bookshelf: {
     slot: "room",
+    equipSlot: "room:floor_prop",
     anchor: "floor_prop",
     build: (m) => {
       const group = new THREE.Group();
-      const frame = mesh(new THREE.BoxGeometry(0.9, 1.5, 0.28), m.wood, 0, 0.75, 0);
+      group.userData.ambientSway = 0.025;
+      const frame = mesh(
+        new THREE.BoxGeometry(0.9, 1.5, 0.28),
+        m.wood,
+        0,
+        0.75,
+        0,
+      );
       group.add(frame);
       // Shelf gaps + books
       for (let row = 0; row < 3; row++) {
         const y = 0.35 + row * 0.42;
-        group.add(mesh(new THREE.BoxGeometry(0.8, 0.28, 0.22), m.dark, 0, y, 0.02));
+        group.add(
+          mesh(new THREE.BoxGeometry(0.8, 0.28, 0.22), m.dark, 0, y, 0.02),
+        );
         for (let b = 0; b < 4; b++) {
           const book = mesh(
             new THREE.BoxGeometry(0.09, 0.24, 0.16),
             b % 3 === 0 ? m.glow : b % 2 === 0 ? m.leaf : m.frame,
             -0.28 + b * 0.17,
             y,
-            0.03
+            0.03,
           );
           book.rotation.z = b === 3 ? 0.16 : 0;
           group.add(book);
@@ -260,6 +304,7 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
   },
   "gaming-desk": {
     slot: "room",
+    equipSlot: "room:desk",
     anchor: "desk",
     build: (m) => {
       // Upgrade kit for the desk: second monitor + LED strip along the edge
@@ -267,49 +312,278 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
       const monitor = new THREE.Group();
       monitor.add(
         mesh(new THREE.BoxGeometry(0.5, 0.32, 0.03), m.frame, 0, 0.36, 0),
-        mesh(new THREE.BoxGeometry(0.46, 0.28, 0.032), m.screen, 0, 0.36, 0.004),
-        mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 8), m.frame, 0, 0.12, 0),
-        mesh(new THREE.BoxGeometry(0.2, 0.02, 0.14), m.frame, 0, 0.04, 0)
+        mesh(
+          new THREE.BoxGeometry(0.46, 0.28, 0.032),
+          m.screen,
+          0,
+          0.36,
+          0.004,
+        ),
+        mesh(
+          new THREE.CylinderGeometry(0.02, 0.02, 0.14, 8),
+          m.frame,
+          0,
+          0.12,
+          0,
+        ),
+        mesh(new THREE.BoxGeometry(0.2, 0.02, 0.14), m.frame, 0, 0.04, 0),
       );
       monitor.position.set(0.55, 0, -0.08);
       monitor.rotation.y = -0.35;
-      const led = mesh(new THREE.BoxGeometry(1.7, 0.02, 0.02), m.glow, 0, -0.045, 0.36);
+      const led = mesh(
+        new THREE.BoxGeometry(1.7, 0.02, 0.02),
+        m.glow,
+        0,
+        -0.045,
+        0.36,
+      );
       group.add(monitor, led);
       return group;
     },
   },
   "floor-plant": {
     slot: "room",
+    equipSlot: "room:floor_prop",
     anchor: "floor_prop",
     build: (m) => {
       const group = new THREE.Group();
-      const leafTall = mesh(new THREE.ConeGeometry(0.2, 0.55, 7), m.leaf, 0, 0.55, 0);
-      const leafRight = mesh(new THREE.ConeGeometry(0.13, 0.38, 7), m.leaf, 0.12, 0.44, 0.06);
+      const leafTall = mesh(
+        new THREE.ConeGeometry(0.2, 0.55, 7),
+        m.leaf,
+        0,
+        0.55,
+        0,
+      );
+      const leafRight = mesh(
+        new THREE.ConeGeometry(0.13, 0.38, 7),
+        m.leaf,
+        0.12,
+        0.44,
+        0.06,
+      );
       leafRight.rotation.z = -0.25;
-      const leafLeft = mesh(new THREE.ConeGeometry(0.11, 0.32, 7), m.leaf, -0.1, 0.42, -0.05);
+      const leafLeft = mesh(
+        new THREE.ConeGeometry(0.11, 0.32, 7),
+        m.leaf,
+        -0.1,
+        0.42,
+        -0.05,
+      );
       leafLeft.rotation.z = 0.22;
       group.add(
-        mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.26, 12), m.wood, 0, 0.13, 0),
-        mesh(new THREE.CylinderGeometry(0.17, 0.16, 0.04, 12), m.dark, 0, 0.27, 0),
+        mesh(
+          new THREE.CylinderGeometry(0.16, 0.13, 0.26, 12),
+          m.wood,
+          0,
+          0.13,
+          0,
+        ),
+        mesh(
+          new THREE.CylinderGeometry(0.17, 0.16, 0.04, 12),
+          m.dark,
+          0,
+          0.27,
+          0,
+        ),
         leafTall,
         leafRight,
-        leafLeft
+        leafLeft,
       );
       return group;
     },
   },
   "fairy-window": {
     slot: "room",
+    equipSlot: "room:window_view",
     anchor: "window_view",
     build: (m) => {
       const group = new THREE.Group();
       const bulbGeo = new THREE.SphereGeometry(0.03, 8, 6);
       for (const x of [-0.62, 0.62]) {
-        group.add(mesh(new THREE.BoxGeometry(0.015, 1.5, 0.015), m.frame, x, 0.15, 0.04));
+        group.add(
+          mesh(
+            new THREE.BoxGeometry(0.015, 1.5, 0.015),
+            m.frame,
+            x,
+            0.15,
+            0.04,
+          ),
+        );
         for (const y of [0.55, 0.15, -0.35]) {
           group.add(mesh(bulbGeo, m.glow, x, y, 0.05));
         }
       }
+      return group;
+    },
+  },
+  "warm-desk-lamp": {
+    slot: "room",
+    equipSlot: "room:lamp",
+    anchor: "lamp",
+    build: (m) => {
+      const group = new THREE.Group();
+      const shade = mesh(
+        new THREE.ConeGeometry(0.12, 0.13, 14, 1, true),
+        m.wood,
+        0,
+        0.43,
+        0.2,
+      );
+      shade.rotation.x = 2.5;
+      group.add(
+        shade,
+        mesh(new THREE.SphereGeometry(0.04, 10, 8), m.glow, 0, 0.4, 0.21),
+      );
+      return group;
+    },
+  },
+  "woven-rug": {
+    slot: "room",
+    equipSlot: "room:rug",
+    anchor: "rug",
+    build: (m) => {
+      const group = new THREE.Group();
+      const outerRing = mesh(
+        new THREE.TorusGeometry(0.82, 0.018, 6, 32),
+        m.glow,
+        0,
+        0.012,
+        0,
+      );
+      const innerRing = mesh(
+        new THREE.TorusGeometry(0.48, 0.012, 6, 28),
+        m.frame,
+        0,
+        0.013,
+        0,
+      );
+      outerRing.rotation.x = -Math.PI / 2;
+      innerRing.rotation.x = -Math.PI / 2;
+      group.add(
+        mesh(new THREE.CylinderGeometry(1.18, 1.18, 0.018, 32), m.wood),
+        outerRing,
+        innerRing,
+      );
+      return group;
+    },
+  },
+  "daily-pinboard": {
+    slot: "room",
+    equipSlot: "room:wall_art",
+    anchor: "wall_art",
+    build: (m) => {
+      const group = new THREE.Group();
+      group.add(
+        mesh(new THREE.BoxGeometry(0.68, 0.76, 0.045), m.wood),
+        mesh(new THREE.BoxGeometry(0.58, 0.66, 0.052), m.dark, 0, 0, 0.01),
+      );
+      for (let i = 0; i < 5; i++) {
+        group.add(
+          mesh(
+            new THREE.CircleGeometry(0.035, 10),
+            i < 3 ? m.glow : m.frame,
+            -0.2 + i * 0.1,
+            0.18,
+            0.04,
+          ),
+        );
+      }
+      group.add(
+        mesh(
+          new THREE.BoxGeometry(0.22, 0.16, 0.012),
+          m.leaf,
+          -0.14,
+          -0.12,
+          0.04,
+        ),
+        mesh(
+          new THREE.BoxGeometry(0.2, 0.13, 0.012),
+          m.glow,
+          0.14,
+          -0.17,
+          0.04,
+        ),
+      );
+      return group;
+    },
+  },
+  "soft-window-curtains": {
+    slot: "room",
+    equipSlot: "room:window_view",
+    anchor: "window_view",
+    build: (m) => {
+      const group = new THREE.Group();
+      group.userData.ambientSway = 0.012;
+      for (const x of [-0.67, 0.67]) {
+        const curtain = mesh(
+          new THREE.BoxGeometry(0.18, 1.55, 0.055),
+          m.wood,
+          x,
+          0.04,
+          0.07,
+        );
+        curtain.rotation.z = x < 0 ? -0.035 : 0.035;
+        group.add(curtain);
+      }
+      group.add(
+        mesh(
+          new THREE.CylinderGeometry(0.018, 0.018, 1.55, 8),
+          m.frame,
+          0,
+          0.84,
+          0.08,
+        ),
+      );
+      group.children[group.children.length - 1].rotation.z = Math.PI / 2;
+      return group;
+    },
+  },
+  "shelf-keepsakes": {
+    slot: "room",
+    equipSlot: "room:shelf",
+    anchor: "shelf",
+    build: (m) => {
+      const group = new THREE.Group();
+      group.add(
+        mesh(
+          new THREE.CylinderGeometry(0.055, 0.075, 0.14, 10),
+          m.glow,
+          0,
+          0.08,
+          -0.24,
+        ),
+        mesh(new THREE.BoxGeometry(0.18, 0.16, 0.05), m.frame, 0, 0.1, 0.05),
+        mesh(new THREE.CircleGeometry(0.045, 12), m.glow, 0, 0.11, 0.081),
+        mesh(
+          new THREE.CylinderGeometry(0.06, 0.05, 0.08, 10),
+          m.wood,
+          0,
+          0.04,
+          0.3,
+        ),
+        mesh(new THREE.ConeGeometry(0.085, 0.18, 8), m.leaf, 0, 0.16, 0.3),
+      );
+      return group;
+    },
+  },
+  "companion-cushion": {
+    slot: "room",
+    equipSlot: "room:companion_corner",
+    anchor: "companion_corner",
+    build: (m) => {
+      const group = new THREE.Group();
+      const cushion = mesh(
+        new THREE.SphereGeometry(0.38, 18, 10),
+        m.wood,
+        0,
+        0.13,
+        0,
+      );
+      cushion.scale.set(1.15, 0.34, 0.86);
+      group.add(
+        cushion,
+        mesh(new THREE.TorusGeometry(0.28, 0.018, 6, 24), m.glow, 0, 0.21, 0),
+      );
       return group;
     },
   },
@@ -318,6 +592,78 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
 // Which shop items the 3D layer can actually display. The shop reads this to
 // gate purchasing — an item not in this list shows as "Coming Soon".
 export const RENDERED_EQUIPMENT_IDS = Object.keys(EQUIPMENT);
+export const HOME_EQUIPMENT_IDS = RENDERED_EQUIPMENT_IDS.filter(
+  (id) => EQUIPMENT[id].slot !== "pet",
+);
+
+export function getEquipmentSlot(itemId: string): string | undefined {
+  return EQUIPMENT[itemId]?.equipSlot;
+}
+
+export function isHomeEquipmentItem(itemId: string): boolean {
+  const slot = EQUIPMENT[itemId]?.slot;
+  return slot === "platform" || slot === "room";
+}
+
+export interface HomeEquipmentPool {
+  setSelection: (equippedIds: string[], previewItemId?: string | null) => void;
+  objects: THREE.Object3D[];
+  dispose: () => void;
+}
+
+// Build home decor once per GL context and switch visibility for previews.
+// This avoids introducing new lit meshes after the first submitted Expo GL
+// frame, which can stall on iOS, and keeps editing instant.
+export function createHomeEquipmentPool(
+  materials: EquipmentMaterials,
+  targets: {
+    platform: THREE.Object3D;
+    room: (anchor: RoomAnchor, object: THREE.Object3D) => void;
+  },
+): HomeEquipmentPool {
+  const objects: THREE.Object3D[] = [];
+  const byId = new Map<string, THREE.Object3D>();
+
+  for (const itemId of HOME_EQUIPMENT_IDS) {
+    const def = EQUIPMENT[itemId];
+    const object = def.build(materials);
+    object.visible = false;
+    object.userData.equipmentId = itemId;
+    object.userData.equipmentSlot = def.slot;
+    object.userData.equipSlot = def.equipSlot;
+    if (def.slot === "platform") targets.platform.add(object);
+    else if (def.anchor) targets.room(def.anchor, object);
+    objects.push(object);
+    byId.set(itemId, object);
+  }
+
+  const setSelection = (
+    equippedIds: string[],
+    previewItemId?: string | null,
+  ) => {
+    const selectedBySlot = new Map<string, string>();
+    for (const itemId of equippedIds) {
+      const def = EQUIPMENT[itemId];
+      if (def && def.slot !== "pet") selectedBySlot.set(def.equipSlot, itemId);
+    }
+    if (previewItemId) {
+      const previewDef = EQUIPMENT[previewItemId];
+      if (previewDef && previewDef.slot !== "pet") {
+        selectedBySlot.set(previewDef.equipSlot, previewItemId);
+      }
+    }
+    for (const [itemId, object] of byId) {
+      const equipSlot = EQUIPMENT[itemId].equipSlot;
+      object.visible = selectedBySlot.get(equipSlot) === itemId;
+    }
+  };
+
+  return {
+    objects,
+    setSelection,
+    dispose: () => disposeEquipment(objects),
+  };
+}
 
 // Attach equipped items for a scene. `slots` filters what this scene shows
 // (the compact avatar card renders pet+platform; the room renders all).
@@ -330,35 +676,29 @@ export function attachEquipment(
     pet?: THREE.Object3D;
     platform?: THREE.Object3D;
     room?: (anchor: RoomAnchor, object: THREE.Object3D) => void;
-  }
+  },
 ): THREE.Object3D[] {
   const built: THREE.Object3D[] = [];
   // Each room anchor shows at most one item: the last-equipped one wins
   // (equippedIds is in equip order).
-  const selectedRoomByAnchor = new Map<RoomAnchor, number>();
+  const selectedByEquipSlot = new Map<string, number>();
 
-  if (slots.includes("room")) {
-    equippedIds.forEach((id, index) => {
-      const def = EQUIPMENT[id];
-      if (def?.slot === "room" && def.anchor) {
-        selectedRoomByAnchor.set(def.anchor, index);
-      }
-    });
-  }
+  equippedIds.forEach((id, index) => {
+    const def = EQUIPMENT[id];
+    if (def) selectedByEquipSlot.set(def.equipSlot, index);
+  });
 
   for (let index = 0; index < equippedIds.length; index++) {
     const id = equippedIds[index];
     const def = EQUIPMENT[id];
     if (!def || !slots.includes(def.slot)) continue;
     const roomAnchor = def.slot === "room" ? def.anchor : undefined;
-    if (def.slot === "room") {
-      if (!roomAnchor || selectedRoomByAnchor.get(roomAnchor) !== index) {
-        continue;
-      }
-    }
+    if (selectedByEquipSlot.get(def.equipSlot) !== index) continue;
+    if (def.slot === "room" && !roomAnchor) continue;
     const object = def.build(materials);
     object.userData.equipmentId = id;
     object.userData.equipmentSlot = def.slot;
+    object.userData.equipSlot = def.equipSlot;
     if (def.slot === "pet" && targets.pet) targets.pet.add(object);
     else if (def.slot === "platform" && targets.platform)
       targets.platform.add(object);

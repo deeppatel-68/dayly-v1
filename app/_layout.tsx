@@ -100,6 +100,14 @@ function AppContent() {
                     name="profile"
                     options={{ title: "Profile", headerBackTitle: "Home" }}
                   />
+                  <Stack.Screen
+                    name="friends/index"
+                    options={{ title: "Friends", headerBackTitle: "Profile" }}
+                  />
+                  <Stack.Screen
+                    name="friends/leaderboard"
+                    options={{ title: "Leaderboard", headerBackTitle: "Friends" }}
+                  />
                   <Stack.Screen name="auth" options={{ headerShown: false }} />
                 </Stack>
               ) : (
