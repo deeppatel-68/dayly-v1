@@ -131,7 +131,7 @@ export default function CustomiseScreen() {
       />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >

@@ -9,6 +9,7 @@ import {
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { StudioType } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
+import { useCharacter } from "@/context/CharacterContext";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
@@ -28,6 +29,7 @@ import {
 export default function ProfileScreen() {
   const { colors, colorScheme, toggleTheme } = useTheme();
   const { user, profile, signOut, updateUsername } = useAuth();
+  const { character } = useCharacter();
   const { totalCount, percentage, currentStreak } = useHabits();
   const { xp, level } = useXp();
   const [showEditSheet, setShowEditSheet] = useState(false);
@@ -38,6 +40,7 @@ export default function ProfileScreen() {
   const username = profile?.username || user?.email?.split("@")[0] || "User";
   const email = user?.email || "";
   const initial = username.slice(0, 1).toUpperCase();
+  const companionName = character.companionName || "Deep";
 
   const openEditor = () => {
     setUsernameInput(username);
@@ -63,7 +66,9 @@ export default function ProfileScreen() {
       setShowEditSheet(false);
     } catch (saveError) {
       setError(
-        saveError instanceof Error ? saveError.message : "Could not update your username."
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not update your username."
       );
     } finally {
       setIsSaving(false);
@@ -76,7 +81,10 @@ export default function ProfileScreen() {
       {
         text: "Sign out",
         style: "destructive",
-        onPress: () => signOut().catch(() => Alert.alert("Could not sign out", "Please try again.")),
+        onPress: () =>
+          signOut().catch(() =>
+            Alert.alert("Could not sign out", "Please try again.")
+          ),
       },
     ]);
   };
@@ -84,29 +92,69 @@ export default function ProfileScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.identity}>
-          <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
-            <Text style={[styles.avatarText, { color: colors.onAccent }]}>{initial}</Text>
+        <View style={styles.hero}>
+          <View
+            style={[
+              styles.avatar,
+              {
+                backgroundColor: colors.completedBackground,
+                borderColor: colors.accent,
+              },
+            ]}
+          >
+            <Text style={[styles.avatarText, { color: colors.accent }]}>
+              {initial}
+            </Text>
           </View>
-          <View style={styles.identityCopy}>
+          <View style={styles.heroCopy}>
             <View style={styles.nameRow}>
-              <Text style={[styles.username, { color: colors.text }]}>{username}</Text>
-              <StudioIconButton icon="pencil-outline" label="Edit username" onPress={openEditor} />
+              <Text numberOfLines={1} style={[styles.username, { color: colors.text }]}>
+                {username}
+              </Text>
+              <StudioIconButton
+                icon="pencil-outline"
+                label="Edit username"
+                onPress={openEditor}
+                style={styles.editButton}
+              />
             </View>
-            <Text style={[styles.email, { color: colors.textSecondary }]}>{email}</Text>
-            <Text style={[styles.level, { color: colors.accent }]}>Level {level}  ·  {xp} XP</Text>
+            <Text numberOfLines={1} style={[styles.email, { color: colors.textSecondary }]}>
+              {email}
+            </Text>
+            <View style={[styles.levelBadge, { backgroundColor: colors.surfaceRaised }]}>
+              <Ionicons name="sparkles-outline" size={13} color={colors.accent} />
+              <Text style={[styles.levelText, { color: colors.text }]}>Level {level}</Text>
+              <Text style={[styles.levelXp, { color: colors.textSecondary }]}>{xp} XP</Text>
+            </View>
           </View>
         </View>
 
-        <StudioSection title="Your rhythm">
+        <StudioSection title="Activity">
           <StudioGroup style={styles.metricsGroup}>
             <Metric value={totalCount} label="Habits" />
             <Metric value={`${Math.round(percentage)}%`} label="Today" divider />
             <Metric value={currentStreak} label="Streak" divider />
+          </StudioGroup>
+        </StudioSection>
+
+        <StudioSection title="Companion">
+          <StudioGroup>
+            <StudioRow
+              title={companionName}
+              detail="Appearance and equipment"
+              leading={
+                <View style={[styles.rowIcon, { backgroundColor: colors.completedBackground }]}>
+                  <Ionicons name="happy-outline" size={19} color={colors.accent} />
+                </View>
+              }
+              trailing={<Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />}
+              onPress={() => router.push("/customise")}
+              last
+            />
           </StudioGroup>
         </StudioSection>
 
@@ -115,7 +163,11 @@ export default function ProfileScreen() {
             <StudioRow
               title="Friends"
               detail="Compare your shared momentum"
-              leading={<Ionicons name="people-outline" size={20} color={colors.accent} />}
+              leading={
+                <View style={[styles.rowIcon, { backgroundColor: colors.surfaceRaised }]}>
+                  <Ionicons name="people-outline" size={19} color={colors.accent} />
+                </View>
+              }
               trailing={<Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />}
               onPress={() => router.push("/friends")}
               last
@@ -127,12 +179,21 @@ export default function ProfileScreen() {
           <StudioGroup>
             <View style={styles.preferenceRow}>
               <View style={styles.preferenceCopy}>
-                <Ionicons
-                  name={colorScheme === "dark" ? "moon-outline" : "sunny-outline"}
-                  size={20}
-                  color={colors.accent}
-                />
-                <Text style={[styles.preferenceTitle, { color: colors.text }]}>Dark appearance</Text>
+                <View style={[styles.rowIcon, { backgroundColor: colors.surfaceRaised }]}>
+                  <Ionicons
+                    name={colorScheme === "dark" ? "moon-outline" : "sunny-outline"}
+                    size={19}
+                    color={colors.accent}
+                  />
+                </View>
+                <View>
+                  <Text style={[styles.preferenceTitle, { color: colors.text }]}>
+                    Dark appearance
+                  </Text>
+                  <Text style={[styles.preferenceDetail, { color: colors.textSecondary }]}>
+                    {colorScheme === "dark" ? "On" : "Off"}
+                  </Text>
+                </View>
               </View>
               <Switch
                 accessibilityLabel="Toggle dark appearance"
@@ -145,14 +206,23 @@ export default function ProfileScreen() {
           </StudioGroup>
         </StudioSection>
 
-        <StudioButton
-          label="Sign out"
-          icon="log-out-outline"
-          onPress={confirmSignOut}
-          tone="secondary"
-          style={styles.signOut}
-          textStyle={{ color: colors.error }}
-        />
+        <StudioSection title="Account">
+          <StudioGroup>
+            <StudioRow
+              title="Sign out"
+              detail="End this session on this device"
+              leading={
+                <View style={[styles.rowIcon, { backgroundColor: `${colors.error}18` }]}>
+                  <Ionicons name="log-out-outline" size={19} color={colors.error} />
+                </View>
+              }
+              trailing={<Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />}
+              onPress={confirmSignOut}
+              destructive
+              last
+            />
+          </StudioGroup>
+        </StudioSection>
       </ScrollView>
 
       <StudioSheet
@@ -201,44 +271,107 @@ export default function ProfileScreen() {
               },
             ]}
           />
-          {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
+          {error ? (
+            <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
+          ) : null}
         </View>
       </StudioSheet>
     </View>
   );
 }
 
-function Metric({ value, label, divider = false }: { value: string | number; label: string; divider?: boolean }) {
+function Metric({
+  value,
+  label,
+  divider = false,
+}: {
+  value: string | number;
+  label: string;
+  divider?: boolean;
+}) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.metric, divider && { borderLeftColor: colors.separator, borderLeftWidth: StyleSheet.hairlineWidth }]}>
+    <View
+      style={[
+        styles.metric,
+        divider && {
+          borderLeftColor: colors.separator,
+          borderLeftWidth: StyleSheet.hairlineWidth,
+        },
+      ]}
+    >
       <Text style={[styles.metricValue, { color: colors.text }]}>{value}</Text>
-      <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+        {label}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { gap: Spacing.lg, paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.xxl },
-  identity: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.sm },
-  avatar: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 28, fontWeight: "700" },
-  identityCopy: { flex: 1, minWidth: 0, gap: 2 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
-  username: { ...StudioType.title, flexShrink: 1 },
+  content: {
+    gap: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxl,
+  },
+  hero: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.sm },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontSize: 30, fontWeight: "700" },
+  heroCopy: { flex: 1, minWidth: 0, gap: 3 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
+  username: { ...StudioType.title, flex: 1 },
+  editButton: { width: 36, height: 36, borderRadius: BorderRadius.sm },
   email: { ...StudioType.detail },
-  level: { ...StudioType.detail, fontWeight: "600", marginTop: 2, fontVariant: ["tabular-nums"] },
+  levelBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+    marginTop: Spacing.xs,
+  },
+  levelText: { ...StudioType.detail, fontWeight: "700" },
+  levelXp: { ...StudioType.detail, fontVariant: ["tabular-nums"] },
   metricsGroup: { flexDirection: "row", marginHorizontal: 0 },
   metric: { flex: 1, alignItems: "center", gap: 2, paddingVertical: Spacing.md },
   metricValue: { ...StudioType.metric },
   metricLabel: { ...StudioType.detail },
-  preferenceRow: { minHeight: 60, paddingHorizontal: Spacing.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  rowIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  preferenceRow: {
+    minHeight: 68,
+    paddingHorizontal: Spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   preferenceCopy: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
   preferenceTitle: { ...StudioType.body },
-  signOut: { marginTop: Spacing.sm },
+  preferenceDetail: { ...StudioType.detail, marginTop: 1 },
   editor: { gap: Spacing.sm },
-  usernameInput: { minHeight: 52, borderWidth: StyleSheet.hairlineWidth, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, ...StudioType.body },
+  usernameInput: {
+    minHeight: 52,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    ...StudioType.body,
+  },
   error: { ...StudioType.detail },
   sheetButton: { flex: 1 },
 });

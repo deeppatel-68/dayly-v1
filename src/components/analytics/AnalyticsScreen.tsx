@@ -138,7 +138,7 @@ export default function AnalyticsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={styles.contentContainer}
       >
         <FadeInView delay={0 * STAGGER_STEP}>
