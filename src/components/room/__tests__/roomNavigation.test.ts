@@ -17,7 +17,7 @@ describe("room navigation", () => {
       expect(ROOM_CAMERA_PROFILES[view].target).toHaveLength(3);
       expect(ROOM_CAMERA_PROFILES[view].fov).toBeGreaterThan(0);
     }
-    expect(ROOM_CAMERA_PROFILES.home.position).toEqual([0.55, 1.42, 5.8]);
+    expect(ROOM_CAMERA_PROFILES.home.position).toEqual([0.5, 1.3, 5.75]);
     expect(
       ROOM_CAMERA_PROFILES.home.position[2] -
         ROOM_CAMERA_PROFILES.desk.position[2],

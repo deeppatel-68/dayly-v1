@@ -13,6 +13,9 @@ export interface EnvironmentProfile {
   hemisphereIntensity: number;
   key: RgbColor;
   keyIntensity: number;
+  // Cool spill from the window recess: strong on dark keyframes so the
+  // night sky reads as a light source, near-zero at midday.
+  windowIntensity: number;
   lampIntensity: number;
   stringIntensity: number;
   screenIntensity: number;
@@ -40,10 +43,13 @@ const NIGHT: Omit<TimeKeyframe, "minute"> = {
   celestialIntensity: 1.35,
   starOpacity: 1,
   hemisphereSky: rgb("#9AA8C1"),
-  hemisphereGround: rgb("#24211E"),
-  hemisphereIntensity: 0.62,
+  hemisphereGround: rgb("#2A2521"),
+  // Night fill is kept low so the lamp reads as THE light source (one warm
+  // pool, one cool window edge) instead of an evenly lit diorama.
+  hemisphereIntensity: 0.54,
   key: rgb("#D8DEEA"),
-  keyIntensity: 0.72,
+  keyIntensity: 0.62,
+  windowIntensity: 0.42,
   lampIntensity: 1.2,
   stringIntensity: 1.1,
   screenIntensity: 0.62,
@@ -58,10 +64,11 @@ const DAWN: Omit<TimeKeyframe, "minute"> = {
   celestialIntensity: 1.08,
   starOpacity: 0.25,
   hemisphereSky: rgb("#E0B8B4"),
-  hemisphereGround: rgb("#302722"),
+  hemisphereGround: rgb("#352C26"),
   hemisphereIntensity: 0.72,
   key: rgb("#FFD8B7"),
   keyIntensity: 0.9,
+  windowIntensity: 0.2,
   lampIntensity: 0.95,
   stringIntensity: 0.8,
   screenIntensity: 0.56,
@@ -76,10 +83,11 @@ const DAY: Omit<TimeKeyframe, "minute"> = {
   celestialIntensity: 0.88,
   starOpacity: 0,
   hemisphereSky: rgb("#D8E8F2"),
-  hemisphereGround: rgb("#39332D"),
+  hemisphereGround: rgb("#3E3831"),
   hemisphereIntensity: 0.84,
   key: rgb("#FFF2DC"),
   keyIntensity: 1.02,
+  windowIntensity: 0.05,
   lampIntensity: 0.55,
   stringIntensity: 0.42,
   screenIntensity: 0.5,
@@ -94,10 +102,11 @@ const DUSK: Omit<TimeKeyframe, "minute"> = {
   celestialIntensity: 1.02,
   starOpacity: 0.18,
   hemisphereSky: rgb("#C99DAB"),
-  hemisphereGround: rgb("#2C2522"),
+  hemisphereGround: rgb("#312A25"),
   hemisphereIntensity: 0.68,
   key: rgb("#F4C7AA"),
   keyIntensity: 0.82,
+  windowIntensity: 0.26,
   lampIntensity: 1.05,
   stringIntensity: 0.86,
   screenIntensity: 0.58,
@@ -156,6 +165,7 @@ function interpolate(
     ),
     key: mixColor(from.key, to.key, amount),
     keyIntensity: mix(from.keyIntensity, to.keyIntensity, amount),
+    windowIntensity: mix(from.windowIntensity, to.windowIntensity, amount),
     lampIntensity: mix(from.lampIntensity, to.lampIntensity, amount),
     stringIntensity: mix(from.stringIntensity, to.stringIntensity, amount),
     screenIntensity: mix(from.screenIntensity, to.screenIntensity, amount),
@@ -194,6 +204,7 @@ const REWARD_DAWN: EnvironmentProfile = {
   key: rgb("#FFE0BD"),
   hemisphereIntensity: 0.92,
   keyIntensity: 1.18,
+  windowIntensity: 0.16,
   lampIntensity: 1.55,
   stringIntensity: 1.8,
   screenIntensity: 0.76,

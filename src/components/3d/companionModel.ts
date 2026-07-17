@@ -11,19 +11,21 @@ import { PetRig } from "./petMotion";
 export const CORE_GLOW_SCALE = 2.6;
 export const HALO_GLOW_SCALE = 1.4;
 
-// Node names authored in the Blender source (assets/avatar/dayly-companion-build.py)
+// Shared-anatomy node names authored in the Blender source
+// (assets/avatar/dayly-companion-build.py). Face nodes (eyes/visor/blush) are
+// deliberately NOT listed here: they live inside the per-style Face_* groups
+// and travel with the active group in createCompanionInstance, so pruning a
+// style hides its whole face instead of leaving name-matched classic eyes
+// stranded (and always visible) in petGroup.
 export const PET_NODES = [
   "Body",
   "FacePanel",
-  "LeftEye",
-  "RightEye",
   "EnergyCore",
   "HaloCharm",
   "LeftFlipper",
   "RightFlipper",
   "LeftFoot",
   "RightFoot",
-  "VisorLip",
 ];
 
 // Parse the bundled GLB once. Scene instances deep-clone every geometry and
@@ -34,11 +36,10 @@ let companionSourcePromise: Promise<THREE.Group> | null = null;
 
 function parseCompanion(): Promise<THREE.Group> {
   return loadAsync(
-      // Metro resolves bundled assets via static require
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../../../assets/avatar/dayly-companion.glb")
-    )
-    .then((gltf: { scene: THREE.Group }) => gltf.scene);
+    // Metro resolves bundled assets via static require
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require("../../../assets/avatar/dayly-companion.glb"),
+  ).then((gltf: { scene: THREE.Group }) => gltf.scene);
 }
 
 export function loadCompanion(): Promise<THREE.Group> {
@@ -61,11 +62,8 @@ export interface CompanionOptions {
 
 // "classic" -> "Face_Classic". The shipped GLB will hold one Face_* group per
 // style with a single one visible; older/current GLBs have no Face_* nodes.
-function applyFaceStyle(root: THREE.Object3D, faceStyle: FaceStyle) {
-  const target = `Face_${faceStyle.charAt(0).toUpperCase()}${faceStyle.slice(1)}`;
-  root.traverse((node) => {
-    if (node.name.startsWith("Face_")) node.visible = node.name === target;
-  });
+function faceGroupName(faceStyle: FaceStyle): string {
+  return `Face_${faceStyle.charAt(0).toUpperCase()}${faceStyle.slice(1)}`;
 }
 
 export interface CompanionInstance {
@@ -80,14 +78,12 @@ export interface CompanionInstance {
 // per-instance materials cloned + tinted so scenes never cross-talk.
 export function createCompanionInstance(
   source: THREE.Group,
-  { accent, bodyColor, faceStyle, levelTier, streakTier }: CompanionOptions
+  { accent, bodyColor, faceStyle, levelTier, streakTier }: CompanionOptions,
 ): CompanionInstance {
   // expo-three may internally cache the parsed scene. Treat that source as
   // immutable and deep-clone all disposable resources for this GL context.
   const root = source.clone(true);
 
-  // Show only the selected face group; no-ops on GLBs without Face_* nodes.
-  applyFaceStyle(root, faceStyle);
   const ownedGeometries = new Set<THREE.BufferGeometry>();
   const ownedMaterials = new Set<THREE.Material>();
 
@@ -98,10 +94,10 @@ export function createCompanionInstance(
     ownedGeometries.add(obj.geometry);
     if (Array.isArray(obj.material)) {
       obj.material = obj.material.map((material: THREE.Material) =>
-        material.clone()
+        material.clone(),
       );
       obj.material.forEach((material: THREE.Material) =>
-        ownedMaterials.add(material)
+        ownedMaterials.add(material),
       );
     } else {
       obj.material = obj.material.clone();
@@ -109,19 +105,69 @@ export function createCompanionInstance(
     }
   });
 
+  // Keep only the active face style. The clone-traverse above already gave
+  // every mesh its OWN geometry/material, so disposing the four unused Face_*
+  // groups frees this instance's clones (never the shared source graph) and
+  // avoids retaining ~4 hidden faces per scene. The active group is reparented
+  // into petGroup below so it bobs/spins with the body.
+  const activeFaceName = faceGroupName(faceStyle);
+  let activeFace: THREE.Object3D | null = null;
+  const faceGroups: THREE.Object3D[] = [];
+  root.traverse((node) => {
+    if (node.name.startsWith("Face_")) faceGroups.push(node);
+  });
+  for (const group of faceGroups) {
+    if (group.name === activeFaceName) {
+      activeFace = group;
+      continue;
+    }
+    group.parent?.remove(group);
+    group.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      ownedGeometries.delete(obj.geometry);
+      obj.geometry.dispose();
+      (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach(
+        (material: THREE.Material) => {
+          ownedMaterials.delete(material);
+          material.dispose();
+        },
+      );
+    });
+  }
+
   const petGroup = new THREE.Group();
   const petNodes = PET_NODES.map((name) => root.getObjectByName(name)).filter(
-    (node): node is THREE.Object3D => Boolean(node)
+    (node): node is THREE.Object3D => Boolean(node),
   );
   petNodes.forEach((node) => petGroup.add(node));
 
+  // The active face follows the pet body (idle bob, sway, celebration spin).
+  // attach() preserves world transform across the reparent so the face keeps
+  // its authored placement relative to the head.
+  if (activeFace) {
+    root.updateWorldMatrix(true, true);
+    petGroup.attach(activeFace);
+  }
+
+  // Meshes of the active face (any style), used to bind + tint the eye glow
+  // and accent materials generically rather than by classic-only node names.
+  const faceMeshes: THREE.Mesh[] = [];
+  activeFace?.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) faceMeshes.push(obj);
+  });
+
+  // Only the classic style authors the canonical LeftEye/RightEye names the
+  // geometry-level rig scales for blink/expression; prefixed variant faces
+  // resolve to undefined here, so petMotion's eye squash simply no-ops on them
+  // (all lookups are null-guarded). Their emissive pulse still tracks via the
+  // shared eyeMat below.
   const leftEye = petGroup.getObjectByName("LeftEye") as THREE.Mesh | undefined;
-  const rightEye = petGroup.getObjectByName("RightEye") as THREE.Mesh | undefined;
+  const rightEye = petGroup.getObjectByName("RightEye") as
+    THREE.Mesh | undefined;
   const core = petGroup.getObjectByName("EnergyCore") as THREE.Mesh | undefined;
   const halo = petGroup.getObjectByName("HaloCharm") as THREE.Mesh | undefined;
   const leftFlipper = petGroup.getObjectByName("LeftFlipper");
   const rightFlipper = petGroup.getObjectByName("RightFlipper");
-  const visorLip = petGroup.getObjectByName("VisorLip") as THREE.Mesh | undefined;
   const ring = root.getObjectByName("PlatformRing") as THREE.Mesh | undefined;
 
   const materialOf = (mesh?: THREE.Mesh) =>
@@ -129,12 +175,35 @@ export function createCompanionInstance(
       ? (mesh.material as THREE.MeshStandardMaterial)
       : null;
 
-  const eyeMat = materialOf(leftEye);
-  if (rightEye && eyeMat) rightEye.material = eyeMat;
+  // Eye glow: the active face's warm eye-white material (Eye_White_Emission,
+  // suffixed on Eve/Joy). Screen has no eye-white mesh, so this stays null.
+  const eyeMesh = faceMeshes.find(
+    (mesh) =>
+      !Array.isArray(mesh.material) &&
+      (mesh.material as THREE.Material).name.startsWith("Eye_White_Emission"),
+  );
+  const eyeMat = eyeMesh
+    ? (eyeMesh.material as THREE.MeshStandardMaterial)
+    : null;
   const coreMat = materialOf(core);
   const accentMat = materialOf(ring);
   if (halo && accentMat) halo.material = accentMat;
-  if (visorLip && accentMat) visorLip.material = accentMat;
+
+  // Share the tinted eye + accent materials across every matching mesh of the
+  // active face so all eyes glow together and accent parts (incl. the classic
+  // VisorLip curve) track the user's customisation on any style.
+  for (const obj of faceMeshes) {
+    if (Array.isArray(obj.material)) continue;
+    const matName = (obj.material as THREE.Material).name;
+    if (eyeMat && matName.startsWith("Eye_White_Emission")) {
+      obj.material = eyeMat;
+    } else if (
+      accentMat &&
+      (matName === "Accent_Orange_Emission" || matName === "LED_Coral_Emission")
+    ) {
+      obj.material = accentMat;
+    }
+  }
 
   if (eyeMat) {
     eyeMat.color.set(0xffe3bd);
@@ -155,10 +224,30 @@ export function createCompanionInstance(
     mat.emissiveIntensity = 0.12;
     mat.envMapIntensity = 0.25;
   }
+
+  // Shared (non-face) accent parts — halo beads, pod inner ring — must track
+  // the same customisation colour or they keep the GLB's baked orange. The
+  // EnergyCore is excluded: its material stays independent so the heartbeat
+  // pulse can run at its own intensity.
+  root.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh) || Array.isArray(obj.material)) return;
+    if (obj === core) return;
+    const matName = (obj.material as THREE.Material).name;
+    if (accentMat && matName === "Accent_Orange_Emission") {
+      obj.material = accentMat;
+    } else if (matName.startsWith("Platform_Inner_Glow")) {
+      const innerMat = obj.material as THREE.MeshStandardMaterial;
+      innerMat.color.set(accent);
+      innerMat.emissive.set(accent);
+      innerMat.emissiveIntensity = 0.08;
+    }
+  });
+
   if (levelTier >= 3 && halo) halo.scale.setScalar(1.25);
 
   if (leftFlipper) leftFlipper.userData.baseRotationZ = leftFlipper.rotation.z;
-  if (rightFlipper) rightFlipper.userData.baseRotationZ = rightFlipper.rotation.z;
+  if (rightFlipper)
+    rightFlipper.userData.baseRotationZ = rightFlipper.rotation.z;
 
   // Fake-bloom halos: one glow texture per instance (per-GL-context rule), two
   // additive sprites parented to the halo + chest core so they track position.

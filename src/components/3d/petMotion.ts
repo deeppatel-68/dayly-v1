@@ -66,6 +66,25 @@ const BOB_AMP = { idle: 0.02, focus: 0.014, sleepy: 0.012 };
 // — a subtle wave is preferred over any body intersection.
 const FLIPPER_WAVE = { celebrate: 0.32, reaction: 0.4 };
 
+// Idle micro-motions: a rare "settle" squash-and-recover, a quick pupil
+// dart, and the halo trailing the body sway. Periods are deliberately
+// non-round so the beats don't sync with the bob/blink cycles.
+export const SETTLE_MICRO = { period: 16.3, duration: 0.9, squash: 0.03 };
+export const EYE_DART_MICRO = { period: 9.7, duration: 0.22, offset: 0.01 };
+// The halo is light jewellery: it lags the body sway by ~120ms, which sells
+// mass without a physics sim.
+export const HALO_LAG_SECONDS = 0.12;
+
+// Module-level (not a per-frame closure): the ambient yaw sway at a given
+// time. Focus locks the body forward, so sway is zero there.
+const swayAt = (
+  time: number,
+  focused: boolean,
+  ambientStrength: number,
+  decorationMotion: number,
+) =>
+  focused ? 0 : Math.sin(time * 0.48) * 0.2 * ambientStrength * decorationMotion;
+
 export interface PetMotionOptions {
   levelTier: number; // 0..3
   streakTier: number; // 0..3
@@ -158,8 +177,10 @@ export function createPetMotionController(options: PetMotionOptions) {
 
     // Bob: gentle idle float, calmer in focus, bouncy when celebrating
     if (celebrating && !reducedMotion) {
+      // Ride the hover baseline so the bottom of each celebration bounce lands
+      // at hover height (never feet-in-pod), matching the idle/focus/sleepy bobs.
       petGroup.position.y =
-        baseY + Math.abs(Math.sin(animationTime * 3.2)) * 0.1;
+        baseY + HOVER_BASELINE + Math.abs(Math.sin(animationTime * 3.2)) * 0.1;
     } else {
       const bobAmp =
         (state === "focus"
@@ -183,13 +204,13 @@ export function createPetMotionController(options: PetMotionOptions) {
       rewardSpin = THREE.MathUtils.lerp(rewardSpin, target, returnAlpha);
       if (Math.abs(target - rewardSpin) < 0.001) rewardSpin = target;
     }
-    const sway =
-      state === "focus"
-        ? 0
-        : Math.sin(animationTime * 0.48) *
-          0.2 *
-          ambientStrength *
-          decorationMotion;
+    const focused = state === "focus";
+    const sway = swayAt(
+      animationTime,
+      focused,
+      ambientStrength,
+      decorationMotion,
+    );
     petGroup.rotation.y = sway + rewardSpin;
     const moodTilt =
       mood === "curious"
@@ -216,11 +237,23 @@ export function createPetMotionController(options: PetMotionOptions) {
       (bounceSpring * 0.38 - bounceImpact * 0.08) * bounceStrength;
     const depthCompression =
       (bounceImpact * 0.06 - bounceSpring * 0.18) * bounceStrength;
+    // Rare idle settle: a soft squash-and-recover, like shifting weight.
+    const settleCycle = animationTime % SETTLE_MICRO.period;
+    const settleStart = SETTLE_MICRO.period - SETTLE_MICRO.duration;
+    const settleEase =
+      state === "idle" && !reacting && settleCycle > settleStart
+        ? Math.sin(
+            ((settleCycle - settleStart) / SETTLE_MICRO.duration) * Math.PI
+          ) *
+          ambientStrength
+        : 0;
+    const settleSquash = settleEase * SETTLE_MICRO.squash;
     petGroup.scale.set(
-      scale + squash,
-      scale + breathing + stretch,
-      scale + depthCompression
+      scale + squash + settleSquash * 0.65,
+      scale + breathing + stretch - settleSquash,
+      scale + depthCompression + settleSquash * 0.65
     );
+    petGroup.position.y -= settleEase * 0.008;
 
     // Energy core heartbeat: quickens in focus, flashes on celebration.
     if (rig.coreMat) {
@@ -313,11 +346,24 @@ export function createPetMotionController(options: PetMotionOptions) {
     }
 
     if (rig.leftPupil && rig.rightPupil) {
+      // Quick micro-dart layered over the slow glance; direction alternates
+      // per cycle so it reads as curiosity, not a tic.
+      const dartCycle = animationTime % EYE_DART_MICRO.period;
+      const dartDirection =
+        Math.floor(animationTime / EYE_DART_MICRO.period) % 2 === 0 ? 1 : -1;
+      const dart =
+        state === "idle" && dartCycle < EYE_DART_MICRO.duration
+          ? Math.sin((dartCycle / EYE_DART_MICRO.duration) * Math.PI) *
+            EYE_DART_MICRO.offset *
+            dartDirection *
+            ambientStrength
+          : 0;
       const glance =
         Math.sin(animationTime * 0.43) *
-        0.014 *
-        ambientStrength *
-        decorationMotion;
+          0.014 *
+          ambientStrength *
+          decorationMotion +
+        dart;
       const lift = mood === "curious" ? 0.008 : mood === "sleepy" ? -0.012 : 0;
       const leftBase =
         (rig.leftPupil.userData.basePosition as THREE.Vector3 | undefined) ??
@@ -467,7 +513,17 @@ export function createPetMotionController(options: PetMotionOptions) {
     if (rig.halo) {
       rig.halo.rotation.x =
         1.05 + Math.sin(animationTime * 0.8) * 0.05 * ambientStrength;
-      rig.halo.rotation.y = 0.12;
+      // Secondary motion: trail the body sway slightly (the halo inherits the
+      // pet group's rotation, so the offset is delayed-minus-current sway).
+      rig.halo.rotation.y =
+        0.12 +
+        (swayAt(
+          animationTime - HALO_LAG_SECONDS,
+          focused,
+          ambientStrength,
+          decorationMotion,
+        ) -
+          sway);
       rig.halo.rotation.z =
         -0.16 +
         animationTime *

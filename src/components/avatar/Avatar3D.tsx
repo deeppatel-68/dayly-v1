@@ -1,4 +1,7 @@
-import { createProceduralCompanion } from "@/components/3d/proceduralCompanion";
+import {
+  createCompanionInstance,
+  loadCompanion,
+} from "@/components/3d/companionModel";
 import {
   attachEquipment,
   createEquipmentMaterials,
@@ -95,8 +98,11 @@ export default function Avatar3D(props: AvatarRendererProps) {
     reactRef.current(reactionToken.reaction);
   }, [reactionToken]);
 
-  // Recreate the GL context only on customisation/theme/tier/equip changes
-  const sceneKey = `${accentColor}|${bodyColor}|${colorScheme}|L${levelTier}|S${streakTier}|${equippedItems.join("+")}`;
+  // Recreate the GL context only on customisation/theme/tier/equip changes.
+  // faceStyle is part of the key so switching face variants rebuilds the scene
+  // and re-prunes to the active Face_* group (companionModel), matching how
+  // colour changes work.
+  const sceneKey = `${accentColor}|${bodyColor}|${faceStyle}|${colorScheme}|L${levelTier}|S${streakTier}|${equippedItems.join("+")}`;
 
   const stopAndDispose = () => {
     setupGenerationRef.current += 1;
@@ -130,113 +136,143 @@ export default function Avatar3D(props: AvatarRendererProps) {
       const width = gl.drawingBufferWidth;
       const height = gl.drawingBufferHeight;
 
-      const renderer = createSceneRenderer({
-        gl,
-        clearColor: variant === "shop" ? "#181715" : colors.background,
-      });
-
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-      const orbitTarget = new THREE.Vector3(
-        0,
-        variant === "shop" ? 0.7 : 0.66,
-        0,
-      );
-      if (variant === "shop") {
-        camera.position.set(0, 0.9, 2.55);
-      } else {
-        camera.position.set(0, 0.94, 2.25);
-      }
-      const orbit = createOrbitRig({
-        target: orbitTarget,
-        radius: variant === "shop" ? 2.55 : 2.25,
-        height: variant === "shop" ? 0.9 : 0.94,
-        ...(variant === "shop"
-          ? {
-              minElevation: (-12 * Math.PI) / 180,
-              maxElevation: (12 * Math.PI) / 180,
-            }
-          : {
-              minAzimuth: -0.45,
-              maxAzimuth: 0.45,
-              easeBackAfter: 1.5,
-            }),
-      });
-      orbit.applyTo(camera, 0);
-      orbitRef.current = orbit;
-
-      const accent = new THREE.Color(accentColor);
-      const motion = createPetMotionController({ levelTier, streakTier });
-
-      createPetLightRig(scene, accent, motion.streakBoost);
-
-      const companion = createProceduralCompanion({
-        accent,
-        bodyColor,
-        faceStyle,
-        levelTier,
-        streakTier,
-      });
-      scene.add(companion.rig.petGroup, companion.root);
-      petTapRef.current = createPetTapDetector(camera, companion.rig.petGroup);
-      reactRef.current = motion.react;
-      const pendingReaction = reactionTokenRef.current;
-      if (
-        pendingReaction &&
-        pendingReaction.id !== appliedReactionIdRef.current
-      ) {
-        appliedReactionIdRef.current = pendingReaction.id;
-        motion.react(pendingReaction.reaction);
-      }
-
-      // Equipped shop items: wearables move with the pet, decorations sit
-      // around the pod. Room-slot items only render in the study room scene.
-      const equipMaterials = createEquipmentMaterials(accent);
-      const equipped = attachEquipment(
-        equippedItems,
-        ["pet", "platform"],
-        equipMaterials,
-        { pet: companion.rig.petGroup, platform: companion.root },
-      );
-
-      // Grounds the floating pet on its pod (puck top sits at y≈0.095)
-      const shadow = createContactShadow(0.5);
-      shadow.group.position.y = 0.096;
-      scene.add(shadow.group);
-
-      const clock = new THREE.Clock();
-      let didNotifyReady = false;
-      const animate = () => {
-        frameRef.current = setTimeout(
-          animate,
-          appActiveRef.current ? 1000 / 30 : 250,
-        );
-        if (!appActiveRef.current) return;
-        const t = clock.getElapsedTime();
-        orbit.applyTo(camera, t);
-        motion.apply(companion.rig, stateRef.current, t, moodRef.current, {
-          reducedMotion: reducedMotionRef.current,
-        });
-        shadow.setLift(companion.rig.petGroup.position.y);
-        renderer.render(scene, camera);
-        gl.endFrameEXP();
-        if (!didNotifyReady) {
-          didNotifyReady = true;
-          onReadyRef.current?.();
-        }
-      };
-      animate();
-
-      cleanupRef.current = () => {
+      // Track every disposable as it is created so both normal teardown and a
+      // mid-construction throw release exactly what exists (LIFO order).
+      const disposables: (() => void)[] = [];
+      const teardown = () => {
         orbitRef.current = null;
         petTapRef.current = null;
         reactRef.current = null;
-        shadow.dispose();
-        disposeEquipment(equipped);
-        equipMaterials.dispose();
-        companion.dispose();
-        renderer.dispose();
+        while (disposables.length) disposables.pop()?.();
       };
+      cleanupRef.current = teardown;
+
+      try {
+        const renderer = createSceneRenderer({
+          gl,
+          clearColor: variant === "shop" ? "#181715" : colors.background,
+        });
+        disposables.push(() => renderer.dispose());
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(
+          45,
+          width / height,
+          0.1,
+          100,
+        );
+        const orbitTarget = new THREE.Vector3(
+          0,
+          variant === "shop" ? 0.7 : 0.66,
+          0,
+        );
+        if (variant === "shop") {
+          camera.position.set(0, 0.9, 2.55);
+        } else {
+          camera.position.set(0, 0.94, 2.25);
+        }
+        const orbit = createOrbitRig({
+          target: orbitTarget,
+          radius: variant === "shop" ? 2.55 : 2.25,
+          height: variant === "shop" ? 0.9 : 0.94,
+          ...(variant === "shop"
+            ? {
+                minElevation: (-12 * Math.PI) / 180,
+                maxElevation: (12 * Math.PI) / 180,
+              }
+            : {
+                minAzimuth: -0.45,
+                maxAzimuth: 0.45,
+                easeBackAfter: 1.5,
+              }),
+        });
+        orbit.applyTo(camera, 0);
+        orbitRef.current = orbit;
+
+        const accent = new THREE.Color(accentColor);
+        const motion = createPetMotionController({ levelTier, streakTier });
+
+        createPetLightRig(scene, accent, motion.streakBoost);
+
+        // Load + parse the GLB per scene mount. loadCompanion caches the parsed
+        // source graph, but createCompanionInstance deep-clones every geometry
+        // and material (the GLB carries no textures), so each GL context owns
+        // fully independent resources — no cross-context blanking.
+        const source = await loadCompanion();
+        if (generation !== setupGenerationRef.current) {
+          teardown();
+          return;
+        }
+        const companion = createCompanionInstance(source, {
+          accent,
+          bodyColor,
+          faceStyle,
+          levelTier,
+          streakTier,
+        });
+        disposables.push(() => companion.dispose());
+        scene.add(companion.rig.petGroup, companion.root);
+        petTapRef.current = createPetTapDetector(
+          camera,
+          companion.rig.petGroup,
+        );
+        reactRef.current = motion.react;
+        const pendingReaction = reactionTokenRef.current;
+        if (
+          pendingReaction &&
+          pendingReaction.id !== appliedReactionIdRef.current
+        ) {
+          appliedReactionIdRef.current = pendingReaction.id;
+          motion.react(pendingReaction.reaction);
+        }
+
+        // Equipped shop items: wearables move with the pet, decorations sit
+        // around the pod. Room-slot items only render in the study room scene.
+        const equipMaterials = createEquipmentMaterials(accent);
+        disposables.push(() => equipMaterials.dispose());
+        const equipped = attachEquipment(
+          equippedItems,
+          ["pet", "platform"],
+          equipMaterials,
+          { pet: companion.rig.petGroup, platform: companion.root },
+        );
+        disposables.push(() => disposeEquipment(equipped));
+
+        // Grounds the floating pet on its pod; 0.0985 clears the pod's new
+        // inner glow ring (tops out at 0.098).
+        const shadow = createContactShadow(0.5);
+        shadow.group.position.y = 0.0985;
+        scene.add(shadow.group);
+        disposables.push(() => shadow.dispose());
+
+        const clock = new THREE.Clock();
+        let didNotifyReady = false;
+        const animate = () => {
+          frameRef.current = setTimeout(
+            animate,
+            appActiveRef.current ? 1000 / 30 : 250,
+          );
+          if (!appActiveRef.current) return;
+          const t = clock.getElapsedTime();
+          orbit.applyTo(camera, t);
+          motion.apply(companion.rig, stateRef.current, t, moodRef.current, {
+            reducedMotion: reducedMotionRef.current,
+          });
+          shadow.setLift(companion.rig.petGroup.position.y);
+          renderer.render(scene, camera);
+          gl.endFrameEXP();
+          if (!didNotifyReady) {
+            didNotifyReady = true;
+            onReadyRef.current?.();
+          }
+        };
+        animate();
+      } catch (error) {
+        // Dispose whatever was constructed before the failure, then rethrow so
+        // the outer handler swaps in the fallback renderer.
+        teardown();
+        throw error;
+      }
     };
 
     setup().catch((error) => {
