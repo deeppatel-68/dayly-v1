@@ -6,7 +6,6 @@ import MomentumCard from "@/components/analytics/sections/MomentumCard";
 import PeriodSelector from "@/components/analytics/PeriodSelector";
 import PeriodSummaryCard from "@/components/analytics/sections/PeriodSummaryCard";
 import FadeInView from "@/components/common/FadeInView";
-import TopBar from "@/components/common/TopBar";
 import { Spacing } from "@/constants/Spacing";
 import { useAuth } from "@/context/AuthContext";
 import { useCharacter } from "@/context/CharacterContext";
@@ -142,12 +141,6 @@ export default function AnalyticsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.contentContainer}
       >
-        <TopBar
-          eyebrow="Growth record"
-          title="Progress"
-          subtitle="See how your habits and focus compound over time."
-        />
-
         <FadeInView delay={0 * STAGGER_STEP}>
           <MomentumCard
             currentStreak={currentStreak}

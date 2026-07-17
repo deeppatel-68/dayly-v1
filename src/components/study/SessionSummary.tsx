@@ -1,4 +1,5 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useCharacter } from "@/context/CharacterContext";
 import { useTheme } from "@/context/ThemeContext";
 import { getLevelProgress } from "@/utils/xp";
@@ -93,8 +94,8 @@ export default function SessionSummary({
         >
           {leveledUp && (
             <View style={[styles.levelUpPill, { backgroundColor: colors.accent }]}>
-              <Ionicons name="arrow-up" size={14} color="#ffffff" />
-              <Text style={styles.levelUpText}>LEVEL UP</Text>
+              <Ionicons name="arrow-up" size={14} color={colors.onAccent} />
+              <Text style={[styles.levelUpText, { color: colors.onAccent }]}>LEVEL UP</Text>
             </View>
           )}
 
@@ -236,7 +237,7 @@ export default function SessionSummary({
               { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 },
             ]}
           >
-            <Text style={styles.continueText}>Continue</Text>
+            <Text style={[styles.continueText, { color: colors.onAccent }]}>Continue</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -270,33 +271,30 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   levelUpText: {
-    fontSize: 12,
-    fontFamily: "Outfit-Bold",
-    color: "#ffffff",
-    letterSpacing: 1,
+    ...StudioType.detail,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
   title: {
-    fontSize: 22,
-    fontFamily: "Outfit-Bold",
-    letterSpacing: 0.5,
+    ...StudioType.title,
     marginBottom: Spacing.lg,
     textAlign: "center",
   },
   duration: {
     fontSize: 56,
-    fontFamily: "Outfit-Bold",
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
     lineHeight: 62,
   },
   durationLabel: {
-    fontSize: 12,
-    fontFamily: "Outfit-Medium",
-    letterSpacing: 2,
+    ...StudioType.detail,
+    fontWeight: "600",
+    letterSpacing: 0.5,
     marginTop: Spacing.xs,
     marginBottom: Spacing.xs,
   },
   savedText: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
     marginBottom: Spacing.lg,
   },
   rewardsRow: {
@@ -314,8 +312,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   rewardText: {
-    fontSize: 16,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.bodyStrong,
   },
   totalsGrid: {
     width: "100%",
@@ -332,12 +329,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   totalValue: {
-    fontSize: 16,
-    fontFamily: "Outfit-Bold",
+    ...StudioType.bodyStrong,
+    fontVariant: ["tabular-nums"],
   },
   totalLabel: {
-    fontSize: 10,
-    fontFamily: "Outfit-Medium",
+    ...StudioType.detail,
     marginTop: 2,
   },
   levelSection: {
@@ -351,12 +347,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   levelLabel: {
-    fontSize: 14,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.bodyStrong,
   },
   levelXp: {
-    fontSize: 13,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
   },
   track: {
     height: 8,
@@ -374,8 +368,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   continueText: {
-    fontSize: 16,
-    fontFamily: "Outfit-SemiBold",
-    color: "#ffffff",
+    ...StudioType.bodyStrong,
   },
 });

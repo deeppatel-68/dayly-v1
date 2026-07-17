@@ -1,5 +1,6 @@
 import SessionSummary from "@/components/study/SessionSummary";
-import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { BorderRadius, Spacing, TouchTarget } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
@@ -354,7 +355,7 @@ export default function FocusTimer({
                   : "play"
               }
               size={immersive ? 28 : 40}
-              color={colors.background}
+              color={colors.onAccent}
               style={isRunning ? {} : { marginLeft: 4 }}
             />
           </Pressable>
@@ -423,17 +424,17 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 56,
-    fontFamily: "Outfit-Bold",
-    letterSpacing: 2,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   timerTextImmersive: {
     fontSize: 34,
     letterSpacing: 0,
   },
   phaseText: {
-    fontSize: 12,
-    fontFamily: "Outfit-Medium",
-    letterSpacing: 2,
+    ...StudioType.detail,
+    fontWeight: "600",
+    letterSpacing: 0.5,
     marginTop: Spacing.xs,
   },
   phaseTextImmersive: {
@@ -442,8 +443,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   xpText: {
-    fontSize: 14,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.detail,
+    fontWeight: "600",
     marginTop: Spacing.xs,
   },
   xpTextImmersive: {
@@ -459,26 +460,25 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   finishButton: {
+    minHeight: TouchTarget,
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
   finishText: {
-    fontSize: 14,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 0.5,
+    ...StudioType.bodyStrong,
   },
   playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#D97757",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.22,
     shadowRadius: 10,

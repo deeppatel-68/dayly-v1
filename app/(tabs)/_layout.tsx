@@ -8,24 +8,28 @@ import {
 } from "expo-router/unstable-native-tabs";
 
 export default function TabLayout() {
-  const { colors } = useTheme();
+  const { colorScheme, colors } = useTheme();
 
   return (
     <NativeTabs
       tintColor={colors.accent}
       iconColor={{ default: colors.textSecondary, selected: colors.accent }}
       labelStyle={{
-        default: { color: colors.textSecondary, fontFamily: "Outfit-Medium" },
-        selected: { color: colors.accent, fontFamily: "Outfit-SemiBold" },
+        default: { color: colors.textSecondary },
+        selected: { color: colors.accent },
       }}
-      backgroundColor={colors.card}
-      blurEffect="systemChromeMaterialDark"
-      shadowColor={colors.border}
+      backgroundColor={colors.surface}
+      blurEffect={
+        colorScheme === "dark"
+          ? "systemChromeMaterialDark"
+          : "systemChromeMaterialLight"
+      }
+      shadowColor={colors.separator}
       indicatorColor={colors.completedBackground}
       minimizeBehavior="onScrollDown"
       disableTransparentOnScrollEdge
     >
-      <NativeTabs.Trigger name="index">
+      <NativeTabs.Trigger name="home">
         <Label>Home</Label>
         <Icon
           sf={{ default: "house", selected: "house.fill" }}

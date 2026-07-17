@@ -1,4 +1,5 @@
-import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { BorderRadius, Spacing, TouchTarget } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -64,16 +65,11 @@ export default function SessionTasks() {
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-        SESSION TASKS
-      </Text>
-
-      {/* Add Task Input */}
       <View
         style={[
           styles.addTaskContainer,
           {
-            backgroundColor: colors.card,
+            backgroundColor: colors.surfaceRaised,
             borderColor: colors.border,
           },
         ]}
@@ -81,7 +77,7 @@ export default function SessionTasks() {
         <TextInput
           style={[styles.addTaskInput, { color: colors.text }]}
           placeholder="Add a task..."
-          placeholderTextColor={colors.textSecondary}
+          placeholderTextColor={colors.textTertiary}
           value={newTextTask}
           onChangeText={setNewTextTask}
           onSubmitEditing={addTask}
@@ -98,7 +94,7 @@ export default function SessionTasks() {
           onPress={addTask}
           disabled={newTextTask.trim() === ""}
         >
-          <Ionicons name="add" size={24} color={colors.background} />
+          <Ionicons name="add" size={24} color={colors.onAccent} />
         </Pressable>
       </View>
 
@@ -107,7 +103,7 @@ export default function SessionTasks() {
         style={[
           styles.tasksContainer,
           {
-            backgroundColor: colors.card,
+            backgroundColor: colors.surface,
             borderColor: colors.border,
           },
         ]}
@@ -159,7 +155,7 @@ export default function SessionTasks() {
                     <Ionicons
                       name="checkmark"
                       size={16}
-                      color={colors.background}
+                      color={colors.onAccent}
                     />
                   )}
                 </View>
@@ -209,13 +205,7 @@ export default function SessionTasks() {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontFamily: "Outfit-Medium",
-    letterSpacing: 2,
-    marginBottom: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   // Add Task Styles
   addTaskContainer: {
@@ -230,14 +220,13 @@ const styles = StyleSheet.create({
   },
   addTaskInput: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: "Outfit-Medium",
+    ...StudioType.body,
     paddingVertical: Spacing.sm,
   },
   addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: TouchTarget,
+    height: TouchTarget,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -271,15 +260,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   taskText: {
-    fontSize: 15,
-    fontFamily: "Outfit-Medium",
-    letterSpacing: 0.5,
+    ...StudioType.body,
     flex: 1,
   },
   deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: TouchTarget,
+    height: TouchTarget,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -289,8 +276,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xl * 2,
   },
   emptyText: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.body,
     marginTop: Spacing.sm,
   },
 });

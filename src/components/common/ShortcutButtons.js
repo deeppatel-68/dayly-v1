@@ -16,7 +16,7 @@ function ShortcutButtons() {
       label: "Study",
       onPress: () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push("/(tabs)/study");
+        router.push("/study");
       },
     },
     {
@@ -24,7 +24,7 @@ function ShortcutButtons() {
       label: "Habits",
       onPress: () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push("/(tabs)/habits");
+        router.push("/habits");
       },
     },
     {
@@ -32,7 +32,7 @@ function ShortcutButtons() {
       label: "Stats",
       onPress: () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push("/(tabs)/stats");
+        router.push("/stats");
       },
     },
   ];
