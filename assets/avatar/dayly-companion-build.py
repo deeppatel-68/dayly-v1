@@ -48,11 +48,16 @@ mat_eye_joy = make_mat("Eye_White_Emission_Joy", (1.0, 0.86, 0.66), 0.42,
                        emission=(1.0, 0.72, 0.44), emission_strength=2.8)
 mat_pupil = make_mat("Pupil_Dark", (0.015, 0.015, 0.02), 0.25)
 mat_catch = make_mat("Catchlight_White", (1.0, 1.0, 1.0), 0.3,
-                     emission=(1.0, 1.0, 1.0), emission_strength=2.5)
+                     emission=(1.0, 1.0, 1.0), emission_strength=2.2)
 mat_blush = make_mat("Blush_Peach", (0.78, 0.28, 0.20), 0.7,
-                     emission=(0.80, 0.32, 0.22), emission_strength=0.25)
+                     emission=(0.80, 0.32, 0.22), emission_strength=0.12)
 mat_accent = make_mat("Accent_Orange_Emission", ORANGE, 0.4,
                       emission=ORANGE, emission_strength=4.5)
+# Chest core runs hotter than the shared accent so the glow hierarchy reads
+# core > halo > platform ring > inner ring. Runtime binds this by mesh
+# (materialOf(core)), not by name, so a dedicated material is safe.
+mat_core = make_mat("Core_Orange_Emission", ORANGE, 0.4,
+                    emission=ORANGE, emission_strength=6.0)
 mat_platform = make_mat("Platform_Dark", (0.02, 0.02, 0.022), 0.75)
 # Variant B: OLED-style screen face.
 mat_screen = make_mat("Screen_Glossy_Black", (0.004, 0.004, 0.006), 0.06,
@@ -127,14 +132,15 @@ body.location = (0, 0, 0.63)
 mesh.materials.append(mat_body)
 mesh.materials.append(mat_base)
 for poly in mesh.polygons:
-    if poly.center.z < -0.19:  # local space, pre-scale; smaller dark base cap
+    if poly.center.z < -0.28:  # local space, pre-scale; low foot-shadow zone,
+        # not a garment line — the dark cap should visually merge with the pod
         poly.material_index = 1
 smooth(body)
 
 # ---------- FacePanel: wide glossy visor recess, shared by every face -------
 # Kept as the classic dark visor. The Screen face lays its own glossy OLED panel
 # on top; every other face reads its features against this recess.
-bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=28, radius=0.42,
+bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=44, radius=0.42,
                                      location=(0, -0.34, 0.81))
 face = bpy.context.active_object
 face.name = "FacePanel"
@@ -145,11 +151,11 @@ smooth(face)
 # VisorRim: charcoal lip around the visor so the panel reads as a moulded
 # inset seam instead of a raw sphere intersection. Child of FacePanel so the
 # runtime petGroup reparent carries it.
-bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=28, radius=0.42,
-                                     location=(0, -0.326, 0.81))
+bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=44, radius=0.42,
+                                     location=(0, -0.320, 0.81))
 visor_rim = bpy.context.active_object
 visor_rim.name = "VisorRim"
-visor_rim.scale = (1.16, 0.42, 0.645)
+visor_rim.scale = (1.17, 0.42, 0.66)
 visor_rim.data.materials.append(mat_body)
 smooth(visor_rim)
 parent_to(visor_rim, face)
@@ -180,8 +186,8 @@ for name, x, side in (("LeftPupil", -0.165, "LeftEye"),
                       segments=16, ring_count=10, mat=mat_pupil)
     parent_to(pupil, classic_eyes[side])
 
-for name, x, r, side in (("LeftCatchlight", -0.192, 0.023, "LeftEye"),
-                         ("RightCatchlight", 0.138, 0.019, "RightEye")):
+for name, x, r, side in (("LeftCatchlight", -0.190, 0.017, "LeftEye"),
+                         ("RightCatchlight", 0.140, 0.014, "RightEye")):
     catch = uv_sphere(name, (x, -0.532, 0.852), r, segments=12, ring_count=8,
                       mat=mat_catch)
     parent_to(catch, classic_eyes[side])
@@ -189,12 +195,12 @@ for name, x, r, side in (("LeftCatchlight", -0.192, 0.023, "LeftEye"),
 # Secondary low catchlights: tiny wet-eye sparkle opposite the main highlight.
 for name, x, side in (("LeftCatchlight2", -0.136, "LeftEye"),
                       ("RightCatchlight2", 0.194, "RightEye")):
-    catch = uv_sphere(name, (x, -0.534, 0.800), 0.011, segments=10, ring_count=6,
+    catch = uv_sphere(name, (x, -0.534, 0.800), 0.008, segments=10, ring_count=6,
                       mat=mat_catch)
     parent_to(catch, classic_eyes[side])
 
 for name, x in (("LeftBlush", -0.30), ("RightBlush", 0.30)):
-    blush = uv_sphere(name, (x, -0.487, 0.755), 0.045, scale=(1.0, 0.3, 0.7),
+    blush = uv_sphere(name, (x, -0.487, 0.755), 0.037, scale=(1.0, 0.3, 0.7),
                       segments=14, ring_count=8, mat=mat_blush)
     parent_to(blush, face_classic)
 
@@ -396,8 +402,22 @@ joy_mouth.data.materials.append(mat_accent)
 parent_to(joy_mouth, face_joy)
 
 # ============================================================= SHARED ANATOMY
-# ---------- EnergyCore: small framed heart on the chest ----------
-core = uv_sphere("EnergyCore", (0, -0.43, 0.36), 0.055, mat=mat_accent)
+# ---------- EnergyCore: framed heart on the chest ----------
+core = uv_sphere("EnergyCore", (0, -0.43, 0.36), 0.068, mat=mat_core)
+
+# CoreBezel: recessed charcoal ring around the core so it reads as a designed,
+# moulded element rather than a loose dot. Child of Body so the runtime
+# petGroup reparent carries it with the pet. Torus axis aligned to the local
+# chest surface normal (approx (0, -0.85, -0.53) -> rot.x ~= 2.13 rad).
+bpy.ops.mesh.primitive_torus_add(major_radius=0.088, minor_radius=0.020,
+                                 major_segments=36, minor_segments=12,
+                                 location=(0, -0.422, 0.365),
+                                 rotation=(2.13, 0, 0))
+core_bezel = bpy.context.active_object
+core_bezel.name = "CoreBezel"
+core_bezel.data.materials.append(mat_body)
+smooth(core_bezel)
+parent_to(core_bezel, body)
 
 # ---------- HaloCharm: larger, thinner, tilted collectible ring ----------
 bpy.ops.mesh.primitive_torus_add(major_radius=0.14, minor_radius=0.011,
@@ -476,7 +496,7 @@ smooth(ring)
 
 # ---------- PlatformInnerRing: faint glow ring inset on the top tier ----------
 mat_inner_glow = make_mat("Platform_Inner_Glow", ORANGE, 0.5,
-                          emission=ORANGE, emission_strength=1.1)
+                          emission=ORANGE, emission_strength=0.7)
 bpy.ops.mesh.primitive_torus_add(major_radius=0.50, minor_radius=0.007,
                                  major_segments=48, minor_segments=8,
                                  location=(0, 0, 0.091))
@@ -488,7 +508,7 @@ smooth(inner_ring)
 # ---------- object bookkeeping ----------
 FACE_GROUPS = ["Face_Classic", "Face_Eve", "Face_Screen", "Face_Kirby", "Face_Joy"]
 
-SHARED_OBJECTS = ["Body", "FacePanel", "VisorRim", "EnergyCore",
+SHARED_OBJECTS = ["Body", "FacePanel", "VisorRim", "EnergyCore", "CoreBezel",
                   "HaloCharm", "HaloBead", "HaloBead2", "LeftFlipper",
                   "RightFlipper", "LeftFoot", "RightFoot", "Platform",
                   "PlatformRing", "PlatformInnerRing"]

@@ -33,6 +33,15 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Local agent tooling and Blender recovery files
+.superpowers/
+.mcp.json
+.claude/agents/
+.claude/settings.json
+.claude/skills/bundle-check/
+.claude/skills/companion-preview/
+*.blend1
+
 # local env files
 .env*.local
 

@@ -52,7 +52,7 @@ mat_screen = make_mat("Screen_Glossy_Black", (0.004, 0.004, 0.006), 0.06,
                       metallic=0.2)
 LED_WARM = (1.0, 0.32, 0.09)  # coral/amber
 mat_led = make_mat("LED_Coral_Emission", LED_WARM, 0.35,
-                   emission=LED_WARM, emission_strength=3.0)
+                   emission=LED_WARM, emission_strength=1.5)
 
 
 def smooth(obj):
@@ -125,13 +125,13 @@ def make_led_tile(name, location, scale, roll=0.0, mat=mat_led):
 EYE_Y = -0.55
 # Parent to Body (near-uniform scale) not FacePanel: FacePanel's strong 0.44
 # Y-scale would bake into children on transform_apply and squash the tiles.
-make_led_tile("LeftEye", (-0.15, EYE_Y, 0.82), (0.115, 0.05, 0.15), roll=-0.05)
-make_led_tile("RightEye", (0.15, EYE_Y, 0.82), (0.115, 0.05, 0.15), roll=0.05)
+make_led_tile("LeftEye", (-0.15, EYE_Y, 0.825), (0.13, 0.05, 0.185), roll=-0.05)
+make_led_tile("RightEye", (0.15, EYE_Y, 0.825), (0.13, 0.05, 0.185), roll=0.05)
 for nm in ("LeftEye", "RightEye"):
     parent_to(bpy.data.objects[nm], body)
 
 # Tiny simple mouth glyph: a small horizontal LED bar for warmth
-make_led_tile("ScreenMouth", (0.0, EYE_Y, 0.695), (0.06, 0.04, 0.025))
+make_led_tile("ScreenMouth", (0.0, EYE_Y, 0.705), (0.065, 0.04, 0.026))
 parent_to(bpy.data.objects["ScreenMouth"], body)
 
 # ---------- Blush: two subtle warm dots on the cheeks, outside the screen ----------

@@ -21,7 +21,7 @@ Do not build generic productivity features unless they support the avatar growth
 
 ## Use These Skills
 
-When working on Dayly, use the relevant files in `.claude/skills/`:
+When working on Dayly, use the relevant files in `.claude/`:
 
 - `dayly-style.md` for UI and visual polish
 - `dayly-architecture.md` for app structure and state
