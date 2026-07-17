@@ -4,6 +4,7 @@ import FaceStylePicker from "@/components/customise/FaceStylePicker";
 import StudySpacePlaceholder from "@/components/study/StudySpacePlaceholder";
 import { RENDERED_EQUIPMENT_IDS } from "@/components/3d/equipment";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useCharacter } from "@/context/CharacterContext";
 import { useCoins } from "@/context/CoinsContext";
 import { useShop } from "@/context/ShopContext";
@@ -120,7 +121,7 @@ export default function CustomiseScreen() {
           title: "Customise",
           headerRight: () => (
             <View style={[styles.coinBalance, { borderColor: "transparent" }]}>
-              <Ionicons name="star" size={14} color="#D4A27F" />
+              <Ionicons name="star" size={14} color={colors.accent} />
               <Text style={[styles.coinText, { color: colors.text }]}>
                 {coins}
               </Text>
@@ -134,7 +135,7 @@ export default function CustomiseScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.preview, { borderColor: colors.border }]}>
+        <View style={[styles.preview, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
           {sceneReady ? (
             <AvatarRenderer
               state="idle"
@@ -176,7 +177,7 @@ export default function CustomiseScreen() {
             style={[
               styles.nameInput,
               {
-                backgroundColor: colors.card,
+                backgroundColor: colors.surface,
                 borderColor: colors.border,
                 color: colors.text,
               },
@@ -294,7 +295,7 @@ function EquipmentItem({
       style={({ pressed }) => [
         styles.item,
         {
-          backgroundColor: colors.card,
+          backgroundColor: colors.surface,
           borderColor: equipped ? colors.accent : colors.border,
           opacity: !owned ? 0.55 : pressed ? 0.78 : 1,
         },
@@ -357,9 +358,8 @@ const styles = StyleSheet.create({
   },
   coinText: { fontFamily: "Outfit-SemiBold", fontSize: 14 },
   preview: {
-    height: 260,
-    backgroundColor: "#181715",
-    borderRadius: BorderRadius.sm,
+    height: 292,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
     overflow: "hidden",
     marginBottom: Spacing.xl,
@@ -390,8 +390,7 @@ const styles = StyleSheet.create({
   },
   section: { marginBottom: Spacing.xl },
   sectionTitle: {
-    fontFamily: "Outfit-Bold",
-    fontSize: 18,
+    ...StudioType.section,
     marginBottom: Spacing.md,
   },
   sectionHeadingRow: {
@@ -402,10 +401,9 @@ const styles = StyleSheet.create({
   nameInput: {
     minHeight: 48,
     borderWidth: 1,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
-    fontFamily: "Outfit-Medium",
-    fontSize: 16,
+    ...StudioType.body,
   },
   errorBanner: {
     minHeight: 42,
@@ -417,11 +415,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.sm,
   },
-  errorText: { flex: 1, fontFamily: "Outfit-Medium", fontSize: 13 },
+  errorText: { flex: 1, ...StudioType.detail },
   equipmentGroup: { marginBottom: Spacing.lg },
   groupTitle: {
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 13,
+    ...StudioType.section,
     textTransform: "uppercase",
     marginBottom: Spacing.sm,
   },
@@ -429,7 +426,7 @@ const styles = StyleSheet.create({
   item: {
     minHeight: 66,
     borderWidth: 1,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     padding: Spacing.sm,
     flexDirection: "row",
     alignItems: "center",
@@ -438,11 +435,11 @@ const styles = StyleSheet.create({
   itemIcon: {
     width: 44,
     height: 44,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   itemCopy: { flex: 1, minWidth: 0 },
-  itemName: { fontFamily: "Outfit-SemiBold", fontSize: 15 },
-  itemState: { fontFamily: "Outfit-Regular", fontSize: 12, marginTop: 2 },
+  itemName: { ...StudioType.bodyStrong },
+  itemState: { ...StudioType.detail, marginTop: 2 },
 });

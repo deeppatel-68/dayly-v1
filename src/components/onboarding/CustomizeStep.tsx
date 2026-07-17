@@ -1,6 +1,7 @@
 import AvatarRenderer from "@/components/avatar/AvatarRenderer";
 import BodyColorPicker from "@/components/customise/BodyColorPicker";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import React from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
@@ -30,7 +31,7 @@ export default function CustomizeStep({
       <View
         style={[
           styles.avatarFrame,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
         ]}
       >
         <AvatarRenderer state="idle" variant="shop" bodyColor={bodyColor} />
@@ -46,7 +47,7 @@ export default function CustomizeStep({
         style={[
           styles.input,
           {
-            backgroundColor: colors.card,
+            backgroundColor: colors.surface,
             borderColor: colors.border,
             color: colors.text,
           },
@@ -54,7 +55,7 @@ export default function CustomizeStep({
         value={name}
         onChangeText={onChangeName}
         placeholder="Name your companion (e.g. Nova, Pip, Ember)"
-        placeholderTextColor={colors.textSecondary}
+        placeholderTextColor={colors.textTertiary}
         maxLength={NAME_MAX_LENGTH}
         autoCapitalize="words"
         autoCorrect={false}
@@ -82,14 +83,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   title: {
-    fontSize: 24,
-    fontFamily: "Outfit-Bold",
+    ...StudioType.title,
     textAlign: "center",
     marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.body,
     textAlign: "center",
     lineHeight: 20,
     marginBottom: Spacing.lg,
@@ -101,8 +100,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm + 2,
-    fontSize: 15,
-    fontFamily: "Outfit-Medium",
+    ...StudioType.body,
     marginBottom: Spacing.lg,
   },
 });

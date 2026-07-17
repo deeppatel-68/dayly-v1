@@ -1,4 +1,6 @@
+import { ThemeColors } from "@/constants/Colors";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { UserProgress } from "@/services/progressService";
 import { toStreakTier } from "@/utils/progression";
@@ -33,7 +35,7 @@ export default function MomentumCard({
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { backgroundColor: colors.surface, borderColor: colors.separator },
       ]}
     >
       <Text style={[styles.title, { color: colors.textSecondary }]}>
@@ -41,44 +43,42 @@ export default function MomentumCard({
       </Text>
 
       <View style={styles.heroRow}>
-        <Ionicons name="flame" size={28} color={colors.accent} />
+        <View style={[styles.heroIcon, { backgroundColor: colors.completedBackground }]}>
+          <Ionicons name="flame" size={20} color={colors.accent} />
+        </View>
         <Text style={[styles.heroValue, { color: colors.text }]}>
           {currentStreak}
         </Text>
         <Text style={[styles.heroUnit, { color: colors.textSecondary }]}>
-          {currentStreak === 1 ? "day streak" : "day streak"}
+          day streak
         </Text>
       </View>
-      <Text style={[styles.tierLabel, { color: colors.accent }]}>
-        {tierLabel}
-      </Text>
+      <Text style={[styles.tierLabel, { color: colors.accent }]}>{tierLabel}</Text>
 
       <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {bestStreak}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            BEST STREAK
-          </Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {focusHours}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            FOCUS HOURS
-          </Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {totalCompleted}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            HABITS DONE
-          </Text>
-        </View>
+        <Metric value={bestStreak} label="Best streak" colors={colors} />
+        <View style={[styles.statDivider, { backgroundColor: colors.separator }]} />
+        <Metric value={focusHours} label="Focus hours" colors={colors} />
+        <View style={[styles.statDivider, { backgroundColor: colors.separator }]} />
+        <Metric value={totalCompleted} label="Habits done" colors={colors} />
       </View>
+    </View>
+  );
+}
+
+function Metric({
+  value,
+  label,
+  colors,
+}: {
+  value: string | number;
+  label: string;
+  colors: ThemeColors;
+}) {
+  return (
+    <View style={styles.statItem}>
+      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
@@ -87,51 +87,43 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   title: {
-    fontSize: 13,
-    fontFamily: "Outfit-Medium",
+    ...StudioType.section,
+    textTransform: "uppercase",
+    letterSpacing: 0.2,
     marginBottom: Spacing.md,
   },
-  heroRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: Spacing.xs,
+  heroRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
+  heroIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
   heroValue: {
-    fontSize: 44,
-    fontFamily: "Outfit-Bold",
+    fontSize: 42,
     lineHeight: 48,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
-  heroUnit: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
-    marginBottom: Spacing.xs,
-  },
+  heroUnit: { ...StudioType.detail },
   tierLabel: {
-    fontSize: 13,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.bodyStrong,
     marginTop: Spacing.xs,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   statsRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    alignItems: "stretch",
+    justifyContent: "space-between",
   },
-  statItem: {
-    alignItems: "center",
-  },
-  statValue: {
-    fontSize: 20,
-    fontFamily: "Outfit-Bold",
-    marginBottom: Spacing.xs,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: "Outfit-Regular",
-    letterSpacing: 0.5,
-  },
+  statItem: { flex: 1, alignItems: "center" },
+  statDivider: { width: StyleSheet.hairlineWidth, marginVertical: Spacing.xs },
+  statValue: { ...StudioType.metric, fontSize: 22, marginBottom: Spacing.xs },
+  statLabel: { ...StudioType.detail, fontSize: 11, textAlign: "center" },
 });

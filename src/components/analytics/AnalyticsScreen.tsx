@@ -202,6 +202,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: Spacing.xl,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xxl,
   },
 });

@@ -2,6 +2,8 @@
  * Typography system - font sizes and weights
  */
 
+import type { TextStyle } from "react-native";
+
 export const FontSizes = {
   xs: 12,
   sm: 14,
@@ -30,7 +32,10 @@ export const FontFamilies = {
 
 // Refreshed product UI defaults to the platform typeface. Outfit remains a
 // brand asset for the Dayly wordmark and companion-specific moments.
-export const StudioType = {
+export const StudioType: Record<
+  "largeTitle" | "title" | "section" | "body" | "bodyStrong" | "detail" | "metric",
+  TextStyle
+> = {
   largeTitle: { fontSize: 34, fontWeight: "700" as const, lineHeight: 41 },
   title: { fontSize: 22, fontWeight: "700" as const, lineHeight: 28 },
   section: { fontSize: 13, fontWeight: "600" as const, lineHeight: 18 },
@@ -40,6 +45,6 @@ export const StudioType = {
   metric: {
     fontSize: 28,
     fontWeight: "700" as const,
-    fontVariant: ["tabular-nums"] as const,
+    fontVariant: ["tabular-nums"],
   },
 };

@@ -1,4 +1,5 @@
-import { Spacing } from "@/constants/Spacing";
+import { BorderRadius, Spacing, TouchTarget } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { AVATAR_BODY_COLORS } from "@/data/avatarColors";
 import * as Haptics from "expo-haptics";
@@ -28,7 +29,10 @@ export default function BodyColorPicker({
           selected={value.toLowerCase() === swatch.hex.toLowerCase()}
           showName={showNames}
           accentColor={colors.accent}
-          borderColor={colors.border}
+          focusRingColor={colors.focusRing}
+          surfaceColor={colors.surface}
+          selectedSurfaceColor={colors.surfaceSelected}
+          separatorColor={colors.separator}
           textColor={colors.textSecondary}
           onSelect={() => {
             Haptics.selectionAsync().catch(() => {});
@@ -46,7 +50,10 @@ function ColorSwatch({
   selected,
   showName,
   accentColor,
-  borderColor,
+  focusRingColor,
+  surfaceColor,
+  selectedSurfaceColor,
+  separatorColor,
   textColor,
   onSelect,
 }: {
@@ -55,7 +62,10 @@ function ColorSwatch({
   selected: boolean;
   showName: boolean;
   accentColor: string;
-  borderColor: string;
+  focusRingColor: string;
+  surfaceColor: string;
+  selectedSurfaceColor: string;
+  separatorColor: string;
   textColor: string;
   onSelect: () => void;
 }) {
@@ -76,18 +86,24 @@ function ColorSwatch({
       accessibilityLabel={name}
       accessibilityState={{ selected }}
       onPress={onSelect}
-      style={styles.option}
+      style={({ pressed }) => [
+        styles.option,
+        {
+          backgroundColor: selected ? selectedSurfaceColor : surfaceColor,
+          borderColor: selected ? focusRingColor : separatorColor,
+          opacity: pressed ? 0.78 : 1,
+        },
+      ]}
     >
-      {({ pressed }) => (
+      {() => (
         <>
           <Animated.View
             style={[
               styles.swatch,
               {
                 backgroundColor: hex,
-                borderColor: selected ? accentColor : borderColor,
-                borderWidth: selected ? 3 : 1,
-                opacity: pressed ? 0.8 : 1,
+                borderColor: selected ? accentColor : surfaceColor,
+                borderWidth: selected ? 3 : 2,
                 transform: [{ scale }],
               },
             ]}
@@ -107,21 +123,25 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   option: {
     alignItems: "center",
-    minWidth: 38,
+    justifyContent: "center",
+    width: TouchTarget,
+    minHeight: TouchTarget,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
   },
   swatch: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
   },
   name: {
-    fontFamily: "Outfit-Regular",
-    fontSize: 11,
-    marginTop: Spacing.xs,
-    maxWidth: 52,
+    ...StudioType.detail,
+    marginTop: 2,
+    maxWidth: TouchTarget + Spacing.xs,
+    textAlign: "center",
   },
 });

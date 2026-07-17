@@ -1,5 +1,6 @@
 import CompanionBadge from "@/components/friends/CompanionBadge";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import {
@@ -166,6 +167,7 @@ export default function FriendsScreen() {
         }}
       />
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -188,7 +190,7 @@ export default function FriendsScreen() {
           <View
             style={[
               styles.inputRow,
-              { backgroundColor: colors.background, borderColor: colors.border },
+              { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
             ]}
           >
             <Ionicons name="search" size={18} color={colors.textSecondary} />
@@ -197,7 +199,7 @@ export default function FriendsScreen() {
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder="Search by username"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={colors.textTertiary}
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -233,7 +235,7 @@ export default function FriendsScreen() {
                     {
                       color:
                         result.relationship === "none"
-                          ? "#ffffff"
+                          ? colors.onAccent
                           : colors.textSecondary,
                     },
                   ]}
@@ -249,7 +251,7 @@ export default function FriendsScreen() {
           <View
             style={[
               styles.inputRow,
-              { backgroundColor: colors.background, borderColor: colors.border },
+              { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
             ]}
           >
             <Ionicons name="key-outline" size={18} color={colors.textSecondary} />
@@ -258,7 +260,7 @@ export default function FriendsScreen() {
               value={codeInput}
               onChangeText={setCodeInput}
               placeholder="Enter a friend code"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={colors.textTertiary}
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={8}
@@ -326,7 +328,7 @@ export default function FriendsScreen() {
                       style={[styles.iconButton, { backgroundColor: colors.accent }]}
                       accessibilityLabel={`Accept ${request.username}`}
                     >
-                      <Ionicons name="checkmark" size={18} color="#ffffff" />
+                      <Ionicons name="checkmark" size={18} color={colors.onAccent} />
                     </Pressable>
                     <Pressable
                       disabled={busy}
@@ -377,7 +379,7 @@ export default function FriendsScreen() {
                 { backgroundColor: colors.accent, opacity: pressed ? 0.7 : 1 },
               ]}
             >
-              <Text style={styles.emptyCtaText}>Share invite</Text>
+            <Text style={[styles.emptyCtaText, { color: colors.onAccent }]}>Share invite</Text>
             </Pressable>
           </View>
         ) : (
@@ -427,9 +429,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl },
   sectionTitle: {
-    fontSize: 12,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 1,
+    ...StudioType.section,
+    color: undefined,
+    letterSpacing: 0.2,
     marginBottom: Spacing.sm,
     marginTop: Spacing.md,
   },
@@ -450,8 +452,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.body,
     paddingVertical: 2,
   },
   divider: { height: 1, marginVertical: Spacing.xs },
@@ -461,41 +462,39 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: Spacing.xs,
   },
-  rowTitle: { fontSize: 16, fontFamily: "Outfit-Medium" },
-  rowSubtitle: { fontSize: 12, fontFamily: "Outfit-Regular", marginTop: 2 },
+  rowTitle: { ...StudioType.bodyStrong },
+  rowSubtitle: { ...StudioType.detail, marginTop: 2 },
   rowActions: { flexDirection: "row", gap: Spacing.sm },
   friendLeft: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   iconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   smallButton: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
+    minHeight: 44,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
-  smallButtonText: { fontSize: 13, fontFamily: "Outfit-SemiBold" },
+  smallButtonText: { ...StudioType.detail, fontWeight: "600" },
   shareRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
     paddingTop: Spacing.xs,
   },
-  shareText: { fontSize: 14, fontFamily: "Outfit-SemiBold" },
+  shareText: { ...StudioType.bodyStrong },
   loader: { marginTop: Spacing.lg },
   emptyCard: { alignItems: "center", paddingVertical: Spacing.xl },
   emptyTitle: {
-    fontSize: 17,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.bodyStrong,
     marginTop: Spacing.sm,
   },
   emptyBody: {
-    fontSize: 13,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
     textAlign: "center",
     marginTop: Spacing.xs,
     marginHorizontal: Spacing.lg,
@@ -506,10 +505,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
   },
-  emptyCtaText: { color: "#ffffff", fontSize: 14, fontFamily: "Outfit-SemiBold" },
+  emptyCtaText: { ...StudioType.bodyStrong },
   pendingOutNote: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
     paddingTop: Spacing.xs,
   },
 });

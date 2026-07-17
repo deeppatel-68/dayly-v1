@@ -1,4 +1,5 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { useHabits } from "@/context/HabitsContext";
 import { MAX_HABITS } from "@/services/habitsService";
@@ -79,7 +80,7 @@ export default function HabitsStep({ selected, onToggle }: HabitsStepProps) {
                 style={({ pressed }) => [
                   styles.chip,
                   {
-                    backgroundColor: isSelected ? colors.accent : colors.card,
+                    backgroundColor: isSelected ? colors.accent : colors.surface,
                     borderColor: isSelected ? colors.accent : colors.border,
                     opacity: isAdded ? 0.55 : isDisabled ? 0.4 : pressed ? 0.85 : 1,
                   },
@@ -88,12 +89,12 @@ export default function HabitsStep({ selected, onToggle }: HabitsStepProps) {
                 <Ionicons
                   name={isAdded ? "checkmark-circle" : habit.icon}
                   size={16}
-                  color={isSelected ? colors.background : colors.text}
+                  color={isSelected ? colors.onAccent : colors.text}
                 />
                 <Text
                   style={[
                     styles.chipText,
-                    { color: isSelected ? colors.background : colors.text },
+                    { color: isSelected ? colors.onAccent : colors.text },
                   ]}
                 >
                   {habit.title}
@@ -128,14 +129,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   title: {
-    fontSize: 24,
-    fontFamily: "Outfit-Bold",
+    ...StudioType.title,
     textAlign: "center",
     marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.body,
     textAlign: "center",
     lineHeight: 20,
     marginBottom: Spacing.xl,
@@ -149,8 +148,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xl,
   },
   loadingText: {
-    fontSize: 13,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
   },
   chipGrid: {
     flexDirection: "row",
@@ -163,21 +161,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.xs,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    minHeight: 44,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
   chipText: {
-    fontSize: 13,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.detail,
+    fontWeight: "600",
   },
   chipMeta: {
-    fontSize: 10,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
   },
   capNote: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
     textAlign: "center",
     marginTop: Spacing.lg,
   },

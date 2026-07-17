@@ -1,6 +1,7 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
 import { useCoins } from "@/context/CoinsContext";
 import { useShop } from "@/context/ShopContext";
+import { useTheme } from "@/context/ThemeContext";
 import type { ShopItem } from "@/types/shop";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -30,6 +31,7 @@ export default function RoomDecorSheet({
   onPreview,
   onClose,
 }: RoomDecorSheetProps) {
+  const { colors } = useTheme();
   const { coins } = useCoins();
   const {
     shopItems,
@@ -97,11 +99,16 @@ export default function RoomDecorSheet({
   };
 
   return (
-    <View style={styles.sheet}>
+    <View
+      style={[
+        styles.sheet,
+        { backgroundColor: colors.glassFallback, borderTopColor: colors.border },
+      ]}
+    >
       <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>DECORATE</Text>
-          <Text style={styles.title}>
+          <Text style={[styles.eyebrow, { color: colors.accent }]}>DECORATE</Text>
+          <Text style={[styles.title, { color: colors.text }]}>
             {ROOM_DECOR_SLOTS.find((slot) => slot.id === selectedSlot)?.label ??
               "My Space"}
           </Text>
@@ -109,9 +116,9 @@ export default function RoomDecorSheet({
         <Pressable
           accessibilityLabel="Close decorate mode"
           onPress={onClose}
-          style={styles.iconButton}
+          style={[styles.iconButton, { backgroundColor: colors.surfaceRaised }]}
         >
-          <Ionicons name="close" size={20} color="#F0EEE6" />
+          <Ionicons name="close" size={20} color={colors.text} />
         </Pressable>
       </View>
 
@@ -129,15 +136,18 @@ export default function RoomDecorSheet({
               accessibilityState={{ selected }}
               accessibilityLabel={slot.label}
               onPress={() => onSelectSlot(slot.id)}
-              style={[styles.slotButton, selected && styles.slotButtonSelected]}
+              style={[
+                styles.slotButton,
+                { backgroundColor: selected ? colors.accent : colors.surfaceRaised },
+              ]}
             >
               <Ionicons
                 name={slot.icon as never}
                 size={17}
-                color={selected ? "#171512" : "#D7D2C7"}
+                color={selected ? colors.onAccent : colors.textSecondary}
               />
               <Text
-                style={[styles.slotLabel, selected && styles.slotLabelSelected]}
+                style={[styles.slotLabel, { color: selected ? colors.onAccent : colors.textSecondary }]}
               >
                 {slot.label}
               </Text>
@@ -146,7 +156,7 @@ export default function RoomDecorSheet({
         })}
       </ScrollView>
 
-      {lastError ? <Text style={styles.error}>{lastError}</Text> : null}
+      {lastError ? <Text style={[styles.error, { color: colors.error }]}>{lastError}</Text> : null}
 
       <ScrollView
         horizontal
@@ -161,23 +171,29 @@ export default function RoomDecorSheet({
               key={item.id}
               disabled={loading || Boolean(busyItemId)}
               onPress={() => selectItem(item)}
-              style={[styles.item, selected && styles.itemSelected]}
+              style={[
+                styles.item,
+                {
+                  backgroundColor: selected ? colors.completedBackground : colors.surface,
+                  borderColor: selected ? colors.accent : colors.border,
+                },
+              ]}
             >
               <View style={styles.itemIcon}>
                 {busyItemId === item.id ? (
-                  <ActivityIndicator size="small" color="#D97757" />
+                  <ActivityIndicator size="small" color={colors.accent} />
                 ) : (
                   <Ionicons
                     name={item.icon as never}
                     size={22}
-                    color="#F0EEE6"
+                    color={colors.text}
                   />
                 )}
               </View>
-              <Text numberOfLines={1} style={styles.itemName}>
+              <Text numberOfLines={1} style={[styles.itemName, { color: colors.text }]}>
                 {item.name}
               </Text>
-              <Text style={styles.itemMeta}>
+              <Text style={[styles.itemMeta, { color: colors.textSecondary }]}>
                 {owned ? "Owned" : `${item.cost} coins`}
               </Text>
             </Pressable>
@@ -185,33 +201,33 @@ export default function RoomDecorSheet({
         })}
         {compatibleItems.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>No pieces for this space yet</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No pieces for this space yet</Text>
           </View>
         ) : null}
       </ScrollView>
 
       <View style={styles.footer}>
         <View style={styles.balance}>
-          <Ionicons name="star" size={14} color="#D4A27F" />
-          <Text style={styles.balanceText}>{coins}</Text>
+          <Ionicons name="star" size={14} color={colors.accent} />
+          <Text style={[styles.balanceText, { color: colors.text }]}>{coins}</Text>
         </View>
         {equippedItem && !previewItem ? (
-          <Pressable onPress={clearSlot} style={styles.secondaryButton}>
-            <Ionicons name="remove-circle-outline" size={17} color="#F0EEE6" />
-            <Text style={styles.secondaryText}>Clear</Text>
+          <Pressable onPress={clearSlot} style={[styles.secondaryButton, { borderColor: colors.border }]}>
+            <Ionicons name="remove-circle-outline" size={17} color={colors.text} />
+            <Text style={[styles.secondaryText, { color: colors.text }]}>Clear</Text>
           </Pressable>
         ) : null}
         {previewItem ? (
           <>
             <Pressable
               onPress={() => onPreview(null)}
-              style={styles.secondaryButton}
+              style={[styles.secondaryButton, { borderColor: colors.border }]}
             >
-              <Text style={styles.secondaryText}>Cancel</Text>
+              <Text style={[styles.secondaryText, { color: colors.text }]}>Cancel</Text>
             </Pressable>
-            <Pressable onPress={applyPreview} style={styles.applyButton}>
-              <Ionicons name="checkmark" size={18} color="#171512" />
-              <Text style={styles.applyText}>Apply</Text>
+            <Pressable onPress={applyPreview} style={[styles.applyButton, { backgroundColor: colors.accent }]}>
+              <Ionicons name="checkmark" size={18} color={colors.onAccent} />
+              <Text style={[styles.applyText, { color: colors.onAccent }]}>Apply</Text>
             </Pressable>
           </>
         ) : null}
@@ -228,9 +244,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingTop: Spacing.md,
     paddingBottom: 28,
-    backgroundColor: "rgba(22,21,19,0.97)",
     borderTopWidth: 1,
-    borderTopColor: "rgba(240,238,230,0.14)",
   },
   header: {
     paddingHorizontal: Spacing.md,
@@ -238,15 +252,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  eyebrow: { color: "#D97757", fontFamily: "Outfit-Bold", fontSize: 10 },
-  title: { color: "#F0EEE6", fontFamily: "Outfit-Bold", fontSize: 20 },
+  eyebrow: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5 },
+  title: { fontSize: 20, fontWeight: "700" },
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: BorderRadius.sm,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(240,238,230,0.08)",
   },
   slotRow: {
     gap: 6,
@@ -254,36 +267,27 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   slotButton: {
-    height: 34,
+    minHeight: 40,
     paddingHorizontal: 10,
     borderRadius: BorderRadius.sm,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(240,238,230,0.07)",
   },
-  slotButtonSelected: { backgroundColor: "#D97757" },
-  slotLabel: { color: "#D7D2C7", fontFamily: "Outfit-SemiBold", fontSize: 11 },
-  slotLabelSelected: { color: "#171512" },
-  error: { color: "#E7A28D", paddingHorizontal: Spacing.md, fontSize: 12 },
+  slotLabel: { fontWeight: "600", fontSize: 11 },
+  error: { paddingHorizontal: Spacing.md, fontSize: 12 },
   itemRow: { gap: 8, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   item: {
     width: 116,
     padding: 10,
     borderWidth: 1,
-    borderColor: "rgba(240,238,230,0.12)",
     borderRadius: BorderRadius.sm,
-    backgroundColor: "rgba(240,238,230,0.04)",
-  },
-  itemSelected: {
-    borderColor: "#D97757",
-    backgroundColor: "rgba(217,119,87,0.1)",
   },
   itemIcon: { height: 30, justifyContent: "center" },
-  itemName: { color: "#F0EEE6", fontFamily: "Outfit-SemiBold", fontSize: 12 },
-  itemMeta: { color: "#A9A49B", fontFamily: "Outfit-Regular", fontSize: 10 },
+  itemName: { fontWeight: "600", fontSize: 12 },
+  itemMeta: { fontSize: 10 },
   empty: { height: 58, justifyContent: "center" },
-  emptyText: { color: "#A9A49B", fontFamily: "Outfit-Regular", fontSize: 12 },
+  emptyText: { fontSize: 12 },
   footer: {
     minHeight: 40,
     paddingHorizontal: Spacing.md,
@@ -298,34 +302,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 5,
   },
-  balanceText: {
-    color: "#F0EEE6",
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 13,
-  },
+  balanceText: { fontWeight: "600", fontSize: 13 },
   secondaryButton: {
-    height: 38,
+    minHeight: 44,
     paddingHorizontal: 13,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: "rgba(240,238,230,0.14)",
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
   },
-  secondaryText: {
-    color: "#F0EEE6",
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 12,
-  },
+  secondaryText: { fontWeight: "600", fontSize: 12 },
   applyButton: {
-    height: 38,
+    minHeight: 44,
     paddingHorizontal: 15,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#D97757",
   },
-  applyText: { color: "#171512", fontFamily: "Outfit-Bold", fontSize: 12 },
+  applyText: { fontWeight: "700", fontSize: 12 },
 });

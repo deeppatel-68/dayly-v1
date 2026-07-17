@@ -32,7 +32,14 @@ import type { RoomView } from "@/components/room/roomNavigation";
 import CompanionDialogue from "@/components/companion/CompanionDialogue";
 import { useCompanionPresence } from "@/components/companion/useCompanionPresence";
 import FocusTimer from "@/components/study/FocusTimer";
-import { Spacing, BorderRadius, Shadows } from "@/constants/Spacing";
+import {
+  Spacing,
+  BorderRadius,
+  Shadows,
+  TouchTarget,
+} from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
+import type { ThemeColors } from "@/constants/Colors";
 import { AVATAR_BODY_COLORS } from "@/data/avatarColors";
 import * as Haptics from "expo-haptics";
 import { ItemCategory, ItemRarity, ShopItem } from "@/types/shop";
@@ -56,7 +63,7 @@ interface ItemCardProps {
   owned: boolean;
   equipped: boolean;
   coins: number;
-  colors: any;
+  colors: ThemeColors;
   rarityColor: string;
   borderWidth: number;
   comingSoon: boolean;
@@ -111,17 +118,17 @@ function ItemCard({
   const actionColor = comingSoon
     ? colors.textSecondary
     : equipped
-      ? colors.background
+      ? colors.onAccent
       : owned || canAfford
-        ? colors.background
+        ? colors.onAccent
         : colors.textSecondary;
   const actionBackground = comingSoon
-    ? colors.border + "30"
+    ? colors.surfaceSelected
     : equipped
       ? colors.accent
       : owned || canAfford
         ? colors.text
-        : colors.border + "30";
+        : colors.surfaceSelected;
 
   return (
     <Pressable
@@ -129,26 +136,29 @@ function ItemCard({
       style={({ pressed }) => [
         styles.itemCard,
         {
-          backgroundColor: colors.card,
+          backgroundColor: colors.surface,
           borderColor: equipped
             ? colors.accent
             : comingSoon
-              ? colors.border
+              ? colors.separator
               : rarityColor,
           borderWidth: equipped ? 2 : comingSoon ? 1 : borderWidth,
-          opacity: comingSoon ? 0.72 : pressed ? 0.86 : 1,
+          opacity: comingSoon ? 0.66 : pressed ? 0.9 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
       ]}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.name}, ${actionLabel}`}
+      accessibilityState={{ disabled: locked, selected: equipped }}
     >
       <View style={styles.itemCardTop}>
         <View
           style={[
             styles.itemIconContainer,
             {
-              backgroundColor: colors.background,
-              borderColor: equipped ? colors.accent : colors.border,
+              backgroundColor: colors.surfaceRaised,
+              borderColor: equipped ? colors.accent : colors.separator,
             },
           ]}
         >
@@ -163,12 +173,12 @@ function ItemCard({
           style={[
             styles.costChip,
             {
-              backgroundColor: colors.background,
-              borderColor: canAfford || owned ? colors.border : "#D4A27F",
+              backgroundColor: colors.surfaceRaised,
+              borderColor: canAfford || owned ? colors.separator : colors.error,
             },
           ]}
         >
-          <Ionicons name="star" size={12} color="#D4A27F" />
+          <Ionicons name="star" size={12} color={colors.accent} />
           <Text
             style={[
               styles.costChipText,
@@ -203,7 +213,7 @@ function ItemCard({
           <View
             style={[
               styles.rarityBadge,
-              { backgroundColor: rarityColor + "20" },
+              { backgroundColor: rarityColor + "1F" },
             ]}
           >
             <Text
@@ -226,8 +236,8 @@ function ItemCard({
                 styles.ownedBadge,
                 {
                   backgroundColor: equipped
-                    ? colors.accent + "20"
-                    : colors.border + "20",
+                    ? colors.completedBackground
+                    : colors.surfaceSelected,
                 },
               ]}
             >
@@ -258,7 +268,11 @@ function ItemCard({
           },
         ]}
       >
-        <Ionicons name={actionIcon as any} size={13} color={actionColor} />
+        {busy ? (
+          <ActivityIndicator size="small" color={actionColor} />
+        ) : (
+          <Ionicons name={actionIcon as any} size={15} color={actionColor} />
+        )}
         <Text style={[styles.actionPillText, { color: actionColor }]}>
           {actionLabel}
         </Text>
@@ -612,13 +626,13 @@ function ShopModal({
   const getRarityColor = (rarity?: ItemRarity): string => {
     switch (rarity) {
       case "legendary":
-        return "#D4A27F"; // Kraft tan
+        return "#D69A5B";
       case "epic":
-        return "#9B59B6"; // Purple
+        return "#B28AD8";
       case "rare":
-        return "#3498DB"; // Blue
+        return "#6FA9D9";
       default:
-        return colors.border; // Common - default border
+        return colors.separator;
     }
   };
 
@@ -643,27 +657,33 @@ function ShopModal({
       onRequestClose={onClose}
     >
       <View
-        style={[styles.shopOverlay, { backgroundColor: colors.background }]}
+        style={[styles.shopOverlay, { backgroundColor: colors.overlay }]}
       >
         <View
-          style={[styles.shopContainer, { backgroundColor: colors.background }]}
+          style={[
+            styles.shopContainer,
+            {
+              backgroundColor: colors.surfaceRaised,
+              borderColor: colors.separator,
+            },
+          ]}
         >
           <View
-            style={[styles.shopHandle, { backgroundColor: colors.border }]}
+            style={[styles.shopHandle, { backgroundColor: colors.separator }]}
           />
 
           {/* Header */}
           <View style={styles.shopHeader}>
             <View style={styles.shopTitleBlock}>
               <Text style={[styles.shopTitle, { color: colors.text }]}>
-                Companion & Home
+                Studio shop
               </Text>
               <Text
                 style={[styles.shopSubtitle, { color: colors.textSecondary }]}
               >
                 {shopSegment === "companion"
-                  ? "Collect a look for your study companion."
-                  : "Make My Space feel like yours."}
+                  ? "Pieces for Deep, collected as you grow."
+                  : "Small details for a room that feels yours."}
               </Text>
             </View>
             <View style={styles.headerRight}>
@@ -671,12 +691,12 @@ function ShopModal({
                 style={[
                   styles.coinDisplay,
                   {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.separator,
                   },
                 ]}
               >
-                <Ionicons name="star" size={18} color="#D4A27F" />
+                <Ionicons name="star" size={17} color={colors.accent} />
                 <Text style={[styles.coinText, { color: colors.text }]}>
                   {coins}
                 </Text>
@@ -685,8 +705,13 @@ function ShopModal({
                 onPress={onClose}
                 style={[
                   styles.closeButton,
-                  { backgroundColor: colors.card, borderColor: colors.border },
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.separator,
+                  },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Close shop"
               >
                 <Ionicons name="close" size={20} color={colors.text} />
               </Pressable>
@@ -696,7 +721,10 @@ function ShopModal({
           <View
             style={[
               styles.shopSegmentControl,
-              { backgroundColor: colors.card },
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.separator,
+              },
             ]}
           >
             {(["companion", "home"] as const).map((segment) => {
@@ -712,7 +740,11 @@ function ShopModal({
                   }}
                   style={[
                     styles.shopSegmentButton,
-                    selected && { backgroundColor: colors.accent },
+                    {
+                      backgroundColor: selected
+                        ? colors.accent
+                        : "transparent",
+                    },
                   ]}
                 >
                   <Ionicons
@@ -720,14 +752,14 @@ function ShopModal({
                       segment === "companion" ? "happy-outline" : "home-outline"
                     }
                     size={17}
-                    color={selected ? colors.background : colors.textSecondary}
+                    color={selected ? colors.onAccent : colors.textSecondary}
                   />
                   <Text
                     style={[
                       styles.shopSegmentText,
                       {
                         color: selected
-                          ? colors.background
+                          ? colors.onAccent
                           : colors.textSecondary,
                       },
                     ]}
@@ -743,7 +775,10 @@ function ShopModal({
             <View
               style={[
                 styles.summaryPill,
-                { backgroundColor: colors.card, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.separator,
+                },
               ]}
             >
               <Ionicons name="cube-outline" size={13} color={colors.accent} />
@@ -754,10 +789,13 @@ function ShopModal({
             <View
               style={[
                 styles.summaryPill,
-                { backgroundColor: colors.card, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.separator,
+                },
               ]}
             >
-              <Ionicons name="sparkles" size={13} color="#D4A27F" />
+              <Ionicons name="sparkles" size={13} color={colors.accent} />
               <Text style={[styles.summaryText, { color: colors.text }]}>
                 {shopSegment === "home"
                   ? ownedItems.filter(
@@ -774,7 +812,10 @@ function ShopModal({
             <View
               style={[
                 styles.summaryPill,
-                { backgroundColor: colors.card, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.separator,
+                },
               ]}
             >
               <Ionicons name="flash-outline" size={13} color={colors.accent} />
@@ -788,14 +829,22 @@ function ShopModal({
             <View
               style={[
                 styles.noticeBanner,
-                { backgroundColor: "#D4A27F20", borderColor: "#D4A27F55" },
+                {
+                  backgroundColor: `${colors.error}1A`,
+                  borderColor: colors.error,
+                },
               ]}
             >
-              <Ionicons name="alert-circle-outline" size={16} color="#D4A27F" />
+              <Ionicons name="alert-circle-outline" size={17} color={colors.error} />
               <Text style={[styles.noticeText, { color: colors.text }]}>
                 {lastError}
               </Text>
-              <Pressable onPress={clearShopError} hitSlop={8}>
+              <Pressable
+                onPress={clearShopError}
+                style={styles.noticeDismiss}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss shop message"
+              >
                 <Ionicons name="close" size={16} color={colors.textSecondary} />
               </Pressable>
             </View>
@@ -808,7 +857,10 @@ function ShopModal({
               <View
                 style={[
                   styles.characterSection,
-                  { backgroundColor: colors.card, borderColor: colors.border },
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.separator,
+                  },
                 ]}
               >
                 <View style={styles.sectionHeaderRow}>
@@ -831,13 +883,13 @@ function ShopModal({
                     <View
                       style={[
                         styles.character3DPlaceholder,
-                        { borderColor: colors.border },
+                        { borderColor: colors.separator },
                       ]}
                     >
                       <View
                         style={[
                           styles.character3DPlaceholderInner,
-                          { backgroundColor: colors.background },
+                          { backgroundColor: colors.backgroundSecondary },
                         ]}
                       >
                         <AvatarRenderer variant="shop" />
@@ -882,8 +934,8 @@ function ShopModal({
                         style={[
                           styles.statChip,
                           {
-                            borderColor: colors.border,
-                            backgroundColor: colors.background,
+                            borderColor: colors.separator,
+                            backgroundColor: colors.surfaceRaised,
                           },
                         ]}
                       >
@@ -898,8 +950,8 @@ function ShopModal({
                         style={[
                           styles.statChip,
                           {
-                            borderColor: colors.border,
-                            backgroundColor: colors.background,
+                            borderColor: colors.separator,
+                            backgroundColor: colors.surfaceRaised,
                           },
                         ]}
                       >
@@ -963,8 +1015,8 @@ function ShopModal({
                     style={[
                       styles.searchContainer,
                       {
-                        backgroundColor: colors.card,
-                        borderColor: colors.border,
+                        backgroundColor: colors.surface,
+                        borderColor: colors.separator,
                       },
                     ]}
                   >
@@ -986,7 +1038,12 @@ function ShopModal({
                       onChangeText={setSearchQuery}
                     />
                     {searchQuery.length > 0 && (
-                      <Pressable onPress={() => setSearchQuery("")}>
+                      <Pressable
+                        onPress={() => setSearchQuery("")}
+                        style={styles.searchClearButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear shop search"
+                      >
                         <Ionicons
                           name="close-circle"
                           size={16}
@@ -1016,11 +1073,11 @@ function ShopModal({
                           backgroundColor:
                             selectedCategory === category
                               ? colors.accent
-                              : colors.card,
+                              : colors.surface,
                           borderColor:
                             selectedCategory === category
                               ? colors.accent
-                              : colors.border,
+                              : colors.separator,
                           opacity: pressed ? 0.8 : 1,
                         },
                       ]}
@@ -1032,7 +1089,7 @@ function ShopModal({
                           {
                             color:
                               selectedCategory === category
-                                ? colors.background
+                                ? colors.onAccent
                                 : colors.text,
                           },
                         ]}
@@ -1048,18 +1105,51 @@ function ShopModal({
               </View>
 
               {/* Items Grid - Using FlatList for Performance */}
-              {sortedItems.length === 0 ? (
+              {loading && !busyItemId ? (
+                <View style={styles.emptyState} accessibilityRole="progressbar">
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                    Preparing the collection
+                  </Text>
+                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                    Your pieces and prices are loading.
+                  </Text>
+                </View>
+              ) : sortedItems.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Ionicons
-                    name="search-outline"
-                    size={48}
+                    name={searchQuery ? "search-outline" : "sparkles-outline"}
+                    size={32}
                     color={colors.textSecondary}
                   />
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                    {searchQuery
+                      ? "Nothing matches that search"
+                      : "The next piece is on its way"}
+                  </Text>
                   <Text
                     style={[styles.emptyText, { color: colors.textSecondary }]}
                   >
-                    No items found
+                    {searchQuery
+                      ? "Try a different name or clear the search."
+                      : shopSegment === "home"
+                        ? "New room details will appear here."
+                        : "New companion pieces will appear here."}
                   </Text>
+                  {searchQuery ? (
+                    <Pressable
+                      style={[
+                        styles.emptyAction,
+                        { backgroundColor: colors.surfaceSelected },
+                      ]}
+                      onPress={() => setSearchQuery("")}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.emptyActionText, { color: colors.text }]}>
+                        Clear search
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : (
                 <FlatList
@@ -1182,6 +1272,7 @@ const styles = StyleSheet.create({
   shopContainer: {
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
+    borderTopWidth: 1,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.lg,
     maxHeight: "92%",
@@ -1207,15 +1298,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   shopTitle: {
-    fontSize: 28,
-    fontFamily: "Outfit-Bold",
-    letterSpacing: 0,
+    ...StudioType.title,
   },
   shopSubtitle: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
-    lineHeight: 16,
-    marginTop: 2,
+    ...StudioType.detail,
+    marginTop: Spacing.xs,
   },
   headerRight: {
     flexDirection: "row",
@@ -1227,18 +1314,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.xs,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 9,
-    borderRadius: BorderRadius.md,
+    minHeight: TouchTarget,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
   },
   coinText: {
-    fontSize: 16,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.bodyStrong,
+    fontVariant: ["tabular-nums"],
   },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.md,
+    width: TouchTarget,
+    height: TouchTarget,
+    borderRadius: BorderRadius.lg,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
@@ -1254,33 +1342,34 @@ const styles = StyleSheet.create({
     padding: 4,
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
   },
   shopSegmentButton: {
     flex: 1,
-    minHeight: 38,
-    borderRadius: BorderRadius.sm,
+    minHeight: TouchTarget,
+    borderRadius: BorderRadius.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.xs,
   },
   shopSegmentText: {
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 12,
+    ...StudioType.detail,
+    fontWeight: "600",
   },
   summaryPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 7,
-    borderRadius: BorderRadius.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
   summaryText: {
-    fontSize: 11,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.detail,
+    fontWeight: "600",
   },
   noticeBanner: {
     flexDirection: "row",
@@ -1295,9 +1384,16 @@ const styles = StyleSheet.create({
   },
   noticeText: {
     flex: 1,
-    fontSize: 12,
-    fontFamily: "Outfit-SemiBold",
-    lineHeight: 16,
+    ...StudioType.detail,
+    fontWeight: "600",
+  },
+  noticeDismiss: {
+    minWidth: TouchTarget,
+    minHeight: TouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: -Spacing.sm,
+    marginRight: -Spacing.sm,
   },
   shopMainContent: {
     flex: 1,
@@ -1319,16 +1415,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   sectionTitle: {
-    fontSize: 12,
-    fontFamily: "Outfit-Bold",
-    letterSpacing: 0.8,
+    ...StudioType.section,
     alignSelf: "flex-start",
     textTransform: "uppercase",
   },
   sectionMeta: {
     flexShrink: 1,
-    fontSize: 10,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
     textAlign: "right",
   },
   characterContent: {
@@ -1373,9 +1466,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   characterDescription: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
-    lineHeight: 16,
+    ...StudioType.detail,
   },
   characterStatsRow: {
     flexDirection: "row",
@@ -1401,8 +1492,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statChipText: {
-    fontSize: 11,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.detail,
+    fontWeight: "600",
   },
   equippedBadges: {
     flexDirection: "row",
@@ -1419,8 +1510,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyAccessoriesText: {
-    fontSize: 11,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
     opacity: 0.8,
   },
   // Items Section (Bottom) - Takes 60-65% of screen
@@ -1440,8 +1530,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderRadius: BorderRadius.md,
+    minHeight: TouchTarget,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
     flex: 1,
   },
@@ -1450,8 +1541,16 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.body,
+    paddingVertical: 0,
+  },
+  searchClearButton: {
+    minHeight: TouchTarget,
+    minWidth: TouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: -Spacing.sm,
+    marginRight: -Spacing.md,
   },
   categoryContainer: {
     flexGrow: 0,
@@ -1463,14 +1562,14 @@ const styles = StyleSheet.create({
   },
   categoryButton: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.md,
+    minHeight: TouchTarget,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
   categoryText: {
-    fontSize: 11,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 0.5,
+    ...StudioType.detail,
+    fontWeight: "600",
   },
   itemsGridContent: {
     paddingBottom: Spacing.xl,
@@ -1490,7 +1589,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    minHeight: 204,
+    minHeight: 218,
     ...Shadows.dark.sm,
   },
   itemCardTop: {
@@ -1518,8 +1617,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   costChipText: {
-    fontSize: 12,
-    fontFamily: "Outfit-Bold",
+    ...StudioType.detail,
+    fontWeight: "700",
   },
   itemCardInfo: {
     gap: Spacing.sm,
@@ -1532,15 +1631,13 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   itemCardName: {
-    fontSize: 14,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.detail,
+    fontWeight: "600",
     flex: 1,
     lineHeight: 18,
   },
   itemDescription: {
-    fontSize: 11,
-    fontFamily: "Outfit-Regular",
-    lineHeight: 15,
+    ...StudioType.detail,
   },
   itemMetaRow: {
     flexDirection: "row",
@@ -1555,9 +1652,9 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   rarityBadgeText: {
-    fontSize: 9,
-    fontFamily: "Outfit-Bold",
-    letterSpacing: 0.5,
+    ...StudioType.detail,
+    fontSize: 10,
+    fontWeight: "700",
   },
   ownedBadge: {
     flexDirection: "row",
@@ -1568,9 +1665,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
   },
   ownedBadgeText: {
-    fontSize: 9,
-    fontFamily: "Outfit-Bold",
-    letterSpacing: 0.4,
+    ...StudioType.detail,
+    fontSize: 10,
+    fontWeight: "700",
   },
   actionPill: {
     flexDirection: "row",
@@ -1578,15 +1675,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: Spacing.xs,
     marginTop: Spacing.md,
-    paddingVertical: 9,
+    minHeight: TouchTarget,
+    paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
   actionPillText: {
-    fontSize: 11,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 0.3,
+    ...StudioType.detail,
+    fontWeight: "600",
   },
   statusBadge: {
     paddingHorizontal: Spacing.xs,
@@ -1603,14 +1700,29 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.xl * 2,
+    paddingVertical: Spacing.xl * 1.5,
     width: "100%",
     paddingHorizontal: Spacing.lg,
   },
   emptyText: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.body,
+    marginTop: Spacing.xs,
+    textAlign: "center",
+  },
+  emptyTitle: {
+    ...StudioType.bodyStrong,
     marginTop: Spacing.md,
     textAlign: "center",
+  },
+  emptyAction: {
+    minHeight: TouchTarget,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.md,
+  },
+  emptyActionText: {
+    ...StudioType.detail,
+    fontWeight: "600",
   },
 });

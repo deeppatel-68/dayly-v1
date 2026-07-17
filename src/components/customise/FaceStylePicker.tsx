@@ -1,4 +1,5 @@
-import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { BorderRadius, Spacing, TouchTarget } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { AVATAR_FACE_STYLES, FaceStyle } from "@/data/faceStyles";
 import * as Haptics from "expo-haptics";
@@ -24,8 +25,10 @@ export default function FaceStylePicker({
           name={style.name}
           selected={value === style.id}
           accentColor={colors.accent}
-          borderColor={colors.border}
-          cardColor={colors.card}
+          focusRingColor={colors.focusRing}
+          surfaceColor={colors.surface}
+          selectedSurfaceColor={colors.surfaceSelected}
+          separatorColor={colors.separator}
           textColor={colors.text}
           onSelect={() => {
             Haptics.selectionAsync().catch(() => {});
@@ -41,16 +44,20 @@ function FaceChip({
   name,
   selected,
   accentColor,
-  borderColor,
-  cardColor,
+  focusRingColor,
+  surfaceColor,
+  selectedSurfaceColor,
+  separatorColor,
   textColor,
   onSelect,
 }: {
   name: string;
   selected: boolean;
   accentColor: string;
-  borderColor: string;
-  cardColor: string;
+  focusRingColor: string;
+  surfaceColor: string;
+  selectedSurfaceColor: string;
+  separatorColor: string;
   textColor: string;
   onSelect: () => void;
 }) {
@@ -77,15 +84,17 @@ function FaceChip({
           style={[
             styles.chip,
             {
-              backgroundColor: cardColor,
-              borderColor: selected ? accentColor : borderColor,
-              borderWidth: selected ? 2 : 1,
+              backgroundColor: selected ? selectedSurfaceColor : surfaceColor,
+              borderColor: selected ? focusRingColor : separatorColor,
+              borderWidth: 1,
               opacity: pressed ? 0.8 : 1,
               transform: [{ scale }],
             },
           ]}
         >
-          <Text style={[styles.chipText, { color: textColor }]}>{name}</Text>
+          <Text style={[styles.chipText, { color: selected ? accentColor : textColor }]}>
+            {name}
+          </Text>
         </Animated.View>
       )}
     </Pressable>
@@ -99,14 +108,13 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   chip: {
-    minHeight: 40,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
+    minHeight: TouchTarget,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md + Spacing.xs,
     justifyContent: "center",
     alignItems: "center",
   },
   chipText: {
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 14,
+    ...StudioType.bodyStrong,
   },
 });

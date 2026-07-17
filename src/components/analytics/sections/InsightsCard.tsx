@@ -1,4 +1,5 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
@@ -17,13 +18,15 @@ export default function InsightsCard({ insights }: InsightsCardProps) {
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { backgroundColor: colors.surface, borderColor: colors.separator },
       ]}
     >
       <View style={styles.header}>
-        <Ionicons name="trending-up" size={16} color={colors.accent} />
+        <View style={[styles.icon, { backgroundColor: colors.completedBackground }]}>
+          <Ionicons name="sparkles-outline" size={17} color={colors.accent} />
+        </View>
         <Text style={[styles.title, { color: colors.textSecondary }]}>
-          AI INSIGHT
+          Companion reflection
         </Text>
       </View>
       <Text style={[styles.insightText, { color: colors.text }]}>
@@ -37,25 +40,27 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: Spacing.sm,
-    gap: Spacing.xs,
+    gap: Spacing.sm,
+  },
+  icon: {
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
-    fontSize: 12,
-    fontFamily: "Outfit-Medium",
-    letterSpacing: 1,
+    ...StudioType.section,
+    textTransform: "uppercase",
+    letterSpacing: 0.2,
   },
-  insightText: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
-    lineHeight: 18,
-    letterSpacing: 0.5,
-  },
+  insightText: { ...StudioType.body },
 });

@@ -4,6 +4,7 @@ import ReadyStep from "@/components/onboarding/ReadyStep";
 import WelcomeStep from "@/components/onboarding/WelcomeStep";
 import FadeInView from "@/components/common/FadeInView";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useCharacter } from "@/context/CharacterContext";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -143,9 +144,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           ]}
         >
           {submitting ? (
-            <ActivityIndicator size="small" color="#ffffff" />
+            <ActivityIndicator size="small" color={colors.onAccent} />
           ) : (
-            <Text style={styles.continueText}>
+            <Text style={[styles.continueText, { color: colors.onAccent }]}>
               {step === STEP_COUNT - 1 ? "Start" : "Continue"}
             </Text>
           )}
@@ -183,18 +184,16 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
   },
   backText: {
-    fontSize: 13,
-    fontFamily: "Outfit-Medium",
+    ...StudioType.detail,
+    fontWeight: "600",
   },
   continueButton: {
-    paddingVertical: Spacing.md,
+    minHeight: 52,
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   continueText: {
-    fontSize: 16,
-    fontFamily: "Outfit-SemiBold",
-    color: "#ffffff",
+    ...StudioType.bodyStrong,
   },
 });
