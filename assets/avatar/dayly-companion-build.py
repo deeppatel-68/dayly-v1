@@ -707,17 +707,53 @@ LITE_EXCLUDED = {
     name for name in MODEL_OBJECTS
     if "Blush" in name or "Catchlight2" in name
 }
+
+
+def local_mesh_bounds(obj):
+    coordinates = [vertex.co for vertex in obj.data.vertices]
+    return (
+        tuple(min(coordinate[axis] for coordinate in coordinates) for axis in range(3)),
+        tuple(max(coordinate[axis] for coordinate in coordinates) for axis in range(3)),
+    )
+
+
+def restore_local_mesh_bounds(obj, original_bounds):
+    current_min, current_max = local_mesh_bounds(obj)
+    original_min, original_max = original_bounds
+    current_center = tuple(
+        (current_min[axis] + current_max[axis]) * 0.5 for axis in range(3)
+    )
+    original_center = tuple(
+        (original_min[axis] + original_max[axis]) * 0.5 for axis in range(3)
+    )
+    scale = tuple(
+        (original_max[axis] - original_min[axis])
+        / (current_max[axis] - current_min[axis])
+        if current_max[axis] != current_min[axis]
+        else 1.0
+        for axis in range(3)
+    )
+    for vertex in obj.data.vertices:
+        for axis in range(3):
+            vertex.co[axis] = (
+                (vertex.co[axis] - current_center[axis]) * scale[axis]
+                + original_center[axis]
+            )
+
+
 for name in MODEL_OBJECTS:
     obj = bpy.data.objects.get(name)
     if not obj or obj.type != "MESH" or name in LITE_EXCLUDED:
         continue
     if len(obj.data.polygons) < 12:
         continue
+    original_bounds = local_mesh_bounds(obj)
     bpy.context.view_layer.objects.active = obj
     modifier = obj.modifiers.new("LiteReduction", "DECIMATE")
     modifier.ratio = 0.58
     modifier.use_collapse_triangulate = True
     bpy.ops.object.modifier_apply(modifier=modifier.name)
+    restore_local_mesh_bounds(obj, original_bounds)
 export_glb(lite_path, excluded=LITE_EXCLUDED)
 
 

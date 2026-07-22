@@ -8,7 +8,7 @@
       "Face_Screen": 9704
     },
     "animations": 0,
-    "bytes": 401568,
+    "bytes": 403324,
     "indexCount": 47388,
     "primitiveCount": 66,
     "requiredNames": [
@@ -41,7 +41,7 @@
       "Face_Screen": 5862
     },
     "animations": 0,
-    "bytes": 250120,
+    "bytes": 250168,
     "indexCount": 27564,
     "primitiveCount": 50,
     "requiredNames": [
