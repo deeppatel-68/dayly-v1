@@ -112,15 +112,20 @@ function createPalette(accent: THREE.Color, tex: RoomTextures): RoomPalette {
     if (extra.emissive) {
       resolvedColor.lerp(new THREE.Color(extra.emissive), 0.35);
     }
-    const material = new THREE.MeshBasicMaterial({
+    const parameters: THREE.MeshBasicMaterialParameters = {
       color: resolvedColor,
-      map: extra.map,
-      transparent: extra.transparent,
-      opacity: extra.opacity,
-      depthTest: extra.depthTest,
-      depthWrite: extra.depthWrite,
-      side: extra.side,
-    });
+    };
+    if (extra.map !== undefined) parameters.map = extra.map;
+    if (extra.transparent !== undefined) {
+      parameters.transparent = extra.transparent;
+    }
+    if (extra.opacity !== undefined) parameters.opacity = extra.opacity;
+    if (extra.depthTest !== undefined) parameters.depthTest = extra.depthTest;
+    if (extra.depthWrite !== undefined) {
+      parameters.depthWrite = extra.depthWrite;
+    }
+    if (extra.side !== undefined) parameters.side = extra.side;
+    const material = new THREE.MeshBasicMaterial(parameters);
     material.toneMapped = false;
     material.userData.baseColor = material.color.clone();
     return material;
@@ -216,6 +221,38 @@ const cylinder = (
   return out;
 };
 
+interface InstanceTransform {
+  position: readonly [number, number, number];
+  rotation?: readonly [number, number, number];
+  scale?: readonly [number, number, number];
+}
+
+function instanceCluster(
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+  name: string,
+  transforms: readonly InstanceTransform[],
+): THREE.InstancedMesh {
+  const cluster = new THREE.InstancedMesh(
+    geometry,
+    material,
+    transforms.length,
+  );
+  cluster.name = name;
+  const transform = new THREE.Object3D();
+  transforms.forEach((authored, index) => {
+    transform.position.set(...authored.position);
+    transform.rotation.set(...(authored.rotation ?? [0, 0, 0]));
+    transform.scale.set(...(authored.scale ?? [1, 1, 1]));
+    transform.updateMatrix();
+    cluster.setMatrixAt(index, transform.matrix);
+  });
+  cluster.instanceMatrix.needsUpdate = true;
+  cluster.computeBoundingBox();
+  cluster.computeBoundingSphere();
+  return cluster;
+}
+
 // Soft elliptical contact shadow (unlit, cheap) — grounds furniture without
 // shadow maps, which expo-gl can't afford.
 const contactShadow = (
@@ -251,9 +288,18 @@ function buildShell(p: RoomPalette): {
   );
 
   // Shallow floor seams give the studio scale without adding textures.
+  const seamTransforms: InstanceTransform[] = [];
   for (let z = -1.55; z <= 2.4; z += 0.65) {
-    shell.add(box(p.darkWood, 6.75, 0.008, 0.018, 0.4, 0.006, z));
+    seamTransforms.push({ position: [0.4, 0.006, z] });
   }
+  shell.add(
+    instanceCluster(
+      new THREE.BoxGeometry(6.75, 0.008, 0.018),
+      p.darkWood,
+      "FloorSeams",
+      seamTransforms,
+    ),
+  );
 
   // Rug under the companion
   const rug = cylinder(p.rug, 1.25, 1.25, 0.03, 1.0, 0.015, 0.2, 40);
@@ -280,15 +326,18 @@ function buildShell(p: RoomPalette): {
     box(p.metal, 0.13, 0.38, 0.04, 0.08, -0.44, 0.05),
     box(p.metal, 0.25, 0.24, 0.04, 0.34, -0.51, 0.05),
   );
-  for (const [x, y] of [
-    [-0.34, 0.34],
-    [-0.16, 0.5],
-    [0.05, 0.18],
-  ]) {
-    const star = new THREE.Mesh(new THREE.CircleGeometry(0.018, 8), p.stars);
-    star.position.set(x, y, 0.056);
-    win.add(star);
-  }
+  win.add(
+    instanceCluster(
+      new THREE.CircleGeometry(0.018, 8),
+      p.stars,
+      "WindowStars",
+      [
+        { position: [-0.34, 0.34, 0.056] },
+        { position: [-0.16, 0.5, 0.056] },
+        { position: [0.05, 0.18, 0.056] },
+      ],
+    ),
+  );
   win.position.set(0.58, 1.72, -2.0);
   shell.add(win);
 
@@ -307,22 +356,19 @@ function buildDesk(p: RoomPalette): {
   // Each end gets two legs tilted front/back so the desk reads structurally
   // supported, not balanced on posts.
   desk.add(roundedBox(p.wood, 1.7, 0.06, 0.7, 0.025, 0, topY, 0));
-  for (const side of [-1, 1]) {
-    for (const tilt of [-1, 1]) {
-      const leg = cylinder(
-        p.wood,
-        0.022,
-        0.028,
-        topY,
-        side * 0.72,
-        topY / 2,
-        0,
-      );
-      leg.rotation.x = tilt * 0.2;
-      leg.rotation.z = side * -0.05;
-      desk.add(leg);
-    }
-  }
+  desk.add(
+    instanceCluster(
+      new THREE.CylinderGeometry(0.022, 0.028, topY, 14),
+      p.wood,
+      "DeskLegs",
+      [-1, 1].flatMap((side) =>
+        [-1, 1].map((tilt): InstanceTransform => ({
+          position: [side * 0.72, topY / 2, 0],
+          rotation: [tilt * 0.2, 0, side * -0.05],
+        })),
+      ),
+    ),
+  );
   desk.add(roundedBox(p.wood, 1.34, 0.05, 0.05, 0.02, 0, 0.22, 0));
 
   // Laptop
@@ -589,15 +635,25 @@ function buildFloorPlant(p: RoomPalette): {
   );
   const foliage = new THREE.Group();
   const leafGeo = new THREE.SphereGeometry(0.11, 7, 5);
-  for (let i = 0; i < 3; i++) {
-    const leafBlade = new THREE.Mesh(leafGeo, p.leaf);
-    const angle = (i / 3) * Math.PI * 2;
-    leafBlade.position.set(Math.cos(angle) * 0.05, 0.36 + i * 0.09, Math.sin(angle) * 0.05);
-    leafBlade.scale.set(0.9, 1.9, 0.28);
-    leafBlade.rotation.y = angle;
-    leafBlade.rotation.z = 0.28;
-    foliage.add(leafBlade);
-  }
+  foliage.add(
+    instanceCluster(
+      leafGeo,
+      p.leaf,
+      "FloorPlantFoliage",
+      [0, 1, 2].map((i) => {
+        const angle = (i / 3) * Math.PI * 2;
+        return {
+          position: [
+            Math.cos(angle) * 0.05,
+            0.36 + i * 0.09,
+            Math.sin(angle) * 0.05,
+          ],
+          rotation: [0, angle, 0.28],
+          scale: [0.9, 1.9, 0.28],
+        } satisfies InstanceTransform;
+      }),
+    ),
+  );
   plant.add(foliage);
   return { group: plant, sway: foliage };
 }
@@ -607,17 +663,17 @@ function buildStringLights(p: RoomPalette): THREE.Group {
   const lights = new THREE.Group();
   const bulbGeo = new THREE.SphereGeometry(0.024, 8, 6);
   const wirePoints: [number, number, number][] = [];
+  const bulbTransforms: InstanceTransform[] = [];
   for (let i = 0; i < 9; i++) {
     const x = -2.2 + i * 0.55;
     // Single gravity sag between the two end anchors — an S-wave reads as
     // decorative oscillation, not a hanging wire.
     const droop = -Math.sin((i / 8) * Math.PI) * 0.12;
     const y = 2.5 + droop;
-    const bulb = new THREE.Mesh(bulbGeo, p.string);
-    bulb.position.set(x, y, -1.94);
-    lights.add(bulb);
+    bulbTransforms.push({ position: [x, y, -1.94] });
     wirePoints.push([x, y + 0.02, -1.945]);
   }
+  lights.add(instanceCluster(bulbGeo, p.string, "StringBulbs", bulbTransforms));
   // The wire the bulbs hang from — without it they read as floating dots.
   lights.add(cable(p.metal, wirePoints, 0.004, 32));
   return lights;
@@ -797,9 +853,12 @@ export function buildStudyRoom(
     anchorFor: (anchor) => ROOM_ANCHORS[anchor],
     dispose: () => {
       const geometries = new Set<THREE.BufferGeometry>();
+      const instances: THREE.InstancedMesh[] = [];
       group.traverse((child) => {
+        if (child instanceof THREE.InstancedMesh) instances.push(child);
         if (child instanceof THREE.Mesh) geometries.add(child.geometry);
       });
+      instances.forEach((instance) => instance.dispose());
       geometries.forEach((geometry) => geometry.dispose());
       Object.values(p).forEach((mat) => mat.dispose());
       lampPoolMat.dispose();
