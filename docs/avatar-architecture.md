@@ -20,16 +20,14 @@ Selection lives in `AVATAR_MODE` in `AvatarRenderer.tsx` ("3d" today).
 ## Shared 3D foundation (`src/components/3d/`)
 
 - `companionModel.ts` — retained Blender GLB loader (`loadCompanion`) +
-  `createCompanionInstance` (pet-node reparenting, per-instance material
-  tinting, and disposal). Used by every companion scene: Avatar3D, the
-  customisation preview, and My Space (`StudyRoomScene`) all load the cached
-  GLB per mount. The bundled GLB is parsed once into an immutable source
-  graph; instances deep-clone geometry and materials and own those disposable
-  resources. Runtime accent tinting covers the core plus every shared
-  `Accent_Orange_Emission` part (halo beads, VisorLip, visor contour) and the
-  pod's `Platform_Inner_Glow` inner ring, so the whole silhouette tracks the
-  user's colour; the EnergyCore material stays independent so its heartbeat
-  pulse can run at its own intensity.
+  `createCompanionInstance` (face pruning, pet-node reparenting, per-instance
+  material conversion/tinting, and disposal). Used by every companion scene.
+  The appropriate bundled GLB is parsed once into an immutable source graph;
+  each instance removes inactive `Face_*` groups before cloning retained
+  geometry and materials, preserving sharing inside the instance while keeping
+  GL contexts isolated. Runtime accent tinting covers the core, orbit, face
+  accents, and both pod rings. Each role owns an independent runtime material
+  so motion can animate its colour without allocations or cross-role changes.
 - `proceduralCompanion.ts` — legacy primitive companion rig, exercised only
   by its own test today. My Space no longer uses it: `StudyRoomScene`
   renders the same cached-GLB companion as everywhere else.
@@ -68,7 +66,10 @@ Selection lives in `AVATAR_MODE` in `AvatarRenderer.tsx` ("3d" today).
 ## Scenes
 
 - `Avatar3D` (avatar card / shop preview) — pet + pod, renders `pet` and
-  `platform` equipment slots. Tap for a haptic bounce; drag for a full orbit.
+  `platform` equipment slots. Both variants start from the authored 10° hero
+  azimuth and ease back there after interaction. Shop drag remains a free 360°
+  turntable with bounded elevation; dashboard drag retains its horizontal
+  clamp. Tap produces a haptic companion reaction.
 - `components/room/StudyRoomScene.tsx` — My Space: moonlit study nook
   (`roomBuilders.ts`: shell, window/skyline, A-frame trestle desk with mug +
   drifting steam, notebook, headphones and laptop cable, practical lamp,
@@ -139,24 +140,69 @@ renderer-independent.
 
 No other code changes; all three surfaces switch over together.
 
-## Blender asset pipeline
+## Companion asset contract
 
-- `assets/avatar/dayly-companion-build.py` is the source of truth for the GLB,
-  `.blend`, and preview. Keep node names stable because `companionModel.ts`
-  uses them for animation and material tinting.
-- The compact asset includes the pear-tapered body, visor with a moulded
-  `VisorRim` lip, eyes with double catchlights (`LeftCatchlight` +
-  `LeftCatchlight2` and mirrored right, prefixed per face style), core,
-  flippers, foot nubs, halo charm with two beads (`HaloBead`, `HaloBead2`),
-  visor accent contour, and a chamfered two-tier pod with an inset
-  `PlatformInnerRing` whose `Platform_Inner_Glow` material is accent-tinted
-  at runtime. It has no skeletal rig.
-- `companionModel.ts` adds progression geometry at runtime so the same compact
-  asset visibly evolves everywhere: tier 1 energy fins, tier 2 orbiting focus
-  ticks, and a tier 3/streak energy arc. These meshes share one low-cost
-  material and are disposed with the companion instance.
-- After model edits, rerun the script in Blender background mode, inspect the
-  preview, and verify wearable and pod-equipment fit against the exported GLB.
+`assets/avatar/dayly-companion-build.py` is the only editable model source. It
+emits two texture-free GLBs from one scene with the same origin, dimensions,
+pod footprint, cosmetic envelope, face groups, and motion contract:
+
+- `dayly-companion.glb` (`detail: "hero"`) keeps the complete authored detail
+  and is selected by `Avatar3D` for dashboard, onboarding, customisation, and
+  shop presentation.
+- `dayly-companion-lite.glb` (`detail: "lite"`) removes sub-pixel blush and
+  secondary catchlights and reduces mesh density. `StudyRoomScene` selects it
+  because the companion occupies fewer pixels there. Lite is a separate asset,
+  not hidden hero geometry, and preserves the same active states and cosmetics.
+
+Both exports must retain `Body`, `Body_Charcoal`, `FacePanel`, `VisorRim`,
+`LeftEye`, `RightEye`, `VisorLip`, `HaloCharm`, `EnergyCore`, `LeftFlipper`,
+`RightFlipper`, and all five compatibility groups: `Face_Classic`, `Face_Eve`,
+`Face_Screen`, `Face_Kirby`, and `Face_Joy`. The internal IDs remain stable for
+persisted users and rig lookup; their display names are Orbit, Focus, Pixel,
+Spark, and Rest. The model has no skin or authored animation clips.
+
+Before instance resources are cloned, `createCompanionInstance` removes the
+four inactive face groups and resolves the selected style's semantic eye,
+pupil, and mouth nodes. A missing required node throws a model-contract error.
+Every retained material slot is converted to a context-owned
+`MeshBasicMaterial` for reliable Expo GL rendering. Conversion retains colour
+and emission influence, maps, side, depth, alpha, blending, vertex-colour, and
+multi-material slot behavior. Body tint replaces only the `Body_Charcoal`
+slot, leaving the stable dark base intact. Core, orbit, face, platform ring,
+and inner ring then receive independent Basic materials for allocation-free
+runtime animation.
+
+`companionModel.ts` adds cumulative progression geometry at runtime: tier 1
+energy fins, tier 2 orbiting focus ticks, and a tier 3/streak energy arc. These
+meshes are disposed with the companion instance.
+
+## Generator, budgets, and visual review
+
+From the repository root, rebuild all authored outputs with:
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python assets/avatar/dayly-companion-build.py
+```
+
+The script resolves outputs relative to itself, so the same command is valid
+from a Git worktree. It writes `dayly-companion.blend`, both GLBs,
+`dayly-companion-preview.png`, and
+`assets/avatar/dayly-companion-manifest.json`. The manifest records bytes,
+primitive/index counts, per-face active triangles, required names, and counts
+of textures, skins, and animation clips. The generator aborts before accepting
+an asset over these limits: hero ≤ 700 KB and 15,000 active-face triangles;
+lite ≤ 450 KB and 7,000 active-face triangles; both with zero textures, skins,
+or clips. `companionAssetBudget.test.ts` recalculates those facts from each GLB
+instead of trusting the manifest.
+
+Review every rebuild at original size in `assets/avatar/review/`: `front.png`,
+`three-quarter.png`, `side.png`, `rear.png`, `silhouette.png`, and `unlit.png`.
+The last two expose outline and Expo Basic-material parity problems that a lit
+front render can hide; also inspect the silhouette at 64 px. Face-specific
+merged outputs live at
+`assets/avatar/face-variants/merged-check-{classic,eve,screen,kirby,joy}.png`.
+Together with `dayly-companion-preview.png`, these generated artifacts are the
+durable visual-review record for changes to the source script.
 
 ## Rules
 

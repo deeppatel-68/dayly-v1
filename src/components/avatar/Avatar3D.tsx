@@ -14,6 +14,7 @@ import SceneTouchLayer, {
 import {
   createOrbitRig,
   createPetTapDetector,
+  HERO_HOME_AZIMUTH,
   OrbitRig,
 } from "@/components/3d/sceneInteraction";
 import {
@@ -175,6 +176,7 @@ export default function Avatar3D(props: AvatarRendererProps) {
           target: orbitTarget,
           radius: variant === "shop" ? 2.55 : 2.25,
           height: variant === "shop" ? 0.9 : 0.94,
+          initialAzimuth: HERO_HOME_AZIMUTH,
           ...(variant === "shop"
             ? {
                 minElevation: (-12 * Math.PI) / 180,

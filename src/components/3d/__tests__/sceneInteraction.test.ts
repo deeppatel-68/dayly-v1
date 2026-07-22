@@ -1,6 +1,68 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { describe, expect, it } from "vitest";
-import { createOrbitRig, createPetTapDetector } from "../sceneInteraction";
+import {
+  createOrbitRig,
+  createPetTapDetector,
+  HERO_HOME_AZIMUTH,
+} from "../sceneInteraction";
+
+async function loadAuthoredHero(): Promise<THREE.Group> {
+  const bytes = await readFile(
+    resolve(process.cwd(), "assets/avatar/dayly-companion.glb"),
+  );
+  const arrayBuffer = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+  const gltf = await new Promise<{ scene: THREE.Group }>((resolveGltf, reject) => {
+    new GLTFLoader().parse(arrayBuffer, "", resolveGltf, reject);
+  });
+
+  for (const groupName of [
+    "Face_Eve",
+    "Face_Screen",
+    "Face_Kirby",
+    "Face_Joy",
+  ]) {
+    const group = gltf.scene.getObjectByName(groupName);
+    if (group) group.visible = false;
+  }
+  gltf.scene.updateWorldMatrix(true, true);
+  return gltf.scene;
+}
+
+function projectHeroBounds(hero: THREE.Group, camera: THREE.PerspectiveCamera) {
+  const ndcBounds = new THREE.Box2();
+  const vertex = new THREE.Vector3();
+  const point = new THREE.Vector2();
+
+  hero.traverse((node) => {
+    if (
+      !node.visible ||
+      !(node instanceof THREE.Mesh) ||
+      // The pod is deliberately allowed to bleed beyond compact cards; the
+      // companion silhouette is the interaction-critical safe area.
+      node.name.startsWith("Platform")
+    ) {
+      return;
+    }
+
+    const positions = node.geometry.getAttribute("position");
+    for (let index = 0; index < positions.count; index += 1) {
+      vertex
+        .fromBufferAttribute(positions, index)
+        .applyMatrix4(node.matrixWorld)
+        .project(camera);
+      point.set(vertex.x, vertex.y);
+      ndcBounds.expandByPoint(point);
+    }
+  });
+
+  return ndcBounds;
+}
 
 describe("scene interaction", () => {
   it("orbits around a stable target without changing radius or height", () => {
@@ -59,6 +121,85 @@ describe("scene interaction", () => {
     const distance = camera.position.distanceTo(target);
     expect(distance).toBeCloseTo(Math.hypot(2.5, 0.25));
   });
+
+  it("starts at the authored 10-degree hero view and returns home after interaction", () => {
+    expect(HERO_HOME_AZIMUTH).toBeCloseTo((10 * Math.PI) / 180);
+
+    const target = new THREE.Vector3(0, 0.66, 0);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    const orbit = createOrbitRig({
+      target,
+      radius: 2.25,
+      height: 0.94,
+      initialAzimuth: HERO_HOME_AZIMUTH,
+      minAzimuth: -0.45,
+      maxAzimuth: 0.45,
+      easeBackAfter: 1.5,
+    });
+
+    orbit.applyTo(camera, 0);
+    expect(camera.position.x).toBeCloseTo(Math.sin(HERO_HOME_AZIMUTH) * 2.25);
+    expect(camera.position.z).toBeCloseTo(Math.cos(HERO_HOME_AZIMUTH) * 2.25);
+
+    orbit.orbitBy(0.06);
+    orbit.applyTo(camera, 0.1);
+    expect(camera.position.x).not.toBeCloseTo(
+      Math.sin(HERO_HOME_AZIMUTH) * 2.25,
+    );
+
+    for (let time = 1.7; time <= 4.7; time += 0.1) {
+      orbit.applyTo(camera, time);
+    }
+    expect(camera.position.x).toBeCloseTo(
+      Math.sin(HERO_HOME_AZIMUTH) * 2.25,
+      3,
+    );
+    expect(camera.position.z).toBeCloseTo(
+      Math.cos(HERO_HOME_AZIMUTH) * 2.25,
+      3,
+    );
+  });
+
+  it.each([
+    {
+      label: "portrait dashboard",
+      aspect: 3 / 4,
+      targetY: 0.66,
+      radius: 2.25,
+      height: 0.94,
+      safetyLimit: 0.95,
+    },
+    {
+      label: "square shop",
+      aspect: 1,
+      targetY: 0.7,
+      radius: 2.55,
+      height: 0.9,
+      safetyLimit: 0.85,
+    },
+  ])(
+    "keeps authored hero bounds inside the $label NDC safety margin",
+    async ({ aspect, targetY, radius, height, safetyLimit }) => {
+      const hero = await loadAuthoredHero();
+      const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+      const orbit = createOrbitRig({
+        target: new THREE.Vector3(0, targetY, 0),
+        radius,
+        height,
+        initialAzimuth: HERO_HOME_AZIMUTH,
+      });
+
+      orbit.applyTo(camera, 0);
+      camera.updateMatrixWorld();
+      camera.updateProjectionMatrix();
+      const bounds = projectHeroBounds(hero, camera);
+
+      expect(bounds.min.x).toBeGreaterThanOrEqual(-safetyLimit);
+      expect(bounds.max.x).toBeLessThanOrEqual(safetyLimit);
+      expect(bounds.min.y).toBeGreaterThanOrEqual(-safetyLimit);
+      expect(bounds.max.y).toBeLessThanOrEqual(safetyLimit);
+    },
+  );
 
   it("only reports taps whose ray intersects the pet", () => {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);

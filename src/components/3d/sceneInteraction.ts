@@ -2,6 +2,10 @@ import * as THREE from "three";
 
 const TWO_PI = Math.PI * 2;
 
+// Dashboard and shop share this authored three-quarter hero composition.
+// Keep it separate from room navigation, whose home view has its own camera.
+export const HERO_HOME_AZIMUTH = (10 * Math.PI) / 180;
+
 // Camera orbit + pet hit-testing shared by the interactive scenes. The rig
 // owns the azimuth; scenes feed it drag deltas from SceneTouchLayer and call
 // applyTo(camera, t) every frame, so interaction never recreates a GL
