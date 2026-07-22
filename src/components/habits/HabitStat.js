@@ -1,46 +1,43 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
+import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { useHabits } from "@/context/HabitsContext";
-function HabitStat() {
+export default function HabitStat() {
   const { colors } = useTheme();
   const { completedCount, currentStreak, totalCount } = useHabits();
-  // Calculate total completions across all habits and all dates
   const stats = [
-    {
-      icon: "radio-button-on",
-      label: "ACTIVE",
-      value: totalCount,
-    },
-    {
-      icon: "flame",
-      label: "STREAK",
-      value: currentStreak.toString(),
-    },
-    {
-      icon: "checkmark-circle",
-      label: "TOTAL",
-      value: completedCount.toString(),
-    },
+    { icon: "radio-button-on", label: "Active", value: totalCount },
+    { icon: "flame", label: "Streak", value: currentStreak },
+    { icon: "checkmark-circle", label: "Today", value: completedCount },
   ];
+
   return (
-    <View style={styles.container}>
-      {stats.map((stat) => (
+    <View
+      style={[
+        styles.strip,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
+      {stats.map((stat, index) => (
         <View
           key={stat.label}
           style={[
-            styles.card,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            styles.item,
+            index > 0 && {
+              borderLeftWidth: StyleSheet.hairlineWidth,
+              borderLeftColor: colors.separator,
+            },
           ]}
         >
-          <Ionicons name={stat.icon} size={24} color={colors.text} />
-          <Text style={[styles.value, { color: colors.text }]}>
+          <Ionicons name={stat.icon} size={15} color={colors.accent} />
+          <Text selectable style={[styles.value, { color: colors.text }]}>
             {stat.value}
           </Text>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
+          <Text selectable style={[styles.label, { color: colors.textSecondary }]}>
             {stat.label}
           </Text>
         </View>
@@ -49,43 +46,21 @@ function HabitStat() {
   );
 }
 
-export default HabitStat;
-
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.xl,
-  },
-  // UPDATE card style (around line 65):
-  card: {
-    flex: 1,
-    aspectRatio: 1,
+  strip: {
+    marginHorizontal: Spacing.md,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    padding: Spacing.md,
-    alignItems: "flex-start",
-    justifyContent: "flex-start",
-    // ADD THESE:
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    overflow: "hidden",
   },
-  value: {
-    fontSize: 32,
-    fontFamily: "Outfit-Bold",
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
+  item: {
+    flex: 1,
+    minHeight: 92,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
   },
-  label: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
-    letterSpacing: 0.5,
-    paddingBottom: Spacing.xs,
-  },
+  value: { ...StudioType.metric },
+  label: { ...StudioType.detail, textTransform: "uppercase", letterSpacing: 0.4 },
 });

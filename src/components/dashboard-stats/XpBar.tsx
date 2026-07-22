@@ -1,4 +1,5 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
 import React, { useEffect, useRef } from "react";
@@ -24,7 +25,7 @@ function XpBar() {
       <View
         style={[
           styles.card,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          { backgroundColor: colors.surface, borderColor: colors.border },
         ]}
       >
         <View style={styles.row}>
@@ -32,7 +33,7 @@ function XpBar() {
             <View
               style={[styles.levelBadge, { backgroundColor: colors.accent }]}
             >
-              <Text style={styles.levelNumber}>{level}</Text>
+              <Text style={[styles.levelNumber, { color: colors.onAccent }]}>{level}</Text>
             </View>
             <Text style={[styles.levelLabel, { color: colors.text }]}>
               Level {level}
@@ -45,7 +46,7 @@ function XpBar() {
         <View
           style={[
             styles.track,
-            { backgroundColor: colors.backgroundSecondary },
+            { backgroundColor: colors.surfaceRaised },
           ]}
         >
           <Animated.View
@@ -72,12 +73,11 @@ export default XpBar;
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    paddingHorizontal: Spacing.sm,
-    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
   },
   card: {
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.md,
     gap: Spacing.sm,
   },
@@ -100,17 +100,14 @@ const styles = StyleSheet.create({
   },
   levelNumber: {
     fontSize: 14,
-    fontFamily: "Outfit-Bold",
-    color: "#ffffff",
+    fontWeight: "700",
   },
   levelLabel: {
-    fontSize: 16,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 0.3,
+    ...StudioType.bodyStrong,
   },
   xpText: {
-    fontSize: 13,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
+    fontVariant: ["tabular-nums"],
   },
   track: {
     height: 8,

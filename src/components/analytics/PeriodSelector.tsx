@@ -1,14 +1,15 @@
-import { Spacing } from "@/constants/Spacing";
+import { BorderRadius, Spacing, TouchTarget } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { AnalyticsPeriod } from "@/utils/analytics";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-const PERIODS: { id: AnalyticsPeriod; label: string; compact: string }[] = [
-  { id: "day", label: "Today", compact: "1D" },
-  { id: "week", label: "Week", compact: "7D" },
-  { id: "month", label: "Month", compact: "30D" },
-  { id: "3months", label: "3 Months", compact: "13W" },
+const PERIODS: { id: AnalyticsPeriod; label: string }[] = [
+  { id: "day", label: "Today" },
+  { id: "week", label: "7 Days" },
+  { id: "month", label: "30 Days" },
+  { id: "3months", label: "13 Weeks" },
 ];
 
 interface PeriodSelectorProps {
@@ -24,9 +25,10 @@ export default function PeriodSelector({
 
   return (
     <View
+      accessibilityRole="tablist"
       style={[
         styles.container,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { backgroundColor: colors.surfaceRaised, borderColor: colors.separator },
       ]}
     >
       {PERIODS.map((period) => {
@@ -34,31 +36,24 @@ export default function PeriodSelector({
         return (
           <Pressable
             key={period.id}
-            accessibilityRole="button"
+            accessibilityRole="tab"
+            accessibilityLabel={`${period.label} analytics period`}
             accessibilityState={{ selected: isSelected }}
             onPress={() => onSelect(period.id)}
             style={({ pressed }) => [
               styles.option,
               isSelected && { backgroundColor: colors.accent },
-              pressed && styles.pressed,
+              pressed && !isSelected && { backgroundColor: colors.surfaceSelected },
+              pressed && isSelected && { opacity: 0.82 },
             ]}
           >
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.compact,
-                { color: isSelected ? colors.background : colors.textSecondary },
-              ]}
-            >
-              {period.compact}
-            </Text>
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.8}
               style={[
                 styles.label,
-                { color: isSelected ? colors.background : colors.text },
+                { color: isSelected ? colors.onAccent : colors.textSecondary },
               ]}
             >
               {period.label}
@@ -75,28 +70,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
-    padding: 4,
-    borderWidth: 1,
-    borderRadius: 8,
+    padding: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: BorderRadius.lg,
   },
   option: {
     flex: 1,
-    minHeight: 52,
-    borderRadius: 6,
+    minHeight: TouchTarget,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-  compact: {
-    fontSize: 10,
-    fontFamily: "Outfit-Bold",
-    marginBottom: 2,
+    paddingHorizontal: Spacing.xs,
   },
   label: {
-    fontSize: 12,
-    fontFamily: "Outfit-SemiBold",
-  },
-  pressed: {
-    opacity: 0.75,
+    ...StudioType.detail,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });

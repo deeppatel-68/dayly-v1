@@ -14,11 +14,19 @@ export const Spacing = {
 
 export const BorderRadius = {
   sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
+  md: 10,
+  lg: 12,
+  xl: 16,
+  xxl: 20,
   full: 9999,
+};
+
+export const TouchTarget = 44;
+
+export const Motion = {
+  quick: 160,
+  standard: 220,
+  deliberate: 320,
 };
 
 export const Shadows = {

@@ -1,4 +1,5 @@
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useTheme } from "@/context/ThemeContext";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -21,6 +22,7 @@ export default function CompanionDialogue({
   style,
 }: CompanionDialogueProps) {
   const reducedMotion = useReducedMotion();
+  const { colors } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-4)).current;
   const [renderedCue, setRenderedCue] = useState(cue);
@@ -56,10 +58,10 @@ export default function CompanionDialogue({
         { opacity, transform: [{ translateY }] },
       ]}
     >
-      <Text numberOfLines={1} style={styles.name}>
+      <Text numberOfLines={1} style={[styles.name, { color: colors.accentLight }]}>
         {name.toUpperCase()}
       </Text>
-      <Text numberOfLines={2} style={styles.line}>
+      <Text numberOfLines={2} style={[styles.line, { color: colors.text }]}>
         {renderedCue.line}
       </Text>
     </Animated.View>
@@ -75,18 +77,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(240, 238, 230, 0.18)",
-    backgroundColor: "rgba(24, 23, 21, 0.92)",
+    borderColor: "rgba(255, 255, 255, 0.16)",
+    backgroundColor: "rgba(18, 25, 34, 0.94)",
   },
   name: {
-    color: "#D4A27F",
-    fontFamily: "Outfit-SemiBold",
+    fontWeight: "700",
     fontSize: 9,
     marginBottom: 3,
   },
   line: {
-    color: "#F0EEE6",
-    fontFamily: "Outfit-Medium",
+    fontWeight: "500",
     fontSize: 13,
     lineHeight: 17,
   },

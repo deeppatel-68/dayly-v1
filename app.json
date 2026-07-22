@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "dashboard",
+    "name": "Dayly",
     "slug": "dashboard",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -40,7 +40,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

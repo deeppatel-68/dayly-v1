@@ -1,16 +1,23 @@
+import {
+  StudioButton,
+  StudioGroup,
+  StudioIconButton,
+  StudioRow,
+  StudioSection,
+  StudioSheet,
+} from "@/components/ui/StudioPrimitives";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
+import { useCharacter } from "@/context/CharacterContext";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useXp } from "@/context/XpContext";
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
-import React from "react";
+import { router } from "expo-router";
+import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
-  Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -21,510 +28,350 @@ import {
 
 export default function ProfileScreen() {
   const { colors, colorScheme, toggleTheme } = useTheme();
-  const isDark = colorScheme === "dark";
   const { user, profile, signOut, updateUsername } = useAuth();
+  const { character } = useCharacter();
   const { totalCount, percentage, currentStreak } = useHabits();
   const { xp, level } = useXp();
+  const [showEditSheet, setShowEditSheet] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const [showEditModal, setShowEditModal] = React.useState(false);
-  const [usernameInput, setUsernameInput] = React.useState("");
-  const [isSaving, setIsSaving] = React.useState(false);
-  const [error, setError] = React.useState("");
+  const username = profile?.username || user?.email?.split("@")[0] || "User";
+  const email = user?.email || "";
+  const initial = username.slice(0, 1).toUpperCase();
+  const companionName = character.companionName || "Deep";
 
-  // Get username from profile or fallback to email prefix
-  const userName = profile?.username || user?.email?.split("@")[0] || "User";
-  const userEmail = user?.email || "";
-  const userInitial = userName.charAt(0).toUpperCase();
-
-  const handleEditUsername = () => {
-    setUsernameInput(userName);
+  const openEditor = () => {
+    setUsernameInput(username);
     setError("");
-    setShowEditModal(true);
+    setShowEditSheet(true);
   };
 
-  const handleSaveUsername = async () => {
-    if (!usernameInput.trim()) {
-      setError("Username cannot be empty");
+  const saveUsername = async () => {
+    const nextUsername = usernameInput.trim();
+    if (!nextUsername) {
+      setError("Choose a username to continue.");
       return;
     }
-
-    if (usernameInput.trim() === userName) {
-      setShowEditModal(false);
+    if (nextUsername === username) {
+      setShowEditSheet(false);
       return;
     }
 
     setIsSaving(true);
     setError("");
-
     try {
-      await updateUsername(usernameInput.trim());
-      setShowEditModal(false);
-    } catch (err: any) {
-      setError(err.message || "Failed to update username");
+      await updateUsername(nextUsername);
+      setShowEditSheet(false);
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not update your username."
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleSignOut = () => {
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await signOut();
-            } catch {
-              Alert.alert("Error", "Failed to sign out. Please try again.");
-            }
-          },
-        },
-      ],
-      { cancelable: true }
-    );
+  const confirmSignOut = () => {
+    Alert.alert("Sign out", "You can sign back in whenever you are ready.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign out",
+        style: "destructive",
+        onPress: () =>
+          signOut().catch(() =>
+            Alert.alert("Could not sign out", "Please try again.")
+          ),
+      },
+    ]);
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Stack.Screen options={{ title: "Profile" }} />
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
+        contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={styles.contentContainer}
       >
-        {/* Profile Header */}
-        <View style={styles.header}>
-          <View
-            style={[styles.avatarLarge, { backgroundColor: colors.accent }]}
-          >
-            <Text style={styles.avatarText}>{userInitial}</Text>
-          </View>
-          <View style={styles.userNameContainer}>
-            <Text style={[styles.userName, { color: colors.text }]}>
-              {userName}
-            </Text>
-            <Pressable
-              onPress={handleEditUsername}
-              style={({ pressed }) => [
-                styles.editButton,
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Ionicons
-                name="pencil-outline"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-          </View>
-          <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
-            {userEmail}
-          </Text>
-          <Text style={[styles.userLevel, { color: colors.accent }]}>
-            Level {level} • {xp} XP
-          </Text>
-        </View>
-
-        {/* Stats Summary */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            STATS
-          </Text>
+        <View style={styles.hero}>
           <View
             style={[
-              styles.statsCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.accent }]}>
-                {totalCount}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                Total Habits
-              </Text>
-            </View>
-            <View
-              style={[styles.statDivider, { backgroundColor: colors.border }]}
-            />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.accent }]}>
-                {Math.round(percentage)}%
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                Today
-              </Text>
-            </View>
-            <View
-              style={[styles.statDivider, { backgroundColor: colors.border }]}
-            />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.accent }]}>
-                {currentStreak}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                Day Streak
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Friends Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            FRIENDS
-          </Text>
-          <View
-            style={[
-              styles.settingsCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Pressable
-              style={({ pressed }) => [
-                styles.settingRow,
-                { opacity: pressed ? 0.7 : 1, borderBottomColor: colors.border },
-              ]}
-              onPress={() => router.push("/friends")}
-            >
-              <View style={styles.settingLeft}>
-                <Ionicons name="people-outline" size={22} color={colors.text} />
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  Friends & Leaderboard
-                </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Settings Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            SETTINGS
-          </Text>
-          <View
-            style={[
-              styles.settingsCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.settingRow}>
-              <View style={styles.settingLeft}>
-                <Ionicons
-                  name={isDark ? "moon" : "sunny"}
-                  size={22}
-                  color={colors.text}
-                />
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  Dark Mode
-                </Text>
-              </View>
-              <Switch
-                value={isDark}
-                onValueChange={toggleTheme}
-                trackColor={{ false: colors.border, true: colors.accent }}
-                thumbColor="#ffffff"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Sign Out Button */}
-        <View style={styles.section}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.signOutButton,
+              styles.avatar,
               {
-                backgroundColor: colors.card,
+                backgroundColor: colors.completedBackground,
                 borderColor: colors.accent,
-                opacity: pressed ? 0.7 : 1,
               },
             ]}
-            onPress={handleSignOut}
           >
-            <Ionicons name="log-out-outline" size={22} color={colors.accent} />
-            <Text style={[styles.signOutText, { color: colors.accent }]}>
-              Sign Out
+            <Text style={[styles.avatarText, { color: colors.accent }]}>
+              {initial}
             </Text>
-          </Pressable>
+          </View>
+          <View style={styles.heroCopy}>
+            <View style={styles.nameRow}>
+              <Text numberOfLines={1} style={[styles.username, { color: colors.text }]}>
+                {username}
+              </Text>
+              <StudioIconButton
+                icon="pencil-outline"
+                label="Edit username"
+                onPress={openEditor}
+                style={styles.editButton}
+              />
+            </View>
+            <Text numberOfLines={1} style={[styles.email, { color: colors.textSecondary }]}>
+              {email}
+            </Text>
+            <View style={[styles.levelBadge, { backgroundColor: colors.surfaceRaised }]}>
+              <Ionicons name="sparkles-outline" size={13} color={colors.accent} />
+              <Text style={[styles.levelText, { color: colors.text }]}>Level {level}</Text>
+              <Text style={[styles.levelXp, { color: colors.textSecondary }]}>{xp} XP</Text>
+            </View>
+          </View>
         </View>
+
+        <StudioSection title="Activity">
+          <StudioGroup style={styles.metricsGroup}>
+            <Metric value={totalCount} label="Habits" />
+            <Metric value={`${Math.round(percentage)}%`} label="Today" divider />
+            <Metric value={currentStreak} label="Streak" divider />
+          </StudioGroup>
+        </StudioSection>
+
+        <StudioSection title="Companion">
+          <StudioGroup>
+            <StudioRow
+              title={companionName}
+              detail="Appearance and equipment"
+              leading={
+                <View style={[styles.rowIcon, { backgroundColor: colors.completedBackground }]}>
+                  <Ionicons name="happy-outline" size={19} color={colors.accent} />
+                </View>
+              }
+              trailing={<Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />}
+              onPress={() => router.push("/customise")}
+              last
+            />
+          </StudioGroup>
+        </StudioSection>
+
+        <StudioSection title="Community">
+          <StudioGroup>
+            <StudioRow
+              title="Friends"
+              detail="Compare your shared momentum"
+              leading={
+                <View style={[styles.rowIcon, { backgroundColor: colors.surfaceRaised }]}>
+                  <Ionicons name="people-outline" size={19} color={colors.accent} />
+                </View>
+              }
+              trailing={<Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />}
+              onPress={() => router.push("/friends")}
+              last
+            />
+          </StudioGroup>
+        </StudioSection>
+
+        <StudioSection title="Appearance">
+          <StudioGroup>
+            <View style={styles.preferenceRow}>
+              <View style={styles.preferenceCopy}>
+                <View style={[styles.rowIcon, { backgroundColor: colors.surfaceRaised }]}>
+                  <Ionicons
+                    name={colorScheme === "dark" ? "moon-outline" : "sunny-outline"}
+                    size={19}
+                    color={colors.accent}
+                  />
+                </View>
+                <View>
+                  <Text style={[styles.preferenceTitle, { color: colors.text }]}>
+                    Dark appearance
+                  </Text>
+                  <Text style={[styles.preferenceDetail, { color: colors.textSecondary }]}>
+                    {colorScheme === "dark" ? "On" : "Off"}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                accessibilityLabel="Toggle dark appearance"
+                value={colorScheme === "dark"}
+                onValueChange={toggleTheme}
+                trackColor={{ false: colors.border, true: colors.accent }}
+                thumbColor={colors.onAccent}
+              />
+            </View>
+          </StudioGroup>
+        </StudioSection>
+
+        <StudioSection title="Account">
+          <StudioGroup>
+            <StudioRow
+              title="Sign out"
+              detail="End this session on this device"
+              leading={
+                <View style={[styles.rowIcon, { backgroundColor: `${colors.error}18` }]}>
+                  <Ionicons name="log-out-outline" size={19} color={colors.error} />
+                </View>
+              }
+              trailing={<Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />}
+              onPress={confirmSignOut}
+              destructive
+              last
+            />
+          </StudioGroup>
+        </StudioSection>
       </ScrollView>
 
-      {/* Edit Username Modal */}
-      <Modal
-        visible={showEditModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowEditModal(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => !isSaving && setShowEditModal(false)}
-        >
-          <Pressable
-            style={[
-              styles.modalContent,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Edit Username
-            </Text>
-
-            <TextInput
-              style={[
-                styles.usernameInput,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: error ? colors.error : colors.border,
-                  color: colors.text,
-                },
-              ]}
-              value={usernameInput}
-              onChangeText={(text) => {
-                setUsernameInput(text);
-                setError("");
-              }}
-              placeholder="Enter username"
-              placeholderTextColor={colors.textSecondary}
-              autoFocus
-              maxLength={30}
-              editable={!isSaving}
+      <StudioSheet
+        visible={showEditSheet}
+        title="Edit username"
+        detail="Letters, numbers, and underscores"
+        onClose={() => !isSaving && setShowEditSheet(false)}
+        footer={
+          <>
+            <StudioButton
+              label="Cancel"
+              tone="secondary"
+              onPress={() => setShowEditSheet(false)}
+              disabled={isSaving}
+              style={styles.sheetButton}
             />
+            <StudioButton
+              label="Save"
+              onPress={saveUsername}
+              loading={isSaving}
+              style={styles.sheetButton}
+            />
+          </>
+        }
+      >
+        <View style={styles.editor}>
+          <TextInput
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!isSaving}
+            maxLength={30}
+            value={usernameInput}
+            onChangeText={(value) => {
+              setUsernameInput(value);
+              setError("");
+            }}
+            placeholder="Username"
+            placeholderTextColor={colors.textTertiary}
+            style={[
+              styles.usernameInput,
+              {
+                backgroundColor: colors.surfaceRaised,
+                borderColor: error ? colors.error : colors.border,
+                color: colors.text,
+              },
+            ]}
+          />
+          {error ? (
+            <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
+          ) : null}
+        </View>
+      </StudioSheet>
+    </View>
+  );
+}
 
-            {error ? (
-              <Text style={[styles.errorText, { color: colors.error }]}>
-                {error}
-              </Text>
-            ) : null}
-
-            <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-              2-30 characters, letters, numbers, and underscores only
-            </Text>
-
-            <View style={styles.modalButtons}>
-              <Pressable
-                onPress={() => setShowEditModal(false)}
-                disabled={isSaving}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.cancelButton,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.modalButtonText, { color: colors.text }]}>
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={handleSaveUsername}
-                disabled={isSaving}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.saveButton,
-                  {
-                    backgroundColor: colors.accent,
-                    opacity: pressed || isSaving ? 0.7 : 1,
-                  },
-                ]}
-              >
-                {isSaving ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>Save</Text>
-                )}
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+function Metric({
+  value,
+  label,
+  divider = false,
+}: {
+  value: string | number;
+  label: string;
+  divider?: boolean;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={[
+        styles.metric,
+        divider && {
+          borderLeftColor: colors.separator,
+          borderLeftWidth: StyleSheet.hairlineWidth,
+        },
+      ]}
+    >
+      <Text style={[styles.metricValue, { color: colors.text }]}>{value}</Text>
+      <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+        {label}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  screen: { flex: 1 },
+  content: {
+    gap: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxl,
   },
-  contentContainer: {
-    flexGrow: 1,
-    paddingBottom: Spacing.xl,
-  },
-  header: {
-    alignItems: "center",
-    paddingVertical: Spacing.xl,
-  },
-  avatarLarge: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  hero: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.sm },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.md,
   },
-  avatarText: {
-    fontSize: 40,
-    fontFamily: "Outfit-Bold",
-    color: "#ffffff",
-  },
-  userNameContainer: {
+  avatarText: { fontSize: 30, fontWeight: "700" },
+  heroCopy: { flex: 1, minWidth: 0, gap: 3 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
+  username: { ...StudioType.title, flex: 1 },
+  editButton: { width: 36, height: 36, borderRadius: BorderRadius.sm },
+  email: { ...StudioType.detail },
+  levelBadge: {
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  userName: {
-    fontSize: 28,
-    fontFamily: "Outfit-Bold",
-  },
-  editButton: {
-    padding: Spacing.xs,
-  },
-  userEmail: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
-  },
-  userLevel: {
-    fontSize: 14,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 0.5,
+    gap: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
     marginTop: Spacing.xs,
   },
-  section: {
-    paddingHorizontal: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 1,
-    marginBottom: Spacing.sm,
-  },
-  statsCard: {
-    flexDirection: "row",
+  levelText: { ...StudioType.detail, fontWeight: "700" },
+  levelXp: { ...StudioType.detail, fontVariant: ["tabular-nums"] },
+  metricsGroup: { flexDirection: "row", marginHorizontal: 0 },
+  metric: { flex: 1, alignItems: "center", gap: 2, paddingVertical: Spacing.md },
+  metricValue: { ...StudioType.metric },
+  metricLabel: { ...StudioType.detail },
+  rowIcon: {
+    width: 34,
+    height: 34,
     borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    padding: Spacing.lg,
-  },
-  statItem: {
-    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
   },
-  statValue: {
-    fontSize: 28,
-    fontFamily: "Outfit-Bold",
-    marginBottom: Spacing.xs,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
-  },
-  statDivider: {
-    width: 1,
-    marginHorizontal: Spacing.md,
-  },
-  settingsCard: {
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  settingRow: {
+  preferenceRow: {
+    minHeight: 68,
+    paddingHorizontal: Spacing.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: Spacing.md,
-    borderBottomWidth: 1,
   },
-  settingLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontFamily: "Outfit-Medium",
-  },
-  signOutButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    gap: Spacing.sm,
-  },
-  signOutText: {
-    fontSize: 16,
-    fontFamily: "Outfit-SemiBold",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: Spacing.md,
-  },
-  modalContent: {
-    width: "100%",
-    maxWidth: 400,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    padding: Spacing.lg,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: "Outfit-Bold",
-    marginBottom: Spacing.md,
-  },
+  preferenceCopy: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  preferenceTitle: { ...StudioType.body },
+  preferenceDetail: { ...StudioType.detail, marginTop: 1 },
+  editor: { gap: Spacing.sm },
   usernameInput: {
-    borderWidth: 1,
+    minHeight: 52,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    fontSize: 16,
-    fontFamily: "Outfit-Regular",
-    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    ...StudioType.body,
   },
-  errorText: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
-    marginBottom: Spacing.xs,
-  },
-  helperText: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
-    marginBottom: Spacing.md,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    gap: Spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  cancelButton: {},
-  saveButton: {},
-  modalButtonText: {
-    fontSize: 16,
-    fontFamily: "Outfit-SemiBold",
-    color: "#ffffff",
-  },
+  error: { ...StudioType.detail },
+  sheetButton: { flex: 1 },
 });

@@ -56,8 +56,10 @@ export default function CharacterScene({
   const levelTier = toLevelTier(level);
   const streakTier = toStreakTier(currentStreak);
 
-  // Recreate the GL context only on customisation/theme/tier changes
-  const sceneKey = `${character.color}|${character.bodyColor}|${equippedIds.join("+")}|${colorScheme}|L${levelTier}|S${streakTier}`;
+  // Recreate the GL context only on customisation/theme/tier changes.
+  // faceStyle is included so this fallback stays in lockstep with the primary
+  // renderer's remount key (the primitive face itself does not vary by style).
+  const sceneKey = `${character.color}|${character.bodyColor}|${character.faceStyle}|${equippedIds.join("+")}|${colorScheme}|L${levelTier}|S${streakTier}`;
 
   const stopAndDispose = () => {
     if (frameRef.current !== null) {
@@ -71,6 +73,9 @@ export default function CharacterScene({
   useEffect(() => stopAndDispose, []);
 
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
+    // Accumulate disposers as resources are constructed so a mid-setup throw
+    // can tear down whatever already exists instead of leaking it.
+    const disposers: (() => void)[] = [];
     try {
       stopAndDispose();
 
@@ -80,8 +85,20 @@ export default function CharacterScene({
       const renderer = new Renderer({ gl });
       renderer.setSize(width, height);
       renderer.setClearColor(colors.background, 1);
+      disposers.push(() => renderer.dispose());
 
       const scene = new THREE.Scene();
+      disposers.push(() => {
+        scene.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            obj.geometry.dispose();
+            const mats = Array.isArray(obj.material)
+              ? obj.material
+              : [obj.material];
+            mats.forEach((m) => m.dispose());
+          }
+        });
+      });
       const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
       if (variant === "preview") {
         camera.position.set(0, 0.88, 2.25);
@@ -424,19 +441,17 @@ export default function CharacterScene({
       animate();
 
       cleanupRef.current = () => {
-        scene.traverse((obj) => {
-          if (obj instanceof THREE.Mesh) {
-            obj.geometry.dispose();
-            const mats = Array.isArray(obj.material)
-              ? obj.material
-              : [obj.material];
-            mats.forEach((m) => m.dispose());
-          }
-        });
-        renderer.dispose();
+        disposers.forEach((dispose) => dispose());
       };
     } catch (error) {
       console.error("Error creating 3D character scene:", error);
+      // Tear down anything constructed before the throw: cancel a queued frame
+      // (animate() may have scheduled one before failing) and dispose resources.
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+      disposers.forEach((dispose) => dispose());
       setFailed(true);
     }
   };

@@ -1,5 +1,6 @@
 import CompanionBadge from "@/components/friends/CompanionBadge";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { getLeaderboard } from "@/services/friendsService";
@@ -61,6 +62,7 @@ export default function LeaderboardScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: "Leaderboard" }} />
       <ScrollView
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -95,7 +97,7 @@ export default function LeaderboardScreen() {
                 <Text
                   style={[
                     styles.segmentText,
-                    { color: active ? "#ffffff" : colors.textSecondary },
+                    { color: active ? colors.onAccent : colors.textSecondary },
                   ]}
                 >
                   {entry.label}
@@ -161,7 +163,7 @@ export default function LeaderboardScreen() {
                   </Text>
                   {row.isSelf ? (
                     <View style={[styles.youPill, { backgroundColor: colors.accent }]}>
-                      <Text style={styles.youPillText}>You</Text>
+                      <Text style={[styles.youPillText, { color: colors.onAccent }]}>You</Text>
                     </View>
                   ) : null}
                 </View>
@@ -199,7 +201,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md - 2,
     alignItems: "center",
   },
-  segmentText: { fontSize: 13, fontFamily: "Outfit-SemiBold" },
+  segmentText: { ...StudioType.detail, fontWeight: "600" },
   loader: { marginTop: Spacing.xl },
   board: {
     borderRadius: BorderRadius.md,
@@ -217,8 +219,8 @@ const styles = StyleSheet.create({
   },
   rank: {
     width: 24,
-    fontSize: 16,
-    fontFamily: "Outfit-Bold",
+    ...StudioType.bodyStrong,
+    fontVariant: ["tabular-nums"],
     textAlign: "center",
   },
   nameBlock: {
@@ -227,14 +229,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.sm,
   },
-  name: { fontSize: 15, fontFamily: "Outfit-Medium", flexShrink: 1 },
+  name: { ...StudioType.body, flexShrink: 1 },
   youPill: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: BorderRadius.md,
   },
-  youPillText: { color: "#ffffff", fontSize: 10, fontFamily: "Outfit-SemiBold" },
-  value: { fontSize: 15, fontFamily: "Outfit-Bold" },
+  youPillText: { ...StudioType.detail, fontWeight: "600" },
+  value: { ...StudioType.bodyStrong, fontVariant: ["tabular-nums"] },
   emptyCard: {
     borderRadius: BorderRadius.md,
     borderWidth: 1,
@@ -243,19 +245,16 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   emptyTitle: {
-    fontSize: 17,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.bodyStrong,
     marginTop: Spacing.sm,
   },
   emptyBody: {
-    fontSize: 13,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
     textAlign: "center",
     marginTop: Spacing.xs,
   },
   footer: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.detail,
     textAlign: "center",
     marginTop: Spacing.md,
   },

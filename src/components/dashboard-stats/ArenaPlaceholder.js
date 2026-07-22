@@ -59,7 +59,7 @@ function ArenaPlaceholder({
       style={[
         styles.container,
         {
-          backgroundColor: colors.background,
+          backgroundColor: colors.surface,
           borderColor: colors.border,
         },
       ]}
@@ -85,7 +85,7 @@ function ArenaPlaceholder({
           </View>
         )}
       </View>
-      <View style={styles.dock}>
+      <View style={[styles.dock, { backgroundColor: colors.glassFallback }]}>
         <View style={styles.identity}>
           <View style={{ opacity: presence.cue ? 0 : 1 }}>
             <Text style={styles.identityLabel}>COMPANION</Text>
@@ -117,6 +117,7 @@ function ArenaPlaceholder({
 }
 
 function SceneAction({ icon, label, onPress }) {
+  const { colors } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -125,11 +126,13 @@ function SceneAction({ icon, label, onPress }) {
       style={({ pressed }) => [
         styles.action,
         {
+          borderColor: colors.border,
+          backgroundColor: colors.surfaceRaised,
           opacity: pressed ? 0.66 : 1,
         },
       ]}
     >
-      <Ionicons name={icon} size={19} color="#F0EEE6" />
+      <Ionicons name={icon} size={19} color={colors.text} />
     </Pressable>
   );
 }
@@ -139,14 +142,14 @@ export default ArenaPlaceholder;
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    height: 220,
+    height: 264,
     marginVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
     overflow: "hidden",
   },
   scene: {
-    height: 168,
+    height: 204,
   },
   sceneLoading: {
     ...StyleSheet.absoluteFillObject,
@@ -155,9 +158,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dock: {
-    height: 52,
+    height: 60,
     paddingHorizontal: Spacing.md,
-    backgroundColor: "rgba(24, 23, 21, 0.96)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -179,14 +181,15 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   identityLabel: {
-    color: "#A5A29A",
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 9,
+    color: "#AAB6C5",
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
   identityName: {
-    color: "#F0EEE6",
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 15,
+    color: "#F4F7FA",
+    fontSize: 17,
+    fontWeight: "700",
     marginTop: 1,
   },
   actions: {
@@ -194,12 +197,10 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   action: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.sm,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: "rgba(240, 238, 230, 0.16)",
-    backgroundColor: "rgba(240, 238, 230, 0.06)",
     alignItems: "center",
     justifyContent: "center",
   },

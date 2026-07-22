@@ -6,7 +6,6 @@ import MomentumCard from "@/components/analytics/sections/MomentumCard";
 import PeriodSelector from "@/components/analytics/PeriodSelector";
 import PeriodSummaryCard from "@/components/analytics/sections/PeriodSummaryCard";
 import FadeInView from "@/components/common/FadeInView";
-import TopBar from "@/components/common/TopBar";
 import { Spacing } from "@/constants/Spacing";
 import { useAuth } from "@/context/AuthContext";
 import { useCharacter } from "@/context/CharacterContext";
@@ -139,15 +138,9 @@ export default function AnalyticsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={styles.contentContainer}
       >
-        <TopBar
-          eyebrow="Growth record"
-          title="Progress"
-          subtitle="See how your habits and focus compound over time."
-        />
-
         <FadeInView delay={0 * STAGGER_STEP}>
           <MomentumCard
             currentStreak={currentStreak}
@@ -209,6 +202,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
-    paddingBottom: Spacing.xl,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xxl,
   },
 });

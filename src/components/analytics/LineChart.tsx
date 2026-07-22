@@ -1,6 +1,7 @@
+import { StudioType } from "@/constants/Typography";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Svg, { Polyline, Circle, Line } from "react-native-svg";
+import Svg, { Circle, Line, Polyline } from "react-native-svg";
 
 export const LineChart = ({
   data,
@@ -21,57 +22,47 @@ export const LineChart = ({
   axisColor?: string;
   labelColor?: string;
 }) => {
-  const maxValue = Math.max(...data.map((d) => d.value), 1);
-  const minValue = Math.min(...data.map((d) => d.value), 0);
+  const maxValue = Math.max(...data.map((datum) => datum.value), 1);
+  const minValue = Math.min(...data.map((datum) => datum.value), 0);
   const valueRange = maxValue - minValue || 1;
   const chartHeight = height - 40;
-  const chartWidth = 300; // Fixed width for SVG calculations
+  const chartWidth = 300;
   const padding = 20;
+  const yAxisValues = Array.from({ length: 5 }, (_, index) => {
+    return minValue + (valueRange * index) / 4;
+  });
 
-  // Calculate positions for each point
   const points = data.map((item, index) => {
     const x =
       padding +
       (index / Math.max(data.length - 1, 1)) * (chartWidth - padding * 2);
     const normalizedValue = (item.value - minValue) / valueRange;
     const y = padding + (1 - normalizedValue) * chartHeight;
-    return {
-      x,
-      y,
-      value: item.value,
-      label: item.label,
-    };
+
+    return { x, y, value: item.value, label: item.label };
   });
-
-  // Create polyline points string
-  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
-
-  // Generate Y-axis scale values
-  const yAxisValues = [];
-  const steps = 4;
-  for (let i = 0; i <= steps; i++) {
-    yAxisValues.push(minValue + (valueRange * i) / steps);
-  }
+  const polylinePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
 
   return (
-    <View style={styles.container}>
+    <View
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={label || "Focus trend chart"}
+      style={styles.container}
+    >
       {label ? (
         <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
       ) : null}
+
       <View style={styles.chartWrapper}>
-        {/* Y-axis labels */}
         <View style={[styles.yAxis, { height: chartHeight + padding * 2 }]}>
-          {yAxisValues.reverse().map((value, index) => (
-            <Text
-              key={index}
-              style={[styles.yAxisLabel, { color: axisColor }]}
-            >
+          {[...yAxisValues].reverse().map((value, index) => (
+            <Text key={index} style={[styles.yAxisLabel, { color: axisColor }]}>
               {Math.round(value)}
             </Text>
           ))}
         </View>
 
-        {/* Chart area with SVG */}
         <View style={[styles.chartArea, { height }]}>
           <Svg
             width="100%"
@@ -80,39 +71,37 @@ export const LineChart = ({
             preserveAspectRatio="xMidYMid meet"
             style={styles.svg}
           >
-            {/* Grid lines */}
             {yAxisValues.map((_, index) => {
-              const yPos = padding + (index / (yAxisValues.length - 1 || 1)) * chartHeight;
+              const yPosition =
+                padding + (index / (yAxisValues.length - 1 || 1)) * chartHeight;
               return (
                 <Line
                   key={`grid-${index}`}
                   x1={padding}
-                  y1={yPos}
+                  y1={yPosition}
                   x2={chartWidth - padding}
-                  y2={yPos}
+                  y2={yPosition}
                   stroke={gridColor}
                   strokeWidth="1"
                 />
               );
             })}
 
-            {/* Line chart */}
             <Polyline
               points={polylinePoints}
               fill="none"
               stroke={color}
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
 
-            {/* Data points */}
             {points.map((point, index) => (
               <Circle
                 key={`point-${index}`}
                 cx={point.x}
                 cy={point.y}
-                r="4"
+                r="3.5"
                 fill={color}
                 stroke={color}
                 strokeWidth="2"
@@ -120,7 +109,6 @@ export const LineChart = ({
             ))}
           </Svg>
 
-          {/* Value labels */}
           {showValues &&
             points.map((point, index) => (
               <View
@@ -133,21 +121,15 @@ export const LineChart = ({
                   },
                 ]}
               >
-                <Text style={[styles.valueText, { color }]}>
-                  {point.value}
-                </Text>
+                <Text style={[styles.valueText, { color }]}>{point.value}</Text>
               </View>
             ))}
         </View>
       </View>
 
-      {/* X-axis labels */}
       <View style={styles.xAxis}>
         {points.map((point, index) => (
-          <Text
-            key={index}
-            style={[styles.xAxisLabel, { color: axisColor }]}
-          >
+          <Text key={index} style={[styles.xAxisLabel, { color: axisColor }]}>
             {point.label}
           </Text>
         ))}
@@ -157,19 +139,9 @@ export const LineChart = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    width: "100%",
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 12,
-    fontFamily: "Outfit-SemiBold",
-  },
-  chartWrapper: {
-    flexDirection: "row",
-    width: "100%",
-  },
+  container: { width: "100%" },
+  label: { ...StudioType.bodyStrong, marginBottom: 12 },
+  chartWrapper: { flexDirection: "row", width: "100%" },
   yAxis: {
     width: 35,
     justifyContent: "space-between",
@@ -178,41 +150,18 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 8,
   },
-  yAxisLabel: {
-    fontSize: 10,
-    fontFamily: "Outfit-Regular",
-  },
-  chartArea: {
-    flex: 1,
-    position: "relative",
-  },
-  svg: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  valueLabel: {
-    position: "absolute",
-    width: 30,
-    alignItems: "center",
-  },
-  valueText: {
-    fontSize: 10,
-    fontFamily: "Outfit-SemiBold",
-  },
+  yAxisLabel: { ...StudioType.detail, fontSize: 11 },
+  chartArea: { flex: 1, position: "relative" },
+  svg: { position: "absolute", top: 0, left: 0, right: 0 },
+  valueLabel: { position: "absolute", width: 30, alignItems: "center" },
+  valueText: { ...StudioType.detail, fontWeight: "600" },
   xAxis: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 8,
     paddingLeft: 35,
   },
-  xAxisLabel: {
-    fontSize: 10,
-    fontFamily: "Outfit-Regular",
-    flex: 1,
-    textAlign: "center",
-  },
+  xAxisLabel: { ...StudioType.detail, fontSize: 11, flex: 1, textAlign: "center" },
 });
 
 export default LineChart;

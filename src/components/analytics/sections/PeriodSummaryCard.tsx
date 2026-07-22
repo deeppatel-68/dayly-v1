@@ -1,4 +1,6 @@
+import { ThemeColors } from "@/constants/Colors";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
@@ -22,74 +24,73 @@ export default function PeriodSummaryCard({
   const { colors } = useTheme();
   const showChange = Math.abs(periodChange) >= 1;
   const isUp = periodChange > 0;
+  const changeColor = isUp ? colors.success : colors.error;
 
   return (
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { backgroundColor: colors.surface, borderColor: colors.separator },
       ]}
     >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Ionicons name="flash" size={16} color={colors.accent} />
-          <Text style={[styles.periodLabel, { color: colors.accent }]}>
+          <Ionicons name="flash-outline" size={17} color={colors.accent} />
+          <Text style={[styles.periodLabel, { color: colors.textSecondary }]}>
             {periodLabel}
           </Text>
         </View>
-        {showChange && (
+        {showChange ? (
           <View
+            accessible
+            accessibilityLabel={`${isUp ? "Up" : "Down"} ${Math.abs(
+              Math.round(periodChange)
+            )} percent`}
             style={[
               styles.changeChip,
-              {
-                backgroundColor: isUp
-                  ? `${colors.success}22`
-                  : `${colors.error}22`,
-              },
+              { backgroundColor: `${changeColor}1F` },
             ]}
           >
             <Ionicons
               name={isUp ? "arrow-up" : "arrow-down"}
-              size={11}
-              color={isUp ? colors.success : colors.error}
+              size={12}
+              color={changeColor}
             />
-            <Text
-              style={[
-                styles.changeText,
-                { color: isUp ? colors.success : colors.error },
-              ]}
-            >
+            <Text style={[styles.changeText, { color: changeColor }]}>
               {Math.abs(Math.round(periodChange))}%
             </Text>
           </View>
-        )}
+        ) : null}
       </View>
+
       <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {focusTimeLabel}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            FOCUS
-          </Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {sessionCount}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            SESSIONS
-          </Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {Math.round(averageSessionMinutes)}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            AVG MIN
-          </Text>
-        </View>
+        <Metric value={focusTimeLabel} label="Focus" colors={colors} />
+        <View style={[styles.statDivider, { backgroundColor: colors.separator }]} />
+        <Metric value={sessionCount} label="Sessions" colors={colors} />
+        <View style={[styles.statDivider, { backgroundColor: colors.separator }]} />
+        <Metric
+          value={Math.round(averageSessionMinutes)}
+          label="Avg. min"
+          colors={colors}
+        />
       </View>
+    </View>
+  );
+}
+
+function Metric({
+  value,
+  label,
+  colors,
+}: {
+  value: string | number;
+  label: string;
+  colors: ThemeColors;
+}) {
+  return (
+    <View style={styles.statItem}>
+      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
@@ -98,9 +99,9 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   header: {
     flexDirection: "row",
@@ -108,16 +109,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: Spacing.md,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-  },
-  periodLabel: {
-    fontSize: 12,
-    fontFamily: "Outfit-SemiBold",
-    letterSpacing: 1,
-  },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
+  periodLabel: { ...StudioType.section, letterSpacing: 0.2 },
   changeChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -126,25 +119,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
-  changeText: {
-    fontSize: 11,
-    fontFamily: "Outfit-Bold",
-  },
+  changeText: { ...StudioType.detail, fontWeight: "700" },
   statsRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    alignItems: "stretch",
+    justifyContent: "space-between",
   },
-  statItem: {
-    alignItems: "center",
-  },
-  statValue: {
-    fontSize: 32,
-    fontFamily: "Outfit-Bold",
-    marginBottom: Spacing.xs,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: "Outfit-Regular",
-    letterSpacing: 0.5,
-  },
+  statItem: { flex: 1, alignItems: "center" },
+  statDivider: { width: StyleSheet.hairlineWidth, marginVertical: Spacing.xs },
+  statValue: { ...StudioType.metric, fontSize: 28, marginBottom: Spacing.xs },
+  statLabel: { ...StudioType.detail, fontSize: 11, textAlign: "center" },
 });

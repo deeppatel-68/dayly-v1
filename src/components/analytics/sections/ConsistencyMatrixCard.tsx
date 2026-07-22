@@ -1,4 +1,5 @@
-import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { BorderRadius, Spacing, TouchTarget } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import { Habit } from "@/types/habits";
 import { toLocalDateKey } from "@/utils/dateKey";
@@ -20,9 +21,10 @@ export default function ConsistencyMatrixCard({
   const [showHabitDropdown, setShowHabitDropdown] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  const selectedHabit = useMemo(() => {
-    return habits.find((h) => h.id === selectedHabitId) || habits[0] || null;
-  }, [habits, selectedHabitId]);
+  const selectedHabit = useMemo(
+    () => habits.find((habit) => habit.id === selectedHabitId) || habits[0] || null,
+    [habits, selectedHabitId]
+  );
 
   React.useEffect(() => {
     if (habits.length > 0 && !selectedHabitId) {
@@ -34,41 +36,30 @@ export default function ConsistencyMatrixCard({
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
     const dates: (Date | null)[] = [];
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      dates.push(null);
-    }
-    for (let day = 1; day <= daysInMonth; day++) {
+
+    for (let day = 0; day < firstDay.getDay(); day += 1) dates.push(null);
+    for (let day = 1; day <= daysInMonth; day += 1) {
       dates.push(new Date(year, month, day));
     }
+
     return dates;
   }, [currentMonth]);
 
-  const monthDisplay = useMemo(() => {
-    return currentMonth.toLocaleDateString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
-  }, [currentMonth]);
+  const monthDisplay = useMemo(
+    () =>
+      currentMonth.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      }),
+    [currentMonth]
+  );
 
-  const goToPreviousMonth = () => {
+  const changeMonth = (delta: number) => {
     setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1)
     );
-  };
-
-  const goToNextMonth = () => {
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
-    );
-  };
-
-  const goToCurrentMonth = () => {
-    setCurrentMonth(new Date());
   };
 
   if (habits.length === 0 || !selectedHabit) {
@@ -76,11 +67,11 @@ export default function ConsistencyMatrixCard({
       <View
         style={[
           styles.card,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          { backgroundColor: colors.surface, borderColor: colors.separator },
         ]}
       >
         <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
-          Consistency matrix
+          Consistency
         </Text>
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           Add your first habit to start your record.
@@ -93,60 +84,78 @@ export default function ConsistencyMatrixCard({
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { backgroundColor: colors.surface, borderColor: colors.separator },
       ]}
     >
       <View style={styles.matrixHeader}>
         <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
-          Consistency matrix
+          Consistency
         </Text>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Choose habit, currently ${selectedHabit.title}`}
           onPress={() => setShowHabitDropdown(true)}
-          style={[
+          style={({ pressed }) => [
             styles.dropdownButton,
             {
-              backgroundColor: colors.backgroundSecondary,
-              borderColor: colors.border,
+              backgroundColor: colors.surfaceRaised,
+              borderColor: colors.separator,
+              opacity: pressed ? 0.76 : 1,
             },
           ]}
         >
-          <Text style={[styles.dropdownText, { color: colors.text }]}>
+          <Text numberOfLines={1} style={[styles.dropdownText, { color: colors.text }]}>
             {selectedHabit.title}
           </Text>
-          <Ionicons
-            name="chevron-down"
-            size={16}
-            color={colors.textSecondary}
-          />
+          <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
         </Pressable>
       </View>
 
-      {/* Month Navigation */}
       <View style={styles.monthNavigation}>
-        <Pressable onPress={goToPreviousMonth} style={styles.navButton}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+          hitSlop={4}
+          onPress={() => changeMonth(-1)}
+          style={({ pressed }) => [
+            styles.navButton,
+            pressed && { backgroundColor: colors.surfaceSelected },
+          ]}
+        >
           <Ionicons name="chevron-back" size={20} color={colors.text} />
         </Pressable>
         <Pressable
-          onPress={goToCurrentMonth}
-          style={styles.monthDisplayButton}
+          accessibilityRole="button"
+          accessibilityLabel="Return to current month"
+          onPress={() => setCurrentMonth(new Date())}
+          style={({ pressed }) => [
+            styles.monthDisplayButton,
+            pressed && { opacity: 0.7 },
+          ]}
         >
           <Text style={[styles.monthDisplayText, { color: colors.text }]}>
             {monthDisplay}
           </Text>
         </Pressable>
-        <Pressable onPress={goToNextMonth} style={styles.navButton}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          hitSlop={4}
+          onPress={() => changeMonth(1)}
+          style={({ pressed }) => [
+            styles.navButton,
+            pressed && { backgroundColor: colors.surfaceSelected },
+          ]}
+        >
           <Ionicons name="chevron-forward" size={20} color={colors.text} />
         </Pressable>
       </View>
 
-      {/* Calendar Grid */}
       <View style={styles.calendarContainer}>
         <View style={styles.dayHeaders}>
           {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
-            <View key={index} style={styles.dayHeader}>
-              <Text
-                style={[styles.dayHeaderText, { color: colors.textSecondary }]}
-              >
+            <View key={`${day}-${index}`} style={styles.dayHeader}>
+              <Text style={[styles.dayHeaderText, { color: colors.textTertiary }]}>
                 {day}
               </Text>
             </View>
@@ -156,35 +165,31 @@ export default function ConsistencyMatrixCard({
         <View style={styles.calendarGrid}>
           {calendarDates.map((date, index) => {
             if (!date) {
-              return (
-                <View
-                  key={index}
-                  style={[styles.calendarCell, styles.emptyCell]}
-                />
-              );
+              return <View key={index} style={[styles.calendarCell, styles.emptyCell]} />;
             }
 
             const dateKey = toLocalDateKey(date);
-            const isCompleted =
-              selectedHabit.completionHistory?.[dateKey] === true;
+            const isCompleted = selectedHabit.completionHistory?.[dateKey] === true;
             const isToday = date.toDateString() === new Date().toDateString();
-            const dayNumber = date.getDate();
 
             return (
               <View
-                key={index}
+                key={dateKey}
+                accessibilityLabel={`${date.toLocaleDateString()}, ${
+                  isCompleted ? "completed" : "not completed"
+                }`}
                 style={[
                   styles.calendarCell,
                   {
                     backgroundColor: isCompleted
                       ? colors.accent
                       : colors.checkboxEmpty,
-                    borderWidth: isToday ? 2 : 1,
                     borderColor: isToday
-                      ? colors.accent
+                      ? colors.focusRing
                       : isCompleted
-                      ? colors.accent
-                      : colors.border,
+                        ? colors.accent
+                        : colors.border,
+                    borderWidth: isToday ? 2 : StyleSheet.hairlineWidth,
                   },
                 ]}
               >
@@ -192,81 +197,85 @@ export default function ConsistencyMatrixCard({
                   style={[
                     styles.dateNumber,
                     {
-                      color: isCompleted ? colors.background : colors.text,
-                      fontWeight: isToday ? "bold" : "normal",
+                      color: isCompleted ? colors.onAccent : colors.text,
+                      fontWeight: isToday ? "700" : "400",
                     },
                   ]}
                 >
-                  {dayNumber}
+                  {date.getDate()}
                 </Text>
-                {isCompleted && (
+                {isCompleted ? (
                   <Ionicons
                     name="checkmark"
                     size={10}
-                    color={colors.background}
-                    style={[styles.checkmark, { opacity: 0.9 }]}
+                    color={colors.onAccent}
+                    style={styles.checkmark}
                   />
-                )}
+                ) : null}
               </View>
             );
           })}
         </View>
       </View>
 
-      {/* Habit Dropdown Modal */}
       <Modal
         visible={showHabitDropdown}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={() => setShowHabitDropdown(false)}
       >
         <Pressable
-          style={styles.modalOverlay}
+          accessibilityRole="button"
+          accessibilityLabel="Close habit selector"
           onPress={() => setShowHabitDropdown(false)}
+          style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}
         >
           <View
+            accessibilityViewIsModal
             style={[
               styles.dropdownMenu,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              { backgroundColor: colors.surface, borderColor: colors.separator },
             ]}
           >
-            {habits.map((habit) => (
-              <Pressable
-                key={habit.id}
-                onPress={() => {
-                  setSelectedHabitId(habit.id);
-                  setShowHabitDropdown(false);
-                }}
-                style={[
-                  styles.dropdownItem,
-                  {
-                    backgroundColor:
-                      selectedHabitId === habit.id
-                        ? colors.backgroundSecondary
-                        : "transparent",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.dropdownItemText,
+            {habits.map((habit, index) => {
+              const isSelected = selectedHabitId === habit.id;
+              return (
+                <Pressable
+                  key={habit.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => {
+                    setSelectedHabitId(habit.id);
+                    setShowHabitDropdown(false);
+                  }}
+                  style={({ pressed }) => [
+                    styles.dropdownItem,
                     {
-                      color:
-                        selectedHabitId === habit.id
-                          ? colors.accent
-                          : colors.text,
-                      fontWeight:
-                        selectedHabitId === habit.id ? "600" : "normal",
+                      backgroundColor: isSelected
+                        ? colors.surfaceSelected
+                        : "transparent",
+                      borderBottomColor: colors.separator,
+                      borderBottomWidth:
+                        index === habits.length - 1 ? 0 : StyleSheet.hairlineWidth,
                     },
+                    pressed && { opacity: 0.72 },
                   ]}
                 >
-                  {habit.title}
-                </Text>
-                {selectedHabitId === habit.id && (
-                  <Ionicons name="checkmark" size={16} color={colors.accent} />
-                )}
-              </Pressable>
-            ))}
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.dropdownItemText,
+                      { color: isSelected ? colors.accent : colors.text },
+                    ]}
+                  >
+                    {habit.title}
+                  </Text>
+                  {isSelected ? (
+                    <Ionicons name="checkmark" size={18} color={colors.accent} />
+                  ) : null}
+                </Pressable>
+              );
+            })}
           </View>
         </Pressable>
       </Modal>
@@ -278,132 +287,91 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.md,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   cardTitle: {
-    fontSize: 13,
-    fontFamily: "Outfit-Medium",
-    marginBottom: Spacing.md,
+    ...StudioType.section,
+    textTransform: "uppercase",
+    letterSpacing: 0.2,
   },
-  emptyText: {
-    fontSize: 13,
-    fontFamily: "Outfit-Regular",
-    lineHeight: 18,
-  },
+  emptyText: { ...StudioType.body, marginTop: Spacing.sm },
   matrixHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
   dropdownButton: {
+    minHeight: TouchTarget,
+    maxWidth: "62%",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     gap: Spacing.xs,
   },
-  dropdownText: {
-    fontSize: 12,
-    fontFamily: "Outfit-SemiBold",
-  },
+  dropdownText: { ...StudioType.detail, flexShrink: 1, fontWeight: "600" },
   monthNavigation: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: Spacing.md,
-    paddingHorizontal: Spacing.xs,
   },
   navButton: {
-    padding: Spacing.sm,
+    width: TouchTarget,
+    height: TouchTarget,
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   monthDisplayButton: {
+    minHeight: TouchTarget,
     flex: 1,
-    alignItems: "center",
-    paddingVertical: Spacing.sm,
-  },
-  monthDisplayText: {
-    fontSize: 14,
-    fontFamily: "Outfit-SemiBold",
-  },
-  calendarContainer: {
-    gap: Spacing.md,
-  },
-  dayHeaders: {
-    flexDirection: "row",
-    marginBottom: Spacing.sm,
-    width: "100%",
-  },
-  dayHeader: {
-    width: `${100 / 7}%`,
     alignItems: "center",
     justifyContent: "center",
   },
-  dayHeaderText: {
-    fontSize: 10,
-    fontFamily: "Outfit-Medium",
-    letterSpacing: 0.5,
-  },
-  calendarGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    width: "100%",
-  },
+  monthDisplayText: { ...StudioType.bodyStrong },
+  calendarContainer: { gap: Spacing.sm },
+  dayHeaders: { flexDirection: "row", width: "100%" },
+  dayHeader: { width: "14.285%", alignItems: "center", justifyContent: "center" },
+  dayHeaderText: { ...StudioType.detail, fontSize: 11, fontWeight: "600" },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap", width: "100%" },
   calendarCell: {
-    width: `${100 / 7}%`,
+    width: "14.285%",
     aspectRatio: 1,
     borderRadius: BorderRadius.sm,
-    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
     marginBottom: Spacing.xs,
   },
-  emptyCell: {
-    borderWidth: 0,
-    backgroundColor: "transparent",
-  },
-  dateNumber: {
-    fontSize: 11,
-    fontFamily: "Outfit-Regular",
-  },
-  checkmark: {
-    position: "absolute",
-    top: 2,
-    right: 2,
-  },
+  emptyCell: { borderWidth: 0, backgroundColor: "transparent" },
+  dateNumber: { ...StudioType.detail, fontSize: 11 },
+  checkmark: { position: "absolute", top: 2, right: 2, opacity: 0.94 },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
     padding: Spacing.lg,
   },
   dropdownMenu: {
-    minWidth: 200,
+    width: "100%",
+    maxWidth: 360,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
   dropdownItem: {
+    minHeight: TouchTarget + 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+    gap: Spacing.md,
   },
-  dropdownItemText: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
-    letterSpacing: 0.5,
-  },
+  dropdownItemText: { ...StudioType.body, flex: 1 },
 });

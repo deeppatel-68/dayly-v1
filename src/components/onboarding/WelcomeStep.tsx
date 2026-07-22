@@ -1,5 +1,6 @@
 import AvatarRenderer from "@/components/avatar/AvatarRenderer";
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useTheme } from "@/context/ThemeContext";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -14,7 +15,7 @@ export default function WelcomeStep() {
       <View
         style={[
           styles.avatarFrame,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
         ]}
       >
         <AvatarRenderer state="idle" variant="dashboard" />
@@ -48,14 +49,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   title: {
-    fontSize: 26,
-    fontFamily: "Outfit-Bold",
+    ...StudioType.title,
     textAlign: "center",
     marginBottom: Spacing.sm,
   },
   body: {
-    fontSize: 15,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.body,
     textAlign: "center",
     lineHeight: 22,
     paddingHorizontal: Spacing.sm,

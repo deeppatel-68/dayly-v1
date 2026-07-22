@@ -30,19 +30,27 @@ export const ROOM_SWIPE_THRESHOLD = 40;
 export const ROOM_CAMERA_PROFILES: Readonly<
   Record<RoomView, RoomCameraProfile>
 > = {
+  // home: slightly lower eye, target between pet and desk so the rug
+  // (foreground), desk + companion (midground) and window + string lights
+  // (background) layer explicitly; the floor plant frames the right edge.
   home: {
-    position: [0.55, 1.42, 5.8],
-    target: [0.72, 0.86, -0.48],
+    position: [0.5, 1.3, 5.75],
+    target: [0.52, 0.8, -0.55],
     fov: 58,
   },
+  // desk: tighter fov, camera shifted left so the laptop/lamp/mug cluster
+  // (desk centre ≈ x −0.85) is the hero rather than a split room view; the
+  // target sits at laptop-screen height.
   desk: {
-    position: [0.25, 1.5, 5.4],
-    target: [0.4, 0.9, -0.8],
-    fov: 58,
+    position: [-0.15, 1.35, 4.15],
+    target: [-0.45, 0.92, -1.15],
+    fov: 50,
   },
+  // windowShelf: target on the window↔shelf diagonal so the moon and the
+  // trophy shelf read together.
   windowShelf: {
     position: [0, 1.65, 7.2],
-    target: [-0.35, 1.45, -0.85],
+    target: [-0.6, 1.52, -1.0],
     fov: 64,
   },
 };

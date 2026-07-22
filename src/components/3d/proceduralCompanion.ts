@@ -7,6 +7,12 @@ const TWO_PI = Math.PI * 2;
 // A scene-native version of the Dayly companion for immersive environments.
 // It mirrors the authored GLB silhouette and exposes the same motion rig, but
 // avoids parsing a second GLB into another Expo GL context on iOS.
+//
+// Limitation: this path hand-builds the CLASSIC face only and intentionally
+// ignores `faceStyle` — non-classic styles (eve/screen/kirby/joy) render as the
+// classic face here. Passing any faceStyle is safe (the field is simply not
+// read). Per-variant faces live in the GLB path (companionModel.applyFaceStyle);
+// bringing them to this procedural renderer is deferred.
 export function createProceduralCompanion({
   accent,
   bodyColor,

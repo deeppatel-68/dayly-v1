@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { createPetMotionController, PetRig } from "../petMotion";
+import {
+  createPetMotionController,
+  EYE_DART_MICRO,
+  PetRig,
+  SETTLE_MICRO,
+} from "../petMotion";
 
 describe("pet motion", () => {
   it("plays one poke bounce and returns to the base animation", () => {
@@ -106,5 +111,74 @@ describe("pet motion", () => {
 
     expect(focusHeight).toBeLessThan(0.1);
     expect(mouth.scale.y).toBeGreaterThan(0.2);
+  });
+
+  it("settles with a rare idle squash that focus never shows", () => {
+    // Mid-window of the settle cycle: period 16.3s, last 0.9s is the settle.
+    const settleTime = SETTLE_MICRO.period - SETTLE_MICRO.duration / 2;
+
+    const idleRig: PetRig = { petGroup: new THREE.Group() };
+    createPetMotionController({ levelTier: 0, streakTier: 0 }).apply(
+      idleRig,
+      "idle",
+      settleTime
+    );
+    expect(idleRig.petGroup.scale.y).toBeLessThan(1);
+    expect(idleRig.petGroup.scale.x).toBeGreaterThan(1);
+
+    const focusRig: PetRig = { petGroup: new THREE.Group() };
+    createPetMotionController({ levelTier: 0, streakTier: 0 }).apply(
+      focusRig,
+      "focus",
+      settleTime
+    );
+    expect(focusRig.petGroup.scale.x).toBeLessThanOrEqual(1);
+  });
+
+  it("darts the pupils during the idle micro-dart window only", () => {
+    const dartTime = EYE_DART_MICRO.period * 2 + EYE_DART_MICRO.duration / 2;
+    const base = new THREE.Vector3(0.1, 0.8, 0.5);
+    const makeRig = (): PetRig => {
+      const leftPupil = new THREE.Mesh();
+      const rightPupil = new THREE.Mesh();
+      leftPupil.userData.basePosition = base.clone();
+      rightPupil.userData.basePosition = base.clone();
+      return { petGroup: new THREE.Group(), leftPupil, rightPupil };
+    };
+
+    // The slow glance is identical across states at equal time, so the idle
+    // vs focus difference isolates the dart exactly.
+    const idleRig = makeRig();
+    createPetMotionController({ levelTier: 0, streakTier: 0 }).apply(
+      idleRig,
+      "idle",
+      dartTime
+    );
+    const focusRig = makeRig();
+    createPetMotionController({ levelTier: 0, streakTier: 0 }).apply(
+      focusRig,
+      "focus",
+      dartTime
+    );
+
+    const dart =
+      idleRig.leftPupil!.position.x - focusRig.leftPupil!.position.x;
+    expect(Math.abs(dart)).toBeCloseTo(EYE_DART_MICRO.offset, 3);
+  });
+
+  it("trails the halo behind the body sway", () => {
+    const halo = new THREE.Mesh();
+    const rig: PetRig = { petGroup: new THREE.Group(), halo };
+    const motion = createPetMotionController({ levelTier: 0, streakTier: 0 });
+
+    // While sway is increasing (t=1), the delayed halo sits behind: below its
+    // 0.12 rest yaw. In focus, sway is locked to zero, so no lag offset.
+    motion.apply(rig, "idle", 1);
+    expect(halo.rotation.y).toBeLessThan(0.12);
+
+    const focusRig: PetRig = { petGroup: new THREE.Group(), halo: new THREE.Mesh() };
+    const focusMotion = createPetMotionController({ levelTier: 0, streakTier: 0 });
+    focusMotion.apply(focusRig, "focus", 1);
+    expect(focusRig.halo!.rotation.y).toBeCloseTo(0.12);
   });
 });

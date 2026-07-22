@@ -1,4 +1,5 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React from "react";
@@ -22,8 +23,16 @@ export default function RoomZoneControls({
   value: RoomView;
   onChange: (view: RoomView) => void;
 }) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.rail} accessibilityRole="tablist">
+    <View
+      style={[
+        styles.rail,
+        { borderColor: colors.border, backgroundColor: colors.glassFallback },
+      ]}
+      accessibilityRole="tablist"
+      pointerEvents="auto"
+    >
       {ZONES.map((zone) => {
         const selected = value === zone.view;
         return (
@@ -39,14 +48,14 @@ export default function RoomZoneControls({
             }}
             style={({ pressed }) => [
               styles.button,
-              selected && styles.buttonSelected,
+              selected && { backgroundColor: colors.accent },
               pressed && styles.buttonPressed,
             ]}
           >
             <Ionicons
               name={zone.icon}
               size={19}
-              color={selected ? "#171512" : "#F0EEE6"}
+              color={selected ? colors.onAccent : colors.text}
             />
           </Pressable>
         );
@@ -64,18 +73,13 @@ const styles = StyleSheet.create({
     padding: 5,
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
-    borderColor: "rgba(240,238,230,0.14)",
-    backgroundColor: "rgba(24,23,21,0.82)",
   },
   button: {
-    width: 42,
-    height: 42,
-    borderRadius: BorderRadius.sm,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-  },
-  buttonSelected: {
-    backgroundColor: "#D97757",
   },
   buttonPressed: {
     opacity: 0.72,

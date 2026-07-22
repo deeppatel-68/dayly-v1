@@ -16,7 +16,7 @@ export const AVATAR_FACE_STYLES: AvatarFaceStyle[] = [
   { id: "joy", name: "Joy" },
 ];
 
-export const DEFAULT_FACE_STYLE: FaceStyle = "classic";
+export const DEFAULT_FACE_STYLE: FaceStyle = "joy";
 
 const FACE_STYLE_IDS = new Set<string>(AVATAR_FACE_STYLES.map((f) => f.id));
 

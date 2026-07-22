@@ -1,11 +1,31 @@
 import type { RoomAnchor } from "@/components/3d/equipment";
+import {
+  cable,
+  lathe,
+  roundedBox,
+} from "@/components/3d/geometry";
+import {
+  createGlowTexture,
+  createShadowMaterial,
+  createShadowTexture,
+} from "@/components/3d/glow";
+import {
+  createFabricWeaveTexture,
+  createPaperFleckTexture,
+  createVerticalGradientTexture,
+  createWoodGrainTexture,
+} from "@/components/3d/surfaceTextures";
 import * as THREE from "three";
 
 // Builders for the cozy study-nook scene: a stylised desk corner, not a
-// world. All primitives, shared materials, mobile-safe mesh budget (~70).
+// world. Shared materials, mobile-safe budget (~105 renderables before the
+// companion/equipment — verified against the 30fps loop). Silhouette-visible
+// furniture uses rounded boxes / lathes for soft premium edges; walls, floor
+// and window recesses stay sharp BoxGeometry (reads as millwork).
 // Coordinate frame: floor at y=0, back wall z≈-2, side wall x≈-2.6; the
 // companion's pod sits front-right at the ROOM_PET_POSITION.
-// Fake-bloom glow primitives live in components/3d/glow.ts.
+// Fake-bloom glow primitives live in components/3d/glow.ts; procedural
+// surface grain lives in components/3d/surfaceTextures.ts.
 
 export const ROOM_PET_POSITION = new THREE.Vector3(1.08, 0, -0.08);
 
@@ -46,6 +66,8 @@ interface RoomPalette {
   wood: THREE.MeshStandardMaterial;
   darkWood: THREE.MeshStandardMaterial;
   fabric: THREE.MeshStandardMaterial;
+  clay: THREE.MeshStandardMaterial;
+  ceramic: THREE.MeshStandardMaterial;
   metal: THREE.MeshStandardMaterial;
   paper: THREE.MeshStandardMaterial;
   leaf: THREE.MeshStandardMaterial;
@@ -58,7 +80,29 @@ interface RoomPalette {
   accentGlow: THREE.MeshStandardMaterial;
 }
 
-function createPalette(accent: THREE.Color): RoomPalette {
+interface RoomTextures {
+  wood: THREE.DataTexture;
+  fabric: THREE.DataTexture;
+  rugWeave: THREE.DataTexture;
+  paper: THREE.DataTexture;
+  glow: THREE.DataTexture;
+  shadow: THREE.DataTexture;
+  gradient: THREE.DataTexture;
+}
+
+function createTextures(): RoomTextures {
+  return {
+    wood: createWoodGrainTexture(2),
+    fabric: createFabricWeaveTexture(4),
+    rugWeave: createFabricWeaveTexture(7),
+    paper: createPaperFleckTexture(2),
+    glow: createGlowTexture(),
+    shadow: createShadowTexture(),
+    gradient: createVerticalGradientTexture(),
+  };
+}
+
+function createPalette(accent: THREE.Color, tex: RoomTextures): RoomPalette {
   const std = (
     color: number | THREE.Color,
     roughness = 0.85,
@@ -69,17 +113,26 @@ function createPalette(accent: THREE.Color): RoomPalette {
   // (Colors.dark.background #1F1E1D, backgroundSecondary #30302E, card
   // #262624 -- src/constants/Colors.ts) so the room reads as an extension
   // of the app chrome rather than an unrelated 3D scene, with floor darkest
-  // (grounding, close to #1F1E1D) and rug lightest (close to #30302E) for depth.
+  // (grounding, close to #1F1E1D) and rug lightest (close to #30302E) for
+  // depth. Grain maps are near-white DataTextures that multiply the palette
+  // colour, so hue stays owned here. `clay` is the one non-accent chroma in
+  // the room (muted terracotta) so the accent orange isn't the lone colour.
   return {
-    wall: std(0x312d29, 0.95),
+    wall: std(0x35302a, 0.95),
     floor: std(0x24211e, 0.9),
-    rug: std(0x3b3732, 0.95),
-    wood: std(0x684b37, 0.7),
-    darkWood: std(0x3b2f26, 0.75),
-    fabric: std(0x433d35, 0.9),
+    rug: std(0x3b3732, 0.95, { map: tex.rugWeave }),
+    wood: std(0x684b37, 0.62, { map: tex.wood }),
+    darkWood: std(0x3b2f26, 0.72, { map: tex.wood }),
+    fabric: std(0x433d35, 0.9, { map: tex.fabric }),
+    clay: std(0x9c6b52, 0.85, { map: tex.fabric }),
+    // Glazed terracotta for the mug: same hue family as clay but smooth —
+    // ceramic must not carry the textile weave.
+    ceramic: std(0x9c6b52, 0.55),
     metal: std(0x1f1f23, 0.45, { metalness: 0.3 }),
-    paper: std(0xe8dcc8, 0.9),
-    leaf: std(0x4a7c59, 0.75, { flatShading: true }),
+    paper: std(0xe8dcc8, 0.9, { map: tex.paper }),
+    // Muted olive-sage: saturated green was competing with the orange accent
+    // as a third chroma once repeated across four plants/props.
+    leaf: std(0x4f6f57, 0.75, { flatShading: true }),
     // Emissives retuned ~1.3x hotter for ACES tone mapping (sceneRenderer.ts)
     screen: std(0x0d0d10, 0.3, {
       emissive: 0x9db8c9,
@@ -146,6 +199,25 @@ const cylinder = (
   return out;
 };
 
+// Soft elliptical contact shadow (unlit, cheap) — grounds furniture without
+// shadow maps, which expo-gl can't afford.
+const contactShadow = (
+  material: THREE.MeshBasicMaterial,
+  scaleX: number,
+  scaleZ: number,
+  x: number,
+  z: number,
+  y = 0.0105,
+) => {
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(x, y, z);
+  shadow.scale.set(scaleX, scaleZ, 1);
+  // Project convention: shadows render at 1, additive glows at 10.
+  shadow.renderOrder = 1;
+  return shadow;
+};
+
 function buildShell(p: RoomPalette): {
   group: THREE.Group;
   celestial: THREE.Mesh;
@@ -167,11 +239,12 @@ function buildShell(p: RoomPalette): {
   }
 
   // Rug under the companion
-  const rug = cylinder(p.rug, 1.25, 1.25, 0.03, 1.0, 0.015, 0.2, 28);
+  const rug = cylinder(p.rug, 1.25, 1.25, 0.03, 1.0, 0.015, 0.2, 40);
   shell.add(rug);
 
   // Recessed night window: moon, tiny skyline and a real sill create depth
-  // without textures or transparency.
+  // without textures or transparency. Outer trim is rounded (touchable
+  // millwork); the recess itself stays sharp.
   const win = new THREE.Group();
   const moon = new THREE.Mesh(new THREE.CircleGeometry(0.12, 20), p.moon);
   moon.position.set(0.25, 0.35, 0.055);
@@ -180,10 +253,10 @@ function buildShell(p: RoomPalette): {
     box(p.night, 1.0, 1.3, 0.04, 0, 0, 0.02),
     box(p.darkWood, 1.0, 0.05, 0.05, 0, 0, 0.035),
     box(p.darkWood, 0.05, 1.3, 0.05, 0, 0, 0.035),
-    box(p.wood, 1.28, 0.08, 0.18, 0, -0.77, 0.08),
-    box(p.wood, 0.08, 1.58, 0.12, -0.62, 0, 0.04),
-    box(p.wood, 0.08, 1.58, 0.12, 0.62, 0, 0.04),
-    box(p.wood, 1.32, 0.08, 0.12, 0, 0.77, 0.04),
+    roundedBox(p.wood, 1.28, 0.08, 0.18, 0.015, 0, -0.77, 0.08),
+    roundedBox(p.wood, 0.08, 1.58, 0.12, 0.015, -0.62, 0, 0.04),
+    roundedBox(p.wood, 0.08, 1.58, 0.12, 0.015, 0.62, 0, 0.04),
+    roundedBox(p.wood, 1.32, 0.08, 0.12, 0.015, 0, 0.77, 0.04),
     moon,
     box(p.metal, 0.16, 0.3, 0.04, -0.38, -0.48, 0.05),
     box(p.metal, 0.22, 0.2, 0.04, -0.15, -0.53, 0.05),
@@ -205,26 +278,42 @@ function buildShell(p: RoomPalette): {
   return { group: shell, celestial: moon };
 }
 
-function buildDesk(p: RoomPalette): { group: THREE.Group; plant: THREE.Mesh } {
+function buildDesk(p: RoomPalette): {
+  group: THREE.Group;
+  plant: THREE.Mesh;
+  steamPlanes: THREE.Mesh[];
+} {
   const desk = new THREE.Group();
   const topY = 0.74;
 
-  desk.add(box(p.wood, 1.7, 0.06, 0.7, 0, topY, 0));
-  for (const [lx, lz] of [
-    [-0.78, -0.28],
-    [0.78, -0.28],
-    [-0.78, 0.28],
-    [0.78, 0.28],
-  ]) {
-    desk.add(box(p.metal, 0.05, topY, 0.05, lx, topY / 2, lz));
+  // Scandi trestle: eased-edge top on two A-frame leg pairs + stretcher.
+  // Each end gets two legs tilted front/back so the desk reads structurally
+  // supported, not balanced on posts.
+  desk.add(roundedBox(p.wood, 1.7, 0.06, 0.7, 0.025, 0, topY, 0));
+  for (const side of [-1, 1]) {
+    for (const tilt of [-1, 1]) {
+      const leg = cylinder(
+        p.wood,
+        0.022,
+        0.028,
+        topY,
+        side * 0.72,
+        topY / 2,
+        0,
+      );
+      leg.rotation.x = tilt * 0.2;
+      leg.rotation.z = side * -0.05;
+      desk.add(leg);
+    }
   }
+  desk.add(roundedBox(p.wood, 1.34, 0.05, 0.05, 0.02, 0, 0.22, 0));
 
   // Laptop
   const laptop = new THREE.Group();
-  laptop.add(box(p.metal, 0.52, 0.02, 0.36, 0, 0.01, 0));
+  laptop.add(roundedBox(p.metal, 0.52, 0.02, 0.36, 0.008, 0, 0.01, 0));
   const lid = new THREE.Group();
   lid.add(
-    box(p.metal, 0.52, 0.34, 0.015, 0, 0.17, 0),
+    roundedBox(p.metal, 0.52, 0.34, 0.015, 0.008, 0, 0.17, 0),
     box(p.screen, 0.47, 0.29, 0.017, 0, 0.17, 0.002),
     box(p.accentGlow, 0.25, 0.018, 0.01, -0.06, 0.21, 0.014),
     box(p.paper, 0.16, 0.012, 0.01, -0.105, 0.16, 0.014),
@@ -237,15 +326,89 @@ function buildDesk(p: RoomPalette): { group: THREE.Group; plant: THREE.Mesh } {
   laptop.rotation.y = 0.12;
   desk.add(laptop);
 
-  // Mug, stacked books, desk plant
+  // Charging cable trailing off the back edge — quiet lived-in detail.
   desk.add(
-    cylinder(p.paper, 0.05, 0.045, 0.09, 0.28, topY + 0.075, 0.16),
-    box(p.paper, 0.3, 0.018, 0.22, 0.25, topY + 0.045, -0.16),
+    cable(p.metal, [
+      [-0.08, topY + 0.035, -0.08],
+      [0.06, topY + 0.02, -0.26],
+      [0.16, topY - 0.04, -0.36],
+      [0.2, 0.32, -0.37],
+      [0.16, 0.008, -0.3],
+      [0.08, 0.008, -0.24],
+    ]),
+  );
+
+  // Ceramic mug (turned profile + handle) with drifting steam.
+  const mug = lathe(
+    p.ceramic,
+    [
+      [0.03, 0],
+      [0.048, 0.006],
+      [0.05, 0.035],
+      [0.046, 0.08],
+      [0.05, 0.09],
+    ],
+    16,
+    0.28,
+    topY + 0.03,
+    0.16,
+  );
+  const handle = new THREE.Mesh(
+    new THREE.TorusGeometry(0.026, 0.007, 6, 12),
+    p.ceramic,
+  );
+  handle.position.set(0.332, topY + 0.078, 0.16);
+  desk.add(mug, handle);
+  const steamPlanes: THREE.Mesh[] = [];
+  for (let i = 0; i < 2; i++) {
+    const steam = new THREE.Mesh(new THREE.PlaneGeometry(0.045, 0.09));
+    steam.position.set(0.275 + i * 0.012, topY + 0.17 + i * 0.05, 0.16);
+    steam.rotation.y = 0.25;
+    steam.renderOrder = 10;
+    steamPlanes.push(steam);
+    desk.add(steam);
+  }
+
+  // Notebook + pencil, stacked books, desk plant
+  const notebook = roundedBox(
+    p.paper,
+    0.16,
+    0.014,
+    0.22,
+    0.005,
+    0.0,
+    topY + 0.04,
+    0.22,
+  );
+  notebook.rotation.y = -0.18;
+  const pencil = cylinder(p.accentGlow, 0.0045, 0.0045, 0.13, 0.03, topY + 0.055, 0.2, 6);
+  pencil.rotation.z = Math.PI / 2;
+  pencil.rotation.y = 0.35;
+  desk.add(notebook, pencil);
+
+  const bookA = roundedBox(p.paper, 0.3, 0.02, 0.22, 0.006, 0.25, topY + 0.045, -0.16);
+  const bookB = roundedBox(p.clay, 0.26, 0.035, 0.18, 0.008, 0.5, topY + 0.05, -0.12);
+  const bookC = roundedBox(p.leaf, 0.2, 0.03, 0.15, 0.008, 0.51, topY + 0.083, -0.11);
+  bookC.rotation.y = 0.08;
+  desk.add(
+    bookA,
     box(p.accentGlow, 0.14, 0.009, 0.012, 0.2, topY + 0.057, -0.15),
-    box(p.fabric, 0.24, 0.035, 0.17, 0.5, topY + 0.05, -0.12),
-    box(p.leaf, 0.2, 0.03, 0.15, 0.51, topY + 0.082, -0.11),
+    bookB,
+    bookC,
     cylinder(p.darkWood, 0.045, 0.038, 0.07, 0.7, topY + 0.065, 0.14, 10),
   );
+
+  // Headphones resting on the book stack — the premium-setup nod.
+  const band = new THREE.Mesh(
+    new THREE.TorusGeometry(0.055, 0.011, 6, 14, Math.PI),
+    p.metal,
+  );
+  band.position.set(0.5, topY + 0.108, -0.11);
+  band.rotation.z = 0;
+  const cupL = roundedBox(p.fabric, 0.032, 0.045, 0.04, 0.012, 0.445, topY + 0.108, -0.11);
+  const cupR = roundedBox(p.fabric, 0.032, 0.045, 0.04, 0.012, 0.555, topY + 0.108, -0.11);
+  desk.add(band, cupL, cupR);
+
   const deskPlant = new THREE.Mesh(
     new THREE.ConeGeometry(0.07, 0.14, 8),
     p.leaf,
@@ -253,7 +416,7 @@ function buildDesk(p: RoomPalette): { group: THREE.Group; plant: THREE.Mesh } {
   deskPlant.position.set(0.7, topY + 0.17, 0.14);
   desk.add(deskPlant);
 
-  return { group: desk, plant: deskPlant };
+  return { group: desk, plant: deskPlant, steamPlanes };
 }
 
 // Desk lamp with a real light the scene can dim/brighten by focus state
@@ -268,12 +431,23 @@ function buildDeskLamp(p: RoomPalette): {
   );
   const arm = box(p.metal, 0.02, 0.02, 0.22, 0, 0.37, 0.09);
   arm.rotation.x = 0.35;
-  const head = new THREE.Mesh(
-    new THREE.ConeGeometry(0.07, 0.1, 12, 1, true),
+  // Turned shade (open bottom) instead of a raw cone
+  const head = lathe(
     p.metal,
+    [
+      [0.075, 0],
+      [0.07, 0.015],
+      [0.038, 0.085],
+      [0.028, 0.1],
+      [0.02, 0.1],
+    ],
+    16,
+    0,
+    0.37,
+    0.23,
   );
+  head.rotation.x = 2.5 - Math.PI; // lathe opens down; tilt like the old cone
   head.position.set(0, 0.42, 0.2);
-  head.rotation.x = 2.5;
   const bulb = new THREE.Mesh(
     new THREE.SphereGeometry(0.032, 10, 8),
     p.lampGlow,
@@ -287,14 +461,33 @@ function buildDeskLamp(p: RoomPalette): {
 
 function buildChair(p: RoomPalette): THREE.Group {
   const chair = new THREE.Group();
-  chair.add(
-    box(p.fabric, 0.46, 0.07, 0.44, 0, 0.46, 0),
-    box(p.fabric, 0.44, 0.52, 0.07, 0, 0.78, -0.2),
-    box(p.rug, 0.38, 0.1, 0.34, 0, 0.51, 0.01),
-    box(p.wood, 0.24, 0.32, 0.025, 0.15, 0.76, -0.155),
-    cylinder(p.metal, 0.03, 0.03, 0.42, 0, 0.24, 0),
-    cylinder(p.metal, 0.24, 0.26, 0.03, 0, 0.03, 0, 10),
+  // Rounded cushions on a turned pedestal — reads as a real task chair.
+  const seat = roundedBox(p.fabric, 0.46, 0.11, 0.44, 0.04, 0, 0.47, 0);
+  const back = roundedBox(p.fabric, 0.44, 0.5, 0.09, 0.04, 0, 0.82, -0.21);
+  back.rotation.x = -0.14;
+  // One turned base: wide floor disc flowing into the stem, so nothing
+  // floats detached (and it's one mesh instead of pedestal + four feet).
+  const pedestal = lathe(
+    p.metal,
+    [
+      [0.02, 0],
+      [0.19, 0.004],
+      [0.2, 0.016],
+      [0.07, 0.03],
+      [0.032, 0.055],
+      [0.026, 0.42],
+    ],
+    16,
   );
+  chair.add(seat, back, pedestal);
+  // Throw blanket draped over the backrest corner — warm secondary colour.
+  const blanketTop = roundedBox(p.clay, 0.24, 0.035, 0.2, 0.014, 0.1, 1.02, -0.22);
+  blanketTop.rotation.x = -0.14;
+  blanketTop.rotation.y = 0.08;
+  const blanketDrop = roundedBox(p.clay, 0.24, 0.3, 0.03, 0.014, 0.1, 0.87, -0.135);
+  blanketDrop.rotation.x = -0.16;
+  blanketDrop.rotation.y = 0.08;
+  chair.add(blanketTop, blanketDrop);
   return chair;
 }
 
@@ -306,23 +499,25 @@ function buildShelf(
 ): { group: THREE.Group; plant: THREE.Mesh } {
   const shelf = new THREE.Group();
   for (const y of [1.45, 1.85]) {
-    shelf.add(box(p.wood, 0.06, 0.04, 1.1, 0, y, 0));
+    shelf.add(roundedBox(p.wood, 0.06, 0.04, 1.1, 0.012, 0, y, 0));
   }
   // Books + trophy on top plank, plant below
-  const bookMats = [p.fabric, p.leaf, p.paper, p.darkWood];
+  const bookMats = [p.fabric, p.leaf, p.paper, p.clay];
   for (let i = 0; i < 4; i++) {
-    const book = box(
+    const book = roundedBox(
       bookMats[i % bookMats.length],
       0.045,
-      0.2,
+      0.2 + (i % 2) * 0.018,
       0.14,
+      0.006,
       0.02,
-      1.97,
+      1.97 + (i % 2) * 0.009,
       -0.38 + i * 0.13,
     );
     if (i === 3) book.rotation.x = -0.18;
     shelf.add(book);
   }
+  // Trophy sits ON the plank (top face y=1.87) at every tier height.
   shelf.add(
     cylinder(
       p.accentGlow,
@@ -330,7 +525,7 @@ function buildShelf(
       0.05 + levelTier * 0.008,
       0.11 + levelTier * 0.025,
       0.02,
-      1.94,
+      1.87 + (0.11 + levelTier * 0.025) / 2,
       0.32,
       10,
     ),
@@ -356,18 +551,58 @@ function buildShelf(
   return { group: shelf, plant: shelfPlant };
 }
 
+// Potted floor plant by the window: frames the right edge of the home view
+// and gives the back corner a soft organic silhouette.
+function buildFloorPlant(p: RoomPalette): {
+  group: THREE.Group;
+  sway: THREE.Object3D;
+} {
+  const plant = new THREE.Group();
+  plant.add(
+    lathe(
+      p.darkWood,
+      [
+        [0.065, 0],
+        [0.1, 0.02],
+        [0.115, 0.17],
+        [0.1, 0.19],
+      ],
+      14,
+    ),
+  );
+  const foliage = new THREE.Group();
+  const leafGeo = new THREE.SphereGeometry(0.11, 7, 5);
+  for (let i = 0; i < 3; i++) {
+    const leafBlade = new THREE.Mesh(leafGeo, p.leaf);
+    const angle = (i / 3) * Math.PI * 2;
+    leafBlade.position.set(Math.cos(angle) * 0.05, 0.36 + i * 0.09, Math.sin(angle) * 0.05);
+    leafBlade.scale.set(0.9, 1.9, 0.28);
+    leafBlade.rotation.y = angle;
+    leafBlade.rotation.z = 0.28;
+    foliage.add(leafBlade);
+  }
+  plant.add(foliage);
+  return { group: plant, sway: foliage };
+}
+
 // Warm string lights along the back wall; the scene flashes them on rewards
 function buildStringLights(p: RoomPalette): THREE.Group {
   const lights = new THREE.Group();
   const bulbGeo = new THREE.SphereGeometry(0.024, 8, 6);
+  const wirePoints: [number, number, number][] = [];
   for (let i = 0; i < 9; i++) {
     const x = -2.2 + i * 0.55;
-    const droop = Math.sin((i / 8) * Math.PI * 2) * 0.06;
-    const y = 2.45 + droop;
+    // Single gravity sag between the two end anchors — an S-wave reads as
+    // decorative oscillation, not a hanging wire.
+    const droop = -Math.sin((i / 8) * Math.PI) * 0.12;
+    const y = 2.5 + droop;
     const bulb = new THREE.Mesh(bulbGeo, p.string);
     bulb.position.set(x, y, -1.94);
     lights.add(bulb);
+    wirePoints.push([x, y + 0.02, -1.945]);
   }
+  // The wire the bulbs hang from — without it they read as floating dots.
+  lights.add(cable(p.metal, wirePoints, 0.004, 32));
   return lights;
 }
 
@@ -383,6 +618,9 @@ export interface StudyRoom {
   celestial: THREE.Mesh;
   ambientObjects: THREE.Object3D[];
   lampPoolMat: THREE.MeshBasicMaterial;
+  wallSpillMat: THREE.MeshBasicMaterial;
+  steamMat: THREE.MeshBasicMaterial;
+  steamPlanes: THREE.Mesh[];
   anchorFor: (anchor: RoomAnchor) => {
     position: [number, number, number];
     rotationY: number;
@@ -398,7 +636,8 @@ export function buildStudyRoom(
     totalHabits?: number;
   } = {},
 ): StudyRoom {
-  const p = createPalette(accent);
+  const tex = createTextures();
+  const p = createPalette(accent, tex);
   const group = new THREE.Group();
   const lampPoolMat = new THREE.MeshBasicMaterial({
     color: 0xf1bd82,
@@ -424,6 +663,10 @@ export function buildStudyRoom(
     options.totalHabits ?? 0,
   );
   shelf.group.position.set(-2.56, 0, -0.6);
+  // x=2.15 keeps the plant inside the home view at true portrait aspect
+  // (fov is vertical; 19.5:9 phones only see ~±14° horizontally).
+  const floorPlant = buildFloorPlant(p);
+  floorPlant.group.position.set(2.15, 0, -1.4);
   const strings = buildStringLights(p);
 
   const lampPool = new THREE.Mesh(
@@ -434,15 +677,90 @@ export function buildStudyRoom(
   lampPool.position.set(-0.25, 0.012, -1.1);
   lampPool.scale.set(1.3, 0.72, 1);
   lampPoolMat.opacity = 0.22;
-  lampPool.renderOrder = 0;
+  lampPool.renderOrder = 1;
+
+  // Contact shadows ground the furniture; one shared unlit material.
+  const shadowMat = createShadowMaterial(tex.shadow);
+  shadowMat.opacity = 0.3;
+  const shadows = [
+    contactShadow(shadowMat, 2.1, 1.05, -0.85, -1.45),
+    contactShadow(shadowMat, 0.85, 0.85, -0.9, -0.7),
+    contactShadow(shadowMat, 0.55, 0.55, 2.15, -1.4),
+  ];
+
+  // Wall shading: dark falloff toward the ceiling (a lamp-lit room is
+  // darkest up high) + a warm additive spill behind the desk lamp. Both
+  // unlit planes — the closest expo-gl gets to baked lighting.
+  const wallShadeMat = new THREE.MeshBasicMaterial({
+    color: 0x0b0908,
+    map: tex.gradient,
+    transparent: true,
+    opacity: 0.4,
+    depthWrite: false,
+  });
+  wallShadeMat.toneMapped = false;
+  // Span tucked under the crown moulding (top ≤3.33 vs crown top 3.35).
+  const backWallShade = new THREE.Mesh(
+    new THREE.PlaneGeometry(7, 1.86),
+    wallShadeMat,
+  );
+  backWallShade.position.set(0.4, 2.4, -1.988);
+  backWallShade.renderOrder = 1;
+  const sideWallShade = new THREE.Mesh(
+    new THREE.PlaneGeometry(6, 1.86),
+    wallShadeMat,
+  );
+  sideWallShade.position.set(-2.592, 2.4, 0.6);
+  sideWallShade.rotation.y = Math.PI / 2;
+  sideWallShade.renderOrder = 1;
+
+  const wallSpillMat = new THREE.MeshBasicMaterial({
+    color: 0xf1bd82,
+    map: tex.glow,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    opacity: 0.12,
+    depthWrite: false,
+  });
+  wallSpillMat.toneMapped = false;
+  const wallSpill = new THREE.Mesh(
+    new THREE.CircleGeometry(0.95, 24),
+    wallSpillMat,
+  );
+  wallSpill.position.set(-0.15, 1.32, -1.986);
+  wallSpill.scale.set(1.25, 1, 1);
+  wallSpill.renderOrder = 10;
+
+  // Coffee steam: two additive wisps drifting above the mug (animated by
+  // the scene loop via steamPlanes/steamMat).
+  const steamMat = new THREE.MeshBasicMaterial({
+    color: 0xfff3e2,
+    map: tex.glow,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    opacity: 0.1,
+    depthWrite: false,
+  });
+  steamMat.toneMapped = false;
+  for (const steam of desk.steamPlanes) {
+    steam.material = steamMat;
+    steam.userData.baseY = steam.position.y;
+    steam.userData.baseX = steam.position.x;
+  }
+
   group.add(
     shell.group,
     desk.group,
     lamp.group,
     chair,
     shelf.group,
+    floorPlant.group,
     strings,
     lampPool,
+    ...shadows,
+    backWallShade,
+    sideWallShade,
+    wallSpill,
   );
   return {
     group,
@@ -454,8 +772,11 @@ export function buildStudyRoom(
     screenMat: p.screen,
     lampGlowMat: p.lampGlow,
     celestial: shell.celestial,
-    ambientObjects: [desk.plant, shelf.plant],
+    ambientObjects: [desk.plant, shelf.plant, floorPlant.sway],
     lampPoolMat,
+    wallSpillMat,
+    steamMat,
+    steamPlanes: desk.steamPlanes,
     anchorFor: (anchor) => ROOM_ANCHORS[anchor],
     dispose: () => {
       const geometries = new Set<THREE.BufferGeometry>();
@@ -465,6 +786,11 @@ export function buildStudyRoom(
       geometries.forEach((geometry) => geometry.dispose());
       Object.values(p).forEach((mat) => mat.dispose());
       lampPoolMat.dispose();
+      shadowMat.dispose();
+      wallShadeMat.dispose();
+      wallSpillMat.dispose();
+      steamMat.dispose();
+      Object.values(tex).forEach((texture) => texture.dispose());
     },
   };
 }

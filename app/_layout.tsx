@@ -13,8 +13,9 @@ import {
 } from "@/services/onboardingService";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
+import { ThemeProvider as NavigationThemeProvider } from "@react-navigation/native";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 
 // Prevent the splash screen from auto-hiding before fonts are loaded
@@ -23,7 +24,27 @@ SplashScreen.preventAutoHideAsync();
 // Inner component that can use hooks
 function AppContent() {
   const { user, loading } = useAuth();
-  const { colors } = useTheme();
+  const { colorScheme, colors } = useTheme();
+  const navigationTheme = useMemo(
+    () => ({
+      dark: colorScheme === "dark",
+      colors: {
+        primary: colors.accent,
+        background: colors.background,
+        card: colors.surface,
+        text: colors.text,
+        border: colors.separator,
+        notification: colors.accent,
+      },
+      fonts: {
+        regular: { fontFamily: "System", fontWeight: "400" as const },
+        medium: { fontFamily: "System", fontWeight: "500" as const },
+        bold: { fontFamily: "System", fontWeight: "700" as const },
+        heavy: { fontFamily: "System", fontWeight: "800" as const },
+      },
+    }),
+    [colorScheme, colors]
+  );
 
   // First-run onboarding gate: checked per-user against AsyncStorage
   // (@onboarding_complete:<userId>). null = not checked yet, so we never
@@ -82,34 +103,36 @@ function AppContent() {
                   <ActivityIndicator size="large" color={colors.accent} />
                 </View>
               ) : onboardingComplete ? (
-                <Stack
-                  screenOptions={{
-                    contentStyle: { backgroundColor: colors.background },
-                    headerStyle: { backgroundColor: colors.background },
-                    headerTintColor: colors.text,
-                    headerTitleStyle: { fontFamily: "Outfit-SemiBold" },
-                    headerShadowVisible: false,
-                  }}
-                >
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen
-                    name="customise"
-                    options={{ title: "Customise", headerBackTitle: "Home" }}
-                  />
-                  <Stack.Screen
-                    name="profile"
-                    options={{ title: "Profile", headerBackTitle: "Home" }}
-                  />
-                  <Stack.Screen
-                    name="friends/index"
-                    options={{ title: "Friends", headerBackTitle: "Profile" }}
-                  />
-                  <Stack.Screen
-                    name="friends/leaderboard"
-                    options={{ title: "Leaderboard", headerBackTitle: "Friends" }}
-                  />
-                  <Stack.Screen name="auth" options={{ headerShown: false }} />
-                </Stack>
+                <NavigationThemeProvider value={navigationTheme}>
+                  <Stack
+                    screenOptions={{
+                      contentStyle: { backgroundColor: colors.background },
+                      headerStyle: { backgroundColor: colors.surface },
+                      headerTintColor: colors.text,
+                      headerShadowVisible: false,
+                      headerBackButtonDisplayMode: "minimal",
+                    }}
+                  >
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen
+                      name="customise"
+                      options={{ title: "Customise", headerBackTitle: "Home" }}
+                    />
+                    <Stack.Screen
+                      name="profile"
+                      options={{ title: "Profile", headerBackTitle: "Home" }}
+                    />
+                    <Stack.Screen
+                      name="friends/index"
+                      options={{ title: "Friends", headerBackTitle: "Profile" }}
+                    />
+                    <Stack.Screen
+                      name="friends/leaderboard"
+                      options={{ title: "Leaderboard", headerBackTitle: "Friends" }}
+                    />
+                    <Stack.Screen name="auth" options={{ headerShown: false }} />
+                  </Stack>
+                </NavigationThemeProvider>
               ) : (
                 <OnboardingFlow
                   onComplete={() => {

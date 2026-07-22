@@ -1,5 +1,5 @@
 import { BorderRadius, Spacing } from "@/constants/Spacing";
-import { FontFamilies, FontSizes } from "@/constants/Typography";
+import { FontFamilies, StudioType } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { supabase } from "@/lib/supabase";
@@ -145,7 +145,7 @@ export const AuthScreen = () => {
             style={[
               styles.input,
               {
-                backgroundColor: colors.card,
+                backgroundColor: colors.surface,
                 color: colors.text,
                 borderColor: colors.border,
               },
@@ -171,9 +171,9 @@ export const AuthScreen = () => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.onAccent} />
             ) : (
-              <Text style={styles.buttonText}>Send Reset Link</Text>
+              <Text style={[styles.buttonText, { color: colors.onAccent }]}>Send Reset Link</Text>
             )}
           </Pressable>
 
@@ -216,7 +216,7 @@ export const AuthScreen = () => {
           style={[
             styles.input,
             {
-              backgroundColor: colors.card,
+              backgroundColor: colors.surface,
               color: colors.text,
               borderColor: colors.border,
             },
@@ -235,7 +235,7 @@ export const AuthScreen = () => {
           style={[
             styles.input,
             {
-              backgroundColor: colors.card,
+              backgroundColor: colors.surface,
               color: colors.text,
               borderColor: colors.border,
             },
@@ -272,9 +272,9 @@ export const AuthScreen = () => {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.onAccent} />
           ) : (
-            <Text style={styles.buttonText}>
+            <Text style={[styles.buttonText, { color: colors.onAccent }]}>
               {isSignUp ? "Sign Up" : "Sign In"}
             </Text>
           )}
@@ -331,23 +331,21 @@ const styles = StyleSheet.create({
   brandMark: { width: 9, height: 9, borderRadius: 5 },
   brand: { fontFamily: FontFamilies.semibold, fontSize: 28 },
   title: {
-    fontSize: FontSizes["3xl"],
-    fontFamily: FontFamilies.bold,
+    ...StudioType.largeTitle,
     marginBottom: Spacing.xs,
     textAlign: "center",
   },
   subtitle: {
-    fontSize: FontSizes.base,
-    fontFamily: FontFamilies.regular,
+    ...StudioType.body,
     marginBottom: Spacing.xl,
     textAlign: "center",
   },
   input: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    minHeight: 52,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
-    fontSize: FontSizes.base,
-    fontFamily: FontFamilies.regular,
+    ...StudioType.body,
     borderWidth: 1,
   },
   forgotPassword: {
@@ -356,14 +354,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   forgotPasswordText: {
-    fontSize: FontSizes.sm,
-    fontFamily: FontFamilies.semibold,
+    ...StudioType.detail,
+    fontWeight: "600",
   },
   button: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
     marginTop: Spacing.sm,
-    minHeight: 50,
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -372,24 +370,21 @@ const styles = StyleSheet.create({
   },
   buttonPressed: { opacity: 0.78 },
   buttonText: {
-    color: "#fff",
     textAlign: "center",
-    fontSize: FontSizes.lg,
-    fontFamily: FontFamilies.semibold,
+    ...StudioType.bodyStrong,
   },
   switchButton: {
     marginTop: Spacing.md,
   },
   switchText: {
     textAlign: "center",
-    fontSize: FontSizes.sm,
-    fontFamily: FontFamilies.medium,
+    ...StudioType.detail,
+    fontWeight: "500",
   },
   noteText: {
     textAlign: "center",
     marginTop: Spacing.md,
-    fontSize: FontSizes.xs,
-    fontFamily: FontFamilies.regular,
+    ...StudioType.detail,
     fontStyle: "italic",
   },
 });
