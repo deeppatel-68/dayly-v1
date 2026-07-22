@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { describe, expect, it } from "vitest";
 import {
+  createHeroCameraOrbit,
   createOrbitRig,
   createPetTapDetector,
   HERO_HOME_AZIMUTH,
@@ -35,33 +36,29 @@ async function loadAuthoredHero(): Promise<THREE.Group> {
 }
 
 function projectHeroBounds(hero: THREE.Group, camera: THREE.PerspectiveCamera) {
-  const ndcBounds = new THREE.Box2();
+  const ndcBounds = new THREE.Box3();
   const vertex = new THREE.Vector3();
-  const point = new THREE.Vector2();
+  let meshCount = 0;
+  let vertexCount = 0;
+  const meshNames: string[] = [];
 
-  hero.traverse((node) => {
-    if (
-      !node.visible ||
-      !(node instanceof THREE.Mesh) ||
-      // The pod is deliberately allowed to bleed beyond compact cards; the
-      // companion silhouette is the interaction-critical safe area.
-      node.name.startsWith("Platform")
-    ) {
-      return;
-    }
+  hero.traverseVisible((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
 
+    meshCount += 1;
+    meshNames.push(node.name);
     const positions = node.geometry.getAttribute("position");
     for (let index = 0; index < positions.count; index += 1) {
+      vertexCount += 1;
       vertex
         .fromBufferAttribute(positions, index)
         .applyMatrix4(node.matrixWorld)
         .project(camera);
-      point.set(vertex.x, vertex.y);
-      ndcBounds.expandByPoint(point);
+      ndcBounds.expandByPoint(vertex);
     }
   });
 
-  return ndcBounds;
+  return { meshCount, meshNames, ndcBounds, vertexCount };
 }
 
 describe("scene interaction", () => {
@@ -122,41 +119,74 @@ describe("scene interaction", () => {
     expect(distance).toBeCloseTo(Math.hypot(2.5, 0.25));
   });
 
-  it("starts at the authored 10-degree hero view and returns home after interaction", () => {
+  it("wires Avatar3D through the shared hero camera/orbit factory", async () => {
+    expect(createHeroCameraOrbit).toBeTypeOf("function");
+
+    const source = await readFile(
+      resolve(process.cwd(), "src/components/avatar/Avatar3D.tsx"),
+      "utf8",
+    );
+    expect(source).toMatch(
+      /createHeroCameraOrbit\(\s*variant === "shop" \? "shop" : "dashboard",\s*width \/ height,?\s*\)/,
+    );
+    expect(source).not.toContain("new THREE.PerspectiveCamera");
+  });
+
+  it("starts the dashboard at 10 degrees, retains its clamp, and returns home", () => {
     expect(HERO_HOME_AZIMUTH).toBeCloseTo((10 * Math.PI) / 180);
 
-    const target = new THREE.Vector3(0, 0.66, 0);
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    const orbit = createOrbitRig({
-      target,
-      radius: 2.25,
-      height: 0.94,
-      initialAzimuth: HERO_HOME_AZIMUTH,
-      minAzimuth: -0.45,
-      maxAzimuth: 0.45,
-      easeBackAfter: 1.5,
-    });
+    const { camera, orbit, orbitOptions } = createHeroCameraOrbit(
+      "dashboard",
+      1,
+    );
 
-    orbit.applyTo(camera, 0);
-    expect(camera.position.x).toBeCloseTo(Math.sin(HERO_HOME_AZIMUTH) * 2.25);
-    expect(camera.position.z).toBeCloseTo(Math.cos(HERO_HOME_AZIMUTH) * 2.25);
+    expect(orbitOptions.initialAzimuth).toBeCloseTo(HERO_HOME_AZIMUTH);
+    expect(orbitOptions.minAzimuth).toBe(-0.45);
+    expect(orbitOptions.maxAzimuth).toBe(0.45);
+    expect(orbitOptions.easeBackAfter).toBe(1.5);
+    expect(camera.position.x).toBeCloseTo(
+      Math.sin(HERO_HOME_AZIMUTH) * orbitOptions.radius,
+    );
+    expect(camera.position.z).toBeCloseTo(
+      Math.cos(HERO_HOME_AZIMUTH) * orbitOptions.radius,
+    );
 
-    orbit.orbitBy(0.06);
+    orbit.orbitBy(10);
     orbit.applyTo(camera, 0.1);
-    expect(camera.position.x).not.toBeCloseTo(
-      Math.sin(HERO_HOME_AZIMUTH) * 2.25,
+    expect(camera.position.x).toBeCloseTo(
+      Math.sin(0.45) * orbitOptions.radius,
     );
 
     for (let time = 1.7; time <= 4.7; time += 0.1) {
       orbit.applyTo(camera, time);
     }
     expect(camera.position.x).toBeCloseTo(
-      Math.sin(HERO_HOME_AZIMUTH) * 2.25,
+      Math.sin(HERO_HOME_AZIMUTH) * orbitOptions.radius,
       3,
     );
     expect(camera.position.z).toBeCloseTo(
-      Math.cos(HERO_HOME_AZIMUTH) * 2.25,
+      Math.cos(HERO_HOME_AZIMUTH) * orbitOptions.radius,
       3,
+    );
+  });
+
+  it("starts the shop at 10 degrees and keeps its azimuth free", () => {
+    const { camera, orbit, orbitOptions } = createHeroCameraOrbit("shop", 1);
+
+    expect(orbitOptions.initialAzimuth).toBeCloseTo(HERO_HOME_AZIMUTH);
+    expect(orbitOptions.minAzimuth).toBeUndefined();
+    expect(orbitOptions.maxAzimuth).toBeUndefined();
+    expect(orbitOptions.minElevation).toBeCloseTo((-12 * Math.PI) / 180);
+    expect(orbitOptions.maxElevation).toBeCloseTo((12 * Math.PI) / 180);
+
+    orbit.orbitBy(0.5);
+    orbit.applyTo(camera, 0.1);
+    const expectedAzimuth = HERO_HOME_AZIMUTH + 0.5 * Math.PI * 1.1;
+    expect(camera.position.x).toBeCloseTo(
+      Math.sin(expectedAzimuth) * orbitOptions.radius,
+    );
+    expect(camera.position.z).toBeCloseTo(
+      Math.cos(expectedAzimuth) * orbitOptions.radius,
     );
   });
 
@@ -164,40 +194,52 @@ describe("scene interaction", () => {
     {
       label: "portrait dashboard",
       aspect: 3 / 4,
-      targetY: 0.66,
-      radius: 2.25,
-      height: 0.94,
+      variant: "dashboard" as const,
       safetyLimit: 0.95,
     },
     {
       label: "square shop",
       aspect: 1,
-      targetY: 0.7,
-      radius: 2.55,
-      height: 0.9,
+      variant: "shop" as const,
       safetyLimit: 0.85,
     },
   ])(
-    "keeps authored hero bounds inside the $label NDC safety margin",
-    async ({ aspect, targetY, radius, height, safetyLimit }) => {
+    "keeps the complete authored hero inside the $label NDC safety margin",
+    async ({ aspect, variant, safetyLimit }) => {
       const hero = await loadAuthoredHero();
-      const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
-      const orbit = createOrbitRig({
-        target: new THREE.Vector3(0, targetY, 0),
-        radius,
-        height,
-        initialAzimuth: HERO_HOME_AZIMUTH,
-      });
+      const { camera } = createHeroCameraOrbit(variant, aspect);
 
-      orbit.applyTo(camera, 0);
       camera.updateMatrixWorld();
       camera.updateProjectionMatrix();
-      const bounds = projectHeroBounds(hero, camera);
+      const { meshCount, meshNames, ndcBounds, vertexCount } = projectHeroBounds(
+        hero,
+        camera,
+      );
 
-      expect(bounds.min.x).toBeGreaterThanOrEqual(-safetyLimit);
-      expect(bounds.max.x).toBeLessThanOrEqual(safetyLimit);
-      expect(bounds.min.y).toBeGreaterThanOrEqual(-safetyLimit);
-      expect(bounds.max.y).toBeLessThanOrEqual(safetyLimit);
+      expect(meshCount).toBeGreaterThan(0);
+      expect(vertexCount).toBeGreaterThan(0);
+      expect(meshNames).toEqual(
+        expect.arrayContaining([
+          "LeftEye",
+          "RightEye",
+          "VisorLip",
+          "Platform",
+          "PlatformRing",
+          "PlatformInnerRing",
+        ]),
+      );
+      expect(ndcBounds.isEmpty()).toBe(false);
+      expect(
+        [...ndcBounds.min.toArray(), ...ndcBounds.max.toArray()].every(
+          Number.isFinite,
+        ),
+      ).toBe(true);
+      expect(ndcBounds.min.x).toBeGreaterThanOrEqual(-safetyLimit);
+      expect(ndcBounds.max.x).toBeLessThanOrEqual(safetyLimit);
+      expect(ndcBounds.min.y).toBeGreaterThanOrEqual(-safetyLimit);
+      expect(ndcBounds.max.y).toBeLessThanOrEqual(safetyLimit);
+      expect(ndcBounds.min.z).toBeGreaterThanOrEqual(-1);
+      expect(ndcBounds.max.z).toBeLessThanOrEqual(1);
     },
   );
 

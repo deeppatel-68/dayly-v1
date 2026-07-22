@@ -69,7 +69,12 @@ Selection lives in `AVATAR_MODE` in `AvatarRenderer.tsx` ("3d" today).
   `platform` equipment slots. Both variants start from the authored 10° hero
   azimuth and ease back there after interaction. Shop drag remains a free 360°
   turntable with bounded elevation; dashboard drag retains its horizontal
-  clamp. Tap produces a haptic companion reaction.
+  clamp. `createHeroCameraOrbit` owns the complete presentation setup: both use
+  a 45° vertical FOV; dashboard uses target Y `0.55`, radius `2.85`, and camera
+  height `0.94`; shop uses target Y `0.50`, radius `2.55`, and camera height
+  `0.90`. Those values keep the complete authored model, including its pod,
+  inside the tested 3:4 portrait and square NDC safety areas. Tap produces a
+  haptic companion reaction.
 - `components/room/StudyRoomScene.tsx` — My Space: moonlit study nook
   (`roomBuilders.ts`: shell, window/skyline, A-frame trestle desk with mug +
   drifting steam, notebook, headphones and laptop cable, practical lamp,

@@ -12,9 +12,8 @@ import SceneTouchLayer, {
   SceneTapEvent,
 } from "@/components/3d/SceneTouchLayer";
 import {
-  createOrbitRig,
+  createHeroCameraOrbit,
   createPetTapDetector,
-  HERO_HOME_AZIMUTH,
   OrbitRig,
 } from "@/components/3d/sceneInteraction";
 import {
@@ -156,39 +155,10 @@ export default function Avatar3D(props: AvatarRendererProps) {
         disposables.push(() => renderer.dispose());
 
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(
-          45,
+        const { camera, orbit } = createHeroCameraOrbit(
+          variant === "shop" ? "shop" : "dashboard",
           width / height,
-          0.1,
-          100,
         );
-        const orbitTarget = new THREE.Vector3(
-          0,
-          variant === "shop" ? 0.7 : 0.66,
-          0,
-        );
-        if (variant === "shop") {
-          camera.position.set(0, 0.9, 2.55);
-        } else {
-          camera.position.set(0, 0.94, 2.25);
-        }
-        const orbit = createOrbitRig({
-          target: orbitTarget,
-          radius: variant === "shop" ? 2.55 : 2.25,
-          height: variant === "shop" ? 0.9 : 0.94,
-          initialAzimuth: HERO_HOME_AZIMUTH,
-          ...(variant === "shop"
-            ? {
-                minElevation: (-12 * Math.PI) / 180,
-                maxElevation: (12 * Math.PI) / 180,
-              }
-            : {
-                minAzimuth: -0.45,
-                maxAzimuth: 0.45,
-                easeBackAfter: 1.5,
-              }),
-        });
-        orbit.applyTo(camera, 0);
         orbitRef.current = orbit;
 
         const accent = new THREE.Color(accentColor);

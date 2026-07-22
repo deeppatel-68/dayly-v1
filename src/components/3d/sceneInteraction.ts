@@ -36,6 +36,15 @@ export interface OrbitRig {
   applyTo: (camera: THREE.PerspectiveCamera, t: number) => void;
 }
 
+export type HeroPresentationVariant = "dashboard" | "shop";
+
+/** @internal */
+export interface HeroCameraOrbit {
+  camera: THREE.PerspectiveCamera;
+  orbit: OrbitRig;
+  orbitOptions: OrbitRigOptions;
+}
+
 // Full-width drag rotates ~200°
 const DRAG_SENSITIVITY = Math.PI * 1.1;
 const ELEVATION_SENSITIVITY = Math.PI * 0.72;
@@ -103,6 +112,37 @@ export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
       camera.lookAt(options.target);
     },
   };
+}
+
+// Internal presentation factory shared by Avatar3D and its framing tests. The
+// full authored model, including the pod, fits the compact portrait/dashboard
+// and square/shop safety areas at the home angle.
+/** @internal */
+export function createHeroCameraOrbit(
+  variant: HeroPresentationVariant,
+  aspect: number,
+): HeroCameraOrbit {
+  const shop = variant === "shop";
+  const orbitOptions: OrbitRigOptions = {
+    target: new THREE.Vector3(0, shop ? 0.5 : 0.55, 0),
+    radius: shop ? 2.55 : 2.85,
+    height: shop ? 0.9 : 0.94,
+    initialAzimuth: HERO_HOME_AZIMUTH,
+    ...(shop
+      ? {
+          minElevation: (-12 * Math.PI) / 180,
+          maxElevation: (12 * Math.PI) / 180,
+        }
+      : {
+          minAzimuth: -0.45,
+          maxAzimuth: 0.45,
+          easeBackAfter: 1.5,
+        }),
+  };
+  const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+  const orbit = createOrbitRig(orbitOptions);
+  orbit.applyTo(camera, 0);
+  return { camera, orbit, orbitOptions };
 }
 
 // Screen-point → "did the user touch the pet?" hit test
