@@ -26,6 +26,7 @@ The refinement is an evolution of `feat/friends-leaderboard`, not a new characte
 - Give core, orbit, face marks, platform ring, and inner ring independent runtime Basic materials. Animate cached Basic-material colours and glow-sprite opacity allocation-free so the visual hierarchy still responds after PBR conversion.
 - Preserve `AvatarRendererProps`, `AvatarState`, progression calculations, equipment IDs, and screen-level APIs. The only new internal interface is the detail option.
 - Keep the render loop allocation-free, 30 fps capped, context-safe, texture-light, and compatible with `MeshBasicMaterial`/`MeshStandardMaterial` only.
+- Preserve all 104 authored study-room visual pieces while batching exact-repeat floor seams, window stars, desk legs, floor foliage, and string bulbs. The canonical room must use at most 85 physical renderables (83 expected), with aggregate bounds retained for portrait frustum culling and instance buffers explicitly released during teardown.
 
 ## Motion and Progression
 
@@ -45,6 +46,7 @@ The refinement is an evolution of `feat/friends-leaderboard`, not a new characte
 - Generated review views must include front, three-quarter, side, rear, silhouette, and unlit/runtime-parity framing. The silhouette must remain readable at 64 px.
 - Each face style must show distinct idle, focus, reward, and level-up behavior through its semantic rig roles; missing required roles fail fast during model construction rather than silently degrading.
 - Existing unit tests remain green; new tests cover detail pruning, per-face rig binding, one-shot reward motion, reduced motion, asset budgets, and generator portability.
+- Room-performance tests must prove 104 logical visuals remain, the static draw-call proxy is at most 85, the five authored instance clusters preserve representative transforms, and every instance/geometry resource is disposed exactly once.
 - Typecheck, lint, Expo/Metro iOS bundle, Blender rebuild, GLB timestamp/budget checks, and visual inspection of two iterative render passes must all pass before completion.
 
 ## Compatibility and Defaults

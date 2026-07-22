@@ -225,7 +225,54 @@ Commit: `feat: author companion state game feel`
 
 ---
 
-### Task 4: Presentation, framing, and whole-branch verification
+### Task 4: Preserve the study-room composition while reducing draw calls
+
+**Files:**
+- Modify: `src/components/room/roomBuilders.ts`
+- Create: `src/components/room/__tests__/roomPerformance.test.ts`
+
+**Interfaces:**
+- Keeps `buildStudyRoom` and every caller unchanged.
+- Adds five private, named `THREE.InstancedMesh` clusters for exact-repeat decor only.
+
+- [ ] **Step 1: Write the failing room-performance tests**
+
+Build the canonical tier-two room and assert the five clusters are instanced with counts `7`, `3`, `4`, `3`, and `9`; logical visual count remains exactly `104`; physical renderables are at most `85`; representative bulb, star, foliage, and desk-leg transforms retain their authored positions/scales/rotations; and instance plus geometry resources dispose exactly once.
+
+- [ ] **Step 2: Run the test and verify RED**
+
+Run: `npm test -- src/components/room/__tests__/roomPerformance.test.ts`
+
+Expected: FAIL because the current room uses 104 separate meshes and the named instance clusters do not exist.
+
+- [ ] **Step 3: Add an aggregate-bounds-safe instance helper**
+
+Create a private helper that receives geometry, material, stable name, and transforms; fills one `THREE.InstancedMesh` with a reused transform object; marks `instanceMatrix.needsUpdate`; computes aggregate bounding box/sphere; and leaves frustum culling enabled.
+
+- [ ] **Step 4: Batch only exact visual repeats**
+
+Convert floor seams, window stars, desk legs, floor-plant foliage, and string bulbs to stable named clusters. Preserve parent animation for foliage and preserve `starMat`/`stringMat` identity. Do not batch books, pins, steam, or other deliberately varied pieces.
+
+- [ ] **Step 5: Preserve clean setup and teardown**
+
+Conditionally pass only defined `MeshBasicMaterial` options to avoid mount-time warnings. During `room.dispose()`, call `dispose()` on every `InstancedMesh` before the existing deduplicated geometry/material disposal so GPU instance attributes and shared resources are each released exactly once.
+
+- [ ] **Step 6: Verify GREEN and commit**
+
+Run:
+
+```bash
+npm test -- src/components/room/__tests__/roomPerformance.test.ts src/components/room/__tests__
+npm run typecheck
+```
+
+Expected: all room tests and typecheck PASS; canonical room retains `104` logical visuals with at most `85` physical renderables.
+
+Commit: `perf: batch repeated study room decor`
+
+---
+
+### Task 5: Presentation, framing, and whole-branch verification
 
 **Files:**
 - Modify: `src/components/avatar/Avatar3D.tsx`
