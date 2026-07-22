@@ -198,7 +198,7 @@ export default function Avatar3D(props: AvatarRendererProps) {
         // source graph, but createCompanionInstance deep-clones every geometry
         // and material (the GLB carries no textures), so each GL context owns
         // fully independent resources — no cross-context blanking.
-        const source = await loadCompanion();
+        const source = await loadCompanion("hero");
         if (generation !== setupGenerationRef.current) {
           teardown();
           return;
@@ -206,6 +206,7 @@ export default function Avatar3D(props: AvatarRendererProps) {
         const companion = createCompanionInstance(source, {
           accent,
           bodyColor,
+          detail: "hero",
           faceStyle,
           levelTier,
           streakTier,

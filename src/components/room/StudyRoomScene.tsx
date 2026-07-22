@@ -278,7 +278,9 @@ export default function StudyRoomScene({
         let previousTime = 0;
         let didNotifyReady = false;
 
+        let renderFailed = false;
         const animate = () => {
+          if (renderFailed) return;
           frameRef.current = setTimeout(
             animate,
             appActiveRef.current ? 1000 / 30 : 250,
@@ -390,11 +392,20 @@ export default function StudyRoomScene({
             );
           }
 
-          renderer.render(scene, camera);
-          gl.endFrameEXP();
-          if (!didNotifyReady) {
-            didNotifyReady = true;
-            onReadyRef.current?.();
+          try {
+            renderer.render(scene, camera);
+            gl.endFrameEXP();
+            if (!didNotifyReady) {
+              didNotifyReady = true;
+              onReadyRef.current?.();
+            }
+          } catch (error) {
+            renderFailed = true;
+            console.error("Error rendering Dayly study room scene:", error);
+            const isCurrentGeneration =
+              generation === setupGenerationRef.current;
+            stopAndDispose();
+            if (isCurrentGeneration) setFailed(true);
           }
         };
 
@@ -402,7 +413,7 @@ export default function StudyRoomScene({
         // source graph, but createCompanionInstance deep-clones every geometry
         // and material (the GLB carries no textures), so this GL context owns
         // fully independent resources even while the dashboard scene is mounted.
-        const source = await loadCompanion();
+        const source = await loadCompanion("lite");
         if (generation !== setupGenerationRef.current) {
           teardown();
           return;
@@ -410,6 +421,7 @@ export default function StudyRoomScene({
         const companion = createCompanionInstance(source, {
           accent,
           bodyColor,
+          detail: "lite",
           faceStyle,
           levelTier,
           streakTier,
