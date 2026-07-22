@@ -2,13 +2,44 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createCompanionInstance } from "../companionModel";
+import {
+  attachEquipment,
+  createEquipmentMaterials,
+  disposeEquipment,
+} from "../equipment";
+import { createPetMotionController } from "../petMotion";
 import {
   createHeroCameraOrbit,
   createOrbitRig,
   createPetTapDetector,
   HERO_HOME_AZIMUTH,
 } from "../sceneInteraction";
+
+vi.mock("expo-three", () => ({ loadAsync: vi.fn() }));
+
+const MAXIMUM_COMPATIBLE_EQUIPMENT = [
+  "focus-cap",
+  "cozy-scarf",
+  "mini-backpack",
+  "halo-orbit-ring",
+  "study-plant",
+  "neon-lamp",
+  "pod-aurora",
+] as const;
+
+const LEVEL_UP_KEY_TIMES = [
+  0, 0.16, 0.18, 0.39, 0.537165, 0.62, 0.63, 0.7, 0.71, 0.722835, 0.98,
+  1.08, 1.8,
+] as const;
+const LEVEL_UP_SAMPLE_TIMES = [
+  ...new Set([
+    ...Array.from({ length: 217 }, (_, index) => index / 120),
+    ...LEVEL_UP_KEY_TIMES,
+  ]),
+].sort((left, right) => left - right);
+const MINIMUM_NDC_HEADROOM = 0.02;
 
 async function loadAuthoredHero(): Promise<THREE.Group> {
   const bytes = await readFile(
@@ -59,6 +90,171 @@ function projectHeroBounds(hero: THREE.Group, camera: THREE.PerspectiveCamera) {
   });
 
   return { meshCount, meshNames, ndcBounds, vertexCount };
+}
+
+interface RuntimeProjection {
+  bounds: THREE.Box3;
+  equipmentIds: Set<string>;
+  maxDepth: number;
+  meshNames: Set<string>;
+  minDepth: number;
+  objectNames: Set<string>;
+  spriteParents: Set<string>;
+  sprites: number;
+}
+
+function findEquipmentId(node: THREE.Object3D): string | undefined {
+  let current: THREE.Object3D | null = node;
+  while (current) {
+    if (typeof current.userData.equipmentId === "string") {
+      return current.userData.equipmentId;
+    }
+    current = current.parent;
+  }
+  return undefined;
+}
+
+function projectRuntimeEnvelope(
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+): RuntimeProjection {
+  scene.updateWorldMatrix(true, true);
+  camera.updateMatrixWorld(true);
+  camera.updateProjectionMatrix();
+
+  const bounds = new THREE.Box3();
+  const equipmentIds = new Set<string>();
+  const meshNames = new Set<string>();
+  const objectNames = new Set<string>();
+  const spriteParents = new Set<string>();
+  const world = new THREE.Vector3();
+  const view = new THREE.Vector3();
+  const projected = new THREE.Vector3();
+  const modelView = new THREE.Matrix4();
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+  let sprites = 0;
+
+  const includeViewPoint = (point: THREE.Vector3) => {
+    const depth = -point.z;
+    minDepth = Math.min(minDepth, depth);
+    maxDepth = Math.max(maxDepth, depth);
+    projected.copy(point).applyMatrix4(camera.projectionMatrix);
+    bounds.expandByPoint(projected);
+  };
+
+  scene.traverseVisible((node) => {
+    objectNames.add(node.name);
+    const equipmentId = findEquipmentId(node);
+    if (equipmentId) equipmentIds.add(equipmentId);
+
+    if (node instanceof THREE.Mesh) {
+      meshNames.add(node.name);
+      const positions = node.geometry.getAttribute("position");
+      for (let index = 0; index < positions.count; index += 1) {
+        world.fromBufferAttribute(positions, index).applyMatrix4(node.matrixWorld);
+        view.copy(world).applyMatrix4(camera.matrixWorldInverse);
+        includeViewPoint(view);
+      }
+      return;
+    }
+
+    if (!(node instanceof THREE.Sprite)) return;
+    sprites += 1;
+    spriteParents.add(node.parent?.name ?? "");
+
+    // Match Three's Sprite vertex shader: scale the unit quad by the sprite's
+    // model-view axes, rotate around Sprite.center, then project. A static
+    // matrix-world point misses the camera-facing billboard's visible area.
+    modelView.multiplyMatrices(camera.matrixWorldInverse, node.matrixWorld);
+    const elements = modelView.elements;
+    const scaleX = Math.hypot(elements[0], elements[1], elements[2]);
+    const scaleY = Math.hypot(elements[4], elements[5], elements[6]);
+    const rotation = (node.material as THREE.SpriteMaterial).rotation;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+
+    for (const x of [0, 1]) {
+      for (const y of [0, 1]) {
+        const alignedX = (x - node.center.x) * scaleX;
+        const alignedY = (y - node.center.y) * scaleY;
+        view.set(
+          elements[12] + cos * alignedX - sin * alignedY,
+          elements[13] + sin * alignedX + cos * alignedY,
+          elements[14],
+        );
+        includeViewPoint(view);
+      }
+    }
+  });
+
+  return {
+    bounds,
+    equipmentIds,
+    maxDepth,
+    meshNames,
+    minDepth,
+    objectNames,
+    spriteParents,
+    sprites,
+  };
+}
+
+function createRuntimeEnvelope(source: THREE.Group) {
+  const scene = new THREE.Scene();
+  const companion = createCompanionInstance(source, {
+    accent: new THREE.Color("#d97757"),
+    bodyColor: "#6f8193",
+    detail: "hero",
+    faceStyle: "classic",
+    levelTier: 3,
+    streakTier: 3,
+  });
+  scene.add(companion.root, companion.rig.petGroup);
+
+  const equipmentMaterials = createEquipmentMaterials(
+    new THREE.Color("#d97757"),
+  );
+  const equipment = attachEquipment(
+    [...MAXIMUM_COMPATIBLE_EQUIPMENT],
+    ["pet", "platform"],
+    equipmentMaterials,
+    { pet: companion.rig.petGroup, platform: companion.root },
+  );
+
+  return {
+    companion,
+    equipment,
+    equipmentMaterials,
+    motion: createPetMotionController({ levelTier: 3, streakTier: 3 }),
+    scene,
+    dispose: () => {
+      disposeEquipment(equipment);
+      equipmentMaterials.dispose();
+      companion.dispose();
+    },
+  };
+}
+
+function expectCompleteRuntimeEnvelope(projection: RuntimeProjection) {
+  expect(projection.sprites).toBe(2);
+  expect(projection.spriteParents).toEqual(
+    new Set(["EnergyCore", "HaloCharm"]),
+  );
+  expect([...projection.meshNames]).toEqual(
+    expect.arrayContaining([
+      "Platform",
+      "LeftEvolutionFin",
+      "RightEvolutionFin",
+      "StreakAura",
+    ]),
+  );
+  expect([...projection.objectNames]).toEqual(
+    expect.arrayContaining(["CompanionEvolution", "FocusNodeOrbit"]),
+  );
+  expect(projection.equipmentIds).toEqual(
+    new Set(MAXIMUM_COMPATIBLE_EQUIPMENT),
+  );
 }
 
 describe("scene interaction", () => {
@@ -242,6 +438,89 @@ describe("scene interaction", () => {
       expect(ndcBounds.max.z).toBeLessThanOrEqual(1);
     },
   );
+
+  it.each([
+    {
+      label: "portrait dashboard",
+      aspect: 3 / 4,
+      variant: "dashboard" as const,
+      safetyLimit: 0.95,
+    },
+    {
+      label: "square shop",
+      aspect: 1,
+      variant: "shop" as const,
+      safetyLimit: 0.85,
+    },
+  ])(
+    "frames the complete tier-three level-up runtime envelope in the $label",
+    async ({ aspect, variant, safetyLimit }) => {
+      const source = await loadAuthoredHero();
+      const runtime = createRuntimeEnvelope(source);
+
+      try {
+        const { camera, orbit } = createHeroCameraOrbit(variant, aspect);
+        const sampledBounds = new THREE.Box3();
+        let minDepth = Infinity;
+        let maxDepth = -Infinity;
+        let capAtRest = 0;
+        let capAtPeak = 0;
+        const cap = runtime.equipment.find(
+          (object) => object.userData.equipmentId === "focus-cap",
+        );
+        if (!cap) throw new Error("focus-cap was not attached");
+        const capWorldPosition = new THREE.Vector3();
+
+        for (const time of LEVEL_UP_SAMPLE_TIMES) {
+          orbit.applyTo(camera, time);
+          runtime.motion.apply(runtime.companion.rig, "levelUp", time);
+          const projection = projectRuntimeEnvelope(runtime.scene, camera);
+          sampledBounds.union(projection.bounds);
+          minDepth = Math.min(minDepth, projection.minDepth);
+          maxDepth = Math.max(maxDepth, projection.maxDepth);
+
+          cap.getWorldPosition(capWorldPosition);
+          if (time === 0) capAtRest = capWorldPosition.y;
+          if (time === 0.39) capAtPeak = capWorldPosition.y;
+        }
+
+        expect(capAtPeak - capAtRest).toBeCloseTo(0.19);
+        const envelopeLimit = safetyLimit - MINIMUM_NDC_HEADROOM;
+        const violations = [
+          sampledBounds.min.x < -envelopeLimit ? "min.x" : null,
+          sampledBounds.max.x > envelopeLimit ? "max.x" : null,
+          sampledBounds.min.y < -envelopeLimit ? "min.y" : null,
+          sampledBounds.max.y > envelopeLimit ? "max.y" : null,
+          minDepth < camera.near ? "near" : null,
+          maxDepth > camera.far ? "far" : null,
+        ].filter(Boolean);
+        expect(
+          violations,
+          `NDC [${sampledBounds.min.x}, ${sampledBounds.max.x}] x ` +
+            `[${sampledBounds.min.y}, ${sampledBounds.max.y}], ` +
+            `depth [${minDepth}, ${maxDepth}]`,
+        ).toEqual([]);
+      } finally {
+        runtime.dispose();
+      }
+    },
+  );
+
+  it("keeps runtime effects and maximum compatible equipment in framing coverage", async () => {
+    const source = await loadAuthoredHero();
+    const runtime = createRuntimeEnvelope(source);
+
+    try {
+      const { camera } = createHeroCameraOrbit("dashboard", 3 / 4);
+      runtime.motion.apply(runtime.companion.rig, "levelUp", 0);
+      runtime.motion.apply(runtime.companion.rig, "levelUp", 0.39);
+      const projection = projectRuntimeEnvelope(runtime.scene, camera);
+
+      expectCompleteRuntimeEnvelope(projection);
+    } finally {
+      runtime.dispose();
+    }
+  });
 
   it("only reports taps whose ray intersects the pet", () => {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);

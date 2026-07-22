@@ -70,11 +70,17 @@ Selection lives in `AVATAR_MODE` in `AvatarRenderer.tsx` ("3d" today).
   azimuth and ease back there after interaction. Shop drag remains a free 360°
   turntable with bounded elevation; dashboard drag retains its horizontal
   clamp. `createHeroCameraOrbit` owns the complete presentation setup: both use
-  a 45° vertical FOV; dashboard uses target Y `0.55`, radius `2.85`, and camera
-  height `0.94`; shop uses target Y `0.50`, radius `2.55`, and camera height
-  `0.90`. Those values keep the complete authored model, including its pod,
-  inside the tested 3:4 portrait and square NDC safety areas. Tap produces a
-  haptic companion reaction.
+  a 45° vertical FOV; dashboard uses target Y `0.86`, radius `3.70`, and camera
+  height `1.25`; shop uses target Y `0.89`, radius `3.60`, and camera height
+  `1.29`. The framing contract covers the complete visible runtime envelope,
+  not only authored GLB vertices: the pod, tier-three fins/focus orbit/aura,
+  camera-facing core and halo glow sprites, the full compatible pet/platform
+  equipment set, and the companion plus attached wearables at the level-up
+  motion's `0.19` lift. The dashboard must remain inside `±0.95` NDC at 3:4;
+  shop must remain inside `±0.85` NDC at square aspect; both must remain inside
+  their camera near/far clip planes, with at least `0.02` NDC headroom on every
+  screen edge for exporter/device variation. Tap produces a haptic companion
+  reaction.
 - `components/room/StudyRoomScene.tsx` — My Space: moonlit study nook
   (`roomBuilders.ts`: shell, window/skyline, A-frame trestle desk with mug +
   drifting steam, notebook, headphones and laptop cable, practical lamp,
@@ -82,7 +88,8 @@ Selection lives in `AVATAR_MODE` in `AvatarRenderer.tsx` ("3d" today).
   string lights with gravity sag) with the cached-GLB companion on its pod.
   Silhouette furniture uses rounded boxes/lathes (`geometry.ts`) with
   procedural grain maps (`surfaceTextures.ts`) and a ceramic + clay material
-  family; budget is ~105 renderables before companion/equipment. Lighting is
+  family; the canonical room is exactly 104 logical visual pieces represented
+  by 83 physical renderables before companion/equipment. Lighting is
   four lights and no shadow maps: hemisphere, warm key directional, the
   lamp's warm PointLight, and a cool window-rim PointLight driven by
   `environmentProfile.windowIntensity` (near-zero at midday, strongest at

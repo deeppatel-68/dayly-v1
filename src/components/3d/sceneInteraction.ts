@@ -115,8 +115,9 @@ export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
 }
 
 // Internal presentation factory shared by Avatar3D and its framing tests. The
-// full authored model, including the pod, fits the compact portrait/dashboard
-// and square/shop safety areas at the home angle.
+// complete tier-three runtime envelope, including glows, evolution geometry,
+// compatible equipment, level-up lift, and pod, fits the compact portrait and
+// square safety areas at the home angle.
 /** @internal */
 export function createHeroCameraOrbit(
   variant: HeroPresentationVariant,
@@ -124,9 +125,9 @@ export function createHeroCameraOrbit(
 ): HeroCameraOrbit {
   const shop = variant === "shop";
   const orbitOptions: OrbitRigOptions = {
-    target: new THREE.Vector3(0, shop ? 0.5 : 0.55, 0),
-    radius: shop ? 2.55 : 2.85,
-    height: shop ? 0.9 : 0.94,
+    target: new THREE.Vector3(0, shop ? 0.89 : 0.86, 0),
+    radius: shop ? 3.6 : 3.7,
+    height: shop ? 1.29 : 1.25,
     initialAzimuth: HERO_HOME_AZIMUTH,
     ...(shop
       ? {
