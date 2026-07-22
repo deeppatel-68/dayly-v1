@@ -220,6 +220,8 @@ export function createPetMotionController(options: PetMotionOptions) {
   let transitionEyeIntensity = lastEyeIntensity;
   let transitionMouthIntensity = lastMouthIntensity;
   let transitionEvolutionIntensity = lastEvolutionIntensity;
+  let celebrationEntryHaloGlow = 0.75;
+  let celebrationEntryCoreGlow = 0.85;
   let haloAngle = 0;
   let orbitAngle = 0;
   let decorationTime = 0;
@@ -231,6 +233,10 @@ export function createPetMotionController(options: PetMotionOptions) {
   let resumeHaloZ = 0;
   let resumeOrbitY = 0;
   let resumeOrbitZ = 0;
+  let resumeLeftFinZ = 0;
+  let resumeRightFinZ = 0;
+  let resumeAuraScale = 1;
+  let resumeAuraOpacity = 0;
   let reactionStartedAt = -Infinity;
   let activeReaction: CompanionReaction = "bounce";
   let pendingBounce = false;
@@ -335,6 +341,8 @@ export function createPetMotionController(options: PetMotionOptions) {
       transitionEyeIntensity = lastEyeIntensity;
       transitionMouthIntensity = lastMouthIntensity;
       transitionEvolutionIntensity = lastEvolutionIntensity;
+      celebrationEntryHaloGlow = rig.haloGlowMat?.opacity ?? 0.75;
+      celebrationEntryCoreGlow = rig.coreGlowMat?.opacity ?? 0.85;
     }
     // Normalise the subtraction so the same authored clip age is bit-for-bit
     // identical at small and large host-clock values (for example 1.35/101.35).
@@ -369,7 +377,14 @@ export function createPetMotionController(options: PetMotionOptions) {
       resumeHaloZ = rig.halo?.rotation.z ?? 0;
       resumeOrbitY = rig.orbitGroup?.rotation.y ?? 0;
       resumeOrbitZ = rig.orbitGroup?.rotation.z ?? 0;
+      resumeLeftFinZ = rig.leftFin?.rotation.z ?? 0;
+      resumeRightFinZ = rig.rightFin?.rotation.z ?? 0;
+      resumeAuraScale = rig.aura?.scale.x ?? 1;
+      resumeAuraOpacity = rig.auraMat?.opacity ?? 0;
     }
+    const decorationResumeBlend = smoothstep(
+      (t - decorationResumedAt) / 0.3,
+    );
 
     if (!reducedMotion && !resumedDecorations) {
       const haloSpeed =
@@ -673,10 +688,16 @@ export function createPetMotionController(options: PetMotionOptions) {
           ? 0.55 + focusPulse * 0.25
           : 0.35 + accentPulse * 0.2;
       const haloGlow = celebrating
-        ? 0.75 + signal * 0.25
+        ? reducedMotion
+          ? lerp(celebrationEntryHaloGlow, 1, signal)
+          : 0.75 + signal * 0.25
         : ambientGlow;
+      const coreGlow =
+        celebrating && reducedMotion
+          ? lerp(celebrationEntryCoreGlow, 1, signal)
+          : Math.min(1, haloGlow + 0.1);
       if (rig.haloGlowMat) rig.haloGlowMat.opacity = haloGlow;
-      if (rig.coreGlowMat) rig.coreGlowMat.opacity = Math.min(1, haloGlow + 0.1);
+      if (rig.coreGlowMat) rig.coreGlowMat.opacity = coreGlow;
     }
 
     let eyeX = 1;
@@ -916,21 +937,34 @@ export function createPetMotionController(options: PetMotionOptions) {
       }
       const leftTarget = leftBase - flare - focusFold;
       const rightTarget = rightBase + flare + focusFold;
-      rig.leftFin.rotation.z =
+      const leftPose =
         stateBeforeEntry === null
           ? leftTarget
           : lerp(transitionLeftFinZ, leftTarget, expressionBlend);
-      rig.rightFin.rotation.z =
+      const rightPose =
         stateBeforeEntry === null
           ? rightTarget
           : lerp(transitionRightFinZ, rightTarget, expressionBlend);
+      rig.leftFin.rotation.z = reducedMotion
+        ? leftPose
+        : lerp(resumeLeftFinZ, leftPose, decorationResumeBlend);
+      rig.rightFin.rotation.z = reducedMotion
+        ? rightPose
+        : lerp(resumeRightFinZ, rightPose, decorationResumeBlend);
     }
 
     if (rig.orbitGroup && !reducedMotion) {
-      const resumeBlend = easeOutCubic((t - decorationResumedAt) / 0.16);
       const targetY = Math.sin(decorationTime * 0.7) * 0.04;
-      rig.orbitGroup.rotation.z = lerp(resumeOrbitZ, orbitAngle, resumeBlend);
-      rig.orbitGroup.rotation.y = lerp(resumeOrbitY, targetY, resumeBlend);
+      rig.orbitGroup.rotation.z = lerp(
+        resumeOrbitZ,
+        orbitAngle,
+        decorationResumeBlend,
+      );
+      rig.orbitGroup.rotation.y = lerp(
+        resumeOrbitY,
+        targetY,
+        decorationResumeBlend,
+      );
     }
 
     if (rig.aura && rig.auraMat) {
@@ -939,20 +973,24 @@ export function createPetMotionController(options: PetMotionOptions) {
       );
       rig.aura.userData.motionBaseScale = baseAuraScale;
       const pulse =
-        reducedMotion ? 0 : (Math.sin(animationTime * 1.8) + 1) * 0.5;
+        reducedMotion ? 0 : (Math.sin(decorationTime * 1.8) + 1) * 0.5;
       const levelAuraSignal =
         state === "levelUp" && !reducedMotion
           ? stateAge <= 0.7
             ? easeOutCubic(stateAge / 0.7)
             : 1 - easeOutCubic((stateAge - 0.7) / 1.1)
           : signal;
-      rig.aura.scale.setScalar(
+      const auraScale =
         levelTier < 3
           ? 0.94
           : baseAuraScale *
               (1 +
                 pulse * 0.035 +
-                (reducedMotion ? 0 : levelAuraSignal * 0.1)),
+                (reducedMotion ? 0 : levelAuraSignal * 0.1));
+      rig.aura.scale.setScalar(
+        reducedMotion
+          ? auraScale
+          : lerp(resumeAuraScale, auraScale, decorationResumeBlend),
       );
       const baseOpacity =
         levelTier >= 3 ? 0.1 : 0.025 + streakBoost * 0.045;
@@ -960,8 +998,11 @@ export function createPetMotionController(options: PetMotionOptions) {
         baseOpacity +
         (reducedMotion ? 0 : pulse * 0.015) +
         levelAuraSignal * 0.055;
-      rig.auraMat.opacity =
+      const auraOpacity =
         levelTier >= 3 ? Math.max(0.1, opacity) : Math.min(0.09, opacity);
+      rig.auraMat.opacity = reducedMotion
+        ? auraOpacity
+        : lerp(resumeAuraOpacity, auraOpacity, decorationResumeBlend);
     }
 
     if (rig.halo && !reducedMotion) {
@@ -986,10 +1027,21 @@ export function createPetMotionController(options: PetMotionOptions) {
         delayedLevelTurn -
         levelTurn;
       const targetZ = -0.16 + haloAngle;
-      const resumeBlend = easeOutCubic((t - decorationResumedAt) / 0.16);
-      rig.halo.rotation.x = lerp(resumeHaloX, targetX, resumeBlend);
-      rig.halo.rotation.y = lerp(resumeHaloY, targetY, resumeBlend);
-      rig.halo.rotation.z = lerp(resumeHaloZ, targetZ, resumeBlend);
+      rig.halo.rotation.x = lerp(
+        resumeHaloX,
+        targetX,
+        decorationResumeBlend,
+      );
+      rig.halo.rotation.y = lerp(
+        resumeHaloY,
+        targetY,
+        decorationResumeBlend,
+      );
+      rig.halo.rotation.z = lerp(
+        resumeHaloZ,
+        targetZ,
+        decorationResumeBlend,
+      );
     }
 
     clipOwnedRootOnLastFrame = clipOwnsRoot;

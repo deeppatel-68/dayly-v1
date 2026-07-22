@@ -355,28 +355,35 @@ describe("pet motion", () => {
   });
 
   it.each(["reward", "levelUp"] as const)(
-    "ramps reduced-motion %s opacity to 180ms then settles",
+    "ramps reduced-motion %s opacity from ambient to 180ms then settles",
     (state) => {
       const rig = makeTimelineRig();
       rig.haloGlowMat = new THREE.SpriteMaterial({ transparent: true });
       rig.coreGlowMat = new THREE.SpriteMaterial({ transparent: true });
       const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
       const frame = { reducedMotion: true };
-      motion.apply(rig, "idle", 0, "calm", frame);
-      motion.apply(rig, state, 1, "celebrating", frame);
-      const entryHalo = rig.haloGlowMat.opacity;
+      motion.apply(rig, "idle", 0, "calm");
+      motion.apply(rig, "idle", 0.5, "calm");
+      const ambientHalo = rig.haloGlowMat.opacity;
+      const ambientCore = rig.coreGlowMat.opacity;
+
+      motion.apply(rig, state, 0.5, "celebrating", frame);
+      expect(rig.haloGlowMat.opacity).toBe(ambientHalo);
+      expect(rig.coreGlowMat.opacity).toBe(ambientCore);
       const entryAura = rig.auraMat!.opacity;
 
-      motion.apply(rig, state, 1.18, "celebrating", frame);
-      expect(rig.haloGlowMat.opacity).toBeGreaterThan(entryHalo);
+      motion.apply(rig, state, 0.68, "celebrating", frame);
+      expect(rig.haloGlowMat.opacity).toBeGreaterThan(ambientHalo);
+      expect(rig.coreGlowMat.opacity).toBeGreaterThan(ambientCore);
       expect(rig.coreGlowMat.opacity).toBeGreaterThanOrEqual(
         rig.haloGlowMat.opacity,
       );
       expect(rig.auraMat!.opacity).toBeGreaterThan(entryAura);
 
       const settleAge = state === "reward" ? 0.68 : 0.88;
-      motion.apply(rig, state, 1 + settleAge, "celebrating", frame);
-      expect(rig.haloGlowMat.opacity).toBeCloseTo(entryHalo, 6);
+      motion.apply(rig, state, 0.5 + settleAge, "celebrating", frame);
+      expect(rig.haloGlowMat.opacity).toBeCloseTo(ambientHalo, 6);
+      expect(rig.coreGlowMat.opacity).toBeCloseTo(ambientCore, 6);
       expect(rig.auraMat!.opacity).toBeCloseTo(entryAura, 6);
     },
   );
@@ -404,23 +411,74 @@ describe("pet motion", () => {
     expect(rig.rightBrow.rotation.z).toBeCloseTo(0.16, 6);
   });
 
-  it("rebases decoration phases when reduced motion is disabled", () => {
+  it("smoothly restores every decoration when reduced motion is disabled", () => {
     const rig = makeTimelineRig();
+    rig.leftFin!.rotation.z = -0.9;
+    rig.rightFin!.rotation.z = 0.9;
+    rig.aura!.scale.setScalar(1.1);
     const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
     motion.apply(rig, "idle", 0);
     motion.apply(rig, "idle", 1 / 30);
     motion.apply(rig, "idle", 2 / 30, "calm", { reducedMotion: true });
     for (let frame = 3; frame <= 303; frame += 1) {
-      motion.apply(rig, "idle", frame / 30, "calm", {
+      motion.apply(rig, "focus", frame / 30, "focused", {
         reducedMotion: true,
       });
     }
     const haloBefore = rig.halo!.rotation.toArray();
     const orbitBefore = rig.orbitGroup!.rotation.toArray();
+    const finsBefore = [rig.leftFin!.rotation.z, rig.rightFin!.rotation.z];
+    const auraBefore = rig.aura!.scale.x;
 
-    motion.apply(rig, "idle", 304 / 30, "calm", { reducedMotion: false });
+    motion.apply(rig, "focus", 304 / 30, "focused", {
+      reducedMotion: false,
+    });
     expect(rig.halo!.rotation.toArray()).toEqual(haloBefore);
     expect(rig.orbitGroup!.rotation.toArray()).toEqual(orbitBefore);
+    expect([rig.leftFin!.rotation.z, rig.rightFin!.rotation.z]).toEqual(
+      finsBefore,
+    );
+    expect(rig.aura!.scale.x).toBe(auraBefore);
+
+    let previousHalo = rig.halo!.rotation.toArray();
+    let previousOrbit = rig.orbitGroup!.rotation.toArray();
+    let previousFins = [rig.leftFin!.rotation.z, rig.rightFin!.rotation.z];
+    let previousAura = rig.aura!.scale.x;
+    for (let frame = 305; frame <= 314; frame += 1) {
+      motion.apply(rig, "focus", frame / 30, "focused", {
+        reducedMotion: false,
+      });
+      rig.halo!.rotation
+        .toArray()
+        .slice(0, 3)
+        .forEach((value, index) => {
+          expect(
+            Math.abs((value as number) - (previousHalo[index] as number)),
+          ).toBeLessThanOrEqual(0.06);
+        });
+      rig.orbitGroup!.rotation
+        .toArray()
+        .slice(0, 3)
+        .forEach((value, index) => {
+          expect(
+            Math.abs((value as number) - (previousOrbit[index] as number)),
+          ).toBeLessThanOrEqual(0.06);
+        });
+      const fins = [rig.leftFin!.rotation.z, rig.rightFin!.rotation.z];
+      fins.forEach((value, index) => {
+        expect(Math.abs(value - previousFins[index])).toBeLessThanOrEqual(0.04);
+      });
+      expect(Math.abs(rig.aura!.scale.x - previousAura)).toBeLessThanOrEqual(
+        0.02,
+      );
+      previousHalo = rig.halo!.rotation.toArray();
+      previousOrbit = rig.orbitGroup!.rotation.toArray();
+      previousFins = fins;
+      previousAura = rig.aura!.scale.x;
+    }
+    expect(rig.leftFin!.rotation.z).toBeCloseTo(-0.72, 3);
+    expect(rig.rightFin!.rotation.z).toBeCloseTo(0.72, 3);
+    expect(rig.aura!.scale.x).toBeGreaterThan(auraBefore);
   });
 
   it("keeps streak-only aura subordinate in every state", () => {
