@@ -17,6 +17,7 @@ export interface FocusSession {
 export interface ChartPoint {
   label: string;
   value: number;
+  applicable?: boolean;
 }
 
 export interface DayStats {
@@ -25,7 +26,7 @@ export interface DayStats {
   habitsCompleted: number;
   habitsTotal: number;
   studyMinutes: number;
-  completionRate: number;
+  completionRate: number | null;
 }
 
 export interface HabitStats {
@@ -41,16 +42,15 @@ export interface HabitStats {
 
 export interface PeriodStats {
   totalHabitsCompleted: number;
-  averageCompletion: number;
+  averageCompletion: number | null;
   totalStudyMinutes: number;
-  averageStudyMinutes: number;
   averageSessionMinutes: number;
   sessionCount: number;
   bestDay: DayStats | null;
   worstDay: DayStats | null;
   currentStreak: number;
   longestStreak: number;
-  periodChange: number;
+  periodChange: number | null;
 }
 
 const PERIOD_DAYS: Record<AnalyticsPeriod, number> = {
@@ -125,7 +125,7 @@ export function calculateDayStats(
     completionRate:
       activeHabits.length > 0
         ? (habitsCompleted / activeHabits.length) * 100
-        : 0,
+        : null,
   };
 }
 
@@ -135,16 +135,17 @@ function shiftDates(dates: Date[], days: number): Date[] {
 
 function averageCompletionForDates(
   dates: Date[],
-  habits: Habit[],
-  sessions: FocusSession[]
-): number {
-  if (dates.length === 0) return 0;
-  return (
-    dates.reduce(
-      (sum, date) => sum + calculateDayStats(date, habits, sessions).completionRate,
-      0
-    ) / dates.length
-  );
+  habits: Habit[]
+): number | null {
+  const applicableDays = dates
+    .map((date) => calculateDayStats(date, habits))
+    .filter((day) => day.completionRate !== null);
+
+  if (applicableDays.length === 0) return null;
+  return applicableDays.reduce(
+    (sum, day) => sum + (day.completionRate ?? 0),
+    0
+  ) / applicableDays.length;
 }
 
 export function calculatePeriodStats(
@@ -166,18 +167,13 @@ export function calculatePeriodStats(
     (sum, day) => sum + day.habitsCompleted,
     0
   );
-  const averageCompletion = averageCompletionForDates(
-    dates,
-    habits,
-    sessions
-  );
+  const averageCompletion = averageCompletionForDates(dates, habits);
   const rankedDays = dayStats
     .filter((day) => day.habitsTotal > 0)
-    .sort((a, b) => b.completionRate - a.completionRate);
+    .sort((a, b) => (b.completionRate ?? 0) - (a.completionRate ?? 0));
   const previousAverage = averageCompletionForDates(
     shiftDates(dates, -dates.length),
-    habits,
-    sessions
+    habits
   );
   const { currentStreak, longestStreak } = calculateStreaks(
     habits,
@@ -192,7 +188,6 @@ export function calculatePeriodStats(
     totalHabitsCompleted,
     averageCompletion,
     totalStudyMinutes: Math.round(totalStudySeconds / 60),
-    averageStudyMinutes: averageSessionMinutes,
     averageSessionMinutes,
     sessionCount: periodSessions.length,
     bestDay: rankedDays[0] ?? null,
@@ -200,9 +195,9 @@ export function calculatePeriodStats(
     currentStreak,
     longestStreak,
     periodChange:
-      previousAverage > 0
+      averageCompletion !== null && previousAverage !== null && previousAverage > 0
         ? ((averageCompletion - previousAverage) / previousAverage) * 100
-        : 0,
+        : null,
   };
 }
 
@@ -260,10 +255,10 @@ export function buildStudyChartData(
   });
 }
 
-function completionPercentForDate(date: Date, habits: Habit[]): number {
+function completionPercentForDate(date: Date, habits: Habit[]): number | null {
   const dateKey = toLocalDateKey(date);
   const activeHabits = habits.filter((habit) => isHabitActiveOn(habit, dateKey));
-  if (activeHabits.length === 0) return 0;
+  if (activeHabits.length === 0) return null;
   const completed = activeHabits.filter(
     (habit) => habit.completionHistory?.[dateKey] === true
   ).length;
@@ -284,7 +279,8 @@ export function buildCompletionChartData(
       } else if (period === "month") {
         label = index % 5 === 0 || index === dates.length - 1 ? `${date.getDate()}` : "";
       }
-      return { label, value: completionPercentForDate(date, habits) };
+      const value = completionPercentForDate(date, habits);
+      return { label, value: value ?? 0, applicable: value !== null };
     });
   }
 
@@ -296,12 +292,15 @@ export function buildCompletionChartData(
     const weekDates = Array.from({ length: 7 }, (_, dayIndex) =>
       addCalendarDays(start, dayIndex)
     );
-    const percentages = weekDates.map((date) =>
-      completionPercentForDate(date, habits)
-    );
-    const value = Math.round(
-      percentages.reduce((sum, value) => sum + value, 0) / percentages.length
-    );
+    const percentages = weekDates
+      .map((date) => completionPercentForDate(date, habits))
+      .filter((value): value is number => value !== null);
+    const value = percentages.length
+      ? Math.round(
+          percentages.reduce((sum, percentage) => sum + percentage, 0) /
+            percentages.length
+        )
+      : 0;
 
     return {
       label:
@@ -309,6 +308,7 @@ export function buildCompletionChartData(
           ? start.toLocaleDateString("en", { month: "short", day: "numeric" })
           : "",
       value,
+      applicable: percentages.length > 0,
     };
   });
 }
@@ -383,7 +383,7 @@ export function generateInsights(
       )} minutes.`
     );
   }
-  if (periodStats.periodChange > 10) {
+  if (periodStats.periodChange !== null && periodStats.periodChange > 10) {
     insights.push(
       `Habit completion improved ${Math.round(periodStats.periodChange)}% over the previous period.`
     );

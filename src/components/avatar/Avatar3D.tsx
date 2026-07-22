@@ -247,7 +247,9 @@ export default function Avatar3D(props: AvatarRendererProps) {
 
         const clock = new THREE.Clock();
         let didNotifyReady = false;
+        let renderFailed = false;
         const animate = () => {
+          if (renderFailed) return;
           frameRef.current = setTimeout(
             animate,
             appActiveRef.current ? 1000 / 30 : 250,
@@ -259,11 +261,17 @@ export default function Avatar3D(props: AvatarRendererProps) {
             reducedMotion: reducedMotionRef.current,
           });
           shadow.setLift(companion.rig.petGroup.position.y);
-          renderer.render(scene, camera);
-          gl.endFrameEXP();
-          if (!didNotifyReady) {
-            didNotifyReady = true;
-            onReadyRef.current?.();
+          try {
+            renderer.render(scene, camera);
+            if (!didNotifyReady) {
+              didNotifyReady = true;
+              onReadyRef.current?.();
+            }
+            gl.endFrameEXP();
+          } catch (error) {
+            renderFailed = true;
+            console.error("Error rendering Dayly companion scene:", error);
+            if (generation === setupGenerationRef.current) setFailed(true);
           }
         };
         animate();

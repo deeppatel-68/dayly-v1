@@ -12,7 +12,7 @@ export interface CompanionEvolution {
   rightFin?: THREE.Mesh;
   orbitGroup?: THREE.Group;
   aura?: THREE.Mesh;
-  evolutionMat: THREE.MeshStandardMaterial;
+  evolutionMat: THREE.MeshBasicMaterial;
   auraMat?: THREE.MeshBasicMaterial;
   dispose: () => void;
 }
@@ -27,12 +27,9 @@ export function createCompanionEvolution({
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
 
-  const evolutionMat = new THREE.MeshStandardMaterial({
+  const evolutionMat = new THREE.MeshBasicMaterial({
     color: accent.clone().multiplyScalar(0.92),
-    emissive: accent,
-    emissiveIntensity: 0.58,
-    metalness: 0.18,
-    roughness: 0.32,
+    toneMapped: false,
   });
   evolutionMat.name = "Evolution_Accent_Runtime";
   materials.add(evolutionMat);

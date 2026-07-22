@@ -61,6 +61,44 @@ Prefer existing packages:
 
 Avoid adding heavy 3D engines unless absolutely necessary.
 
+## Current 3D Stack (wave-1 polish)
+
+The companion is a Blender-generated GLB (`assets/avatar/dayly-companion-build.py`),
+loaded via `src/components/3d/companionModel.ts`: `loadCompanion` caches the
+parsed source graph, `createCompanionInstance` deep-clones per scene mount.
+`proceduralCompanion.ts` is legacy/test-only — My Space (`StudyRoomScene`)
+uses the same GLB path as Avatar3D.
+
+Shared modules in `src/components/3d/`:
+
+- `geometry.ts` — vendored RoundedBoxGeometry plus `roundedBox`/`lathe`/`cable`
+  helpers for soft premium silhouettes (default `ROUNDED_SEGMENTS = 2`)
+- `surfaceTextures.ts` — procedural near-white DataTexture grain maps
+  (wood/fabric/paper) plus a vertical gradient for wall shading; they multiply
+  the palette colour and never shift hue
+- `petMotion.ts` — state→motion controller plus idle micro-motions:
+  `SETTLE_MICRO` (rare settle squash every ~16.3s), `EYE_DART_MICRO` (quick
+  pupil dart every ~9.7s), `HALO_LAG_SECONDS` (halo trails body sway by ~120ms)
+
+Companion nodes/materials to keep stable: `VisorRim` (moulded visor lip),
+double catchlights (`LeftCatchlight2`/`RightCatchlight2` per face style),
+`HaloBead` + `HaloBead2`, `PlatformInnerRing` with the `Platform_Inner_Glow`
+material. Runtime accent tinting covers all shared `Accent_Orange_Emission`
+parts plus `Platform_Inner_Glow`, so new accent geometry must reuse those
+material names to track the user's colour.
+
+Study room (`roomBuilders.ts` + `StudyRoomScene.tsx`):
+
+- four lights, no shadow maps: hemisphere, warm key directional, lamp
+  PointLight, and a cool window-rim PointLight driven by
+  `environmentProfile.windowIntensity` (time-of-day)
+- grounding via unlit fakes: contact shadows, wall-shade gradient planes, and
+  additive lamp-spill; renderOrder convention: shadows 1, additive glows 10
+- rounded furniture (trestle desk, turned-base chair + throw blanket, mug with
+  steam, floor plant, headphones, notebook, cables), ceramic + clay materials,
+  ~105 renderables before companion/equipment
+- MSAA is per GLView: the room runs 2x, Avatar3D runs 4x
+
 ## MVP Character
 
 Start with:
@@ -78,7 +116,8 @@ Start with:
 
 Use one reusable component:
 
-- CharacterScene
+- AvatarRenderer (screens never import a concrete renderer;
+  CharacterScene is the legacy primitive fallback behind it)
 
 Then integrate it into:
 
@@ -137,7 +176,8 @@ After implementation:
 
 Read CLAUDE.md and the relevant .claude skill files.
 
-Current task:
+Historic task (completed — shipped as the Blender GLB companion; kept for
+art-direction reference):
 Redesign the 3D avatar into a premium digital pet.
 
 Context:

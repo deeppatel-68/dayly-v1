@@ -45,13 +45,19 @@ export default function HabitsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.intro}>
+          <Text selectable style={[styles.eyebrow, { color: colors.accentLight }]}>
+            Today, slowly
+          </Text>
+          <Text selectable style={[styles.title, { color: colors.text }]}>
+            Keep the promises that matter.
+          </Text>
           <Text selectable style={[styles.summary, { color: colors.textSecondary }]}>
             {habits.length
-              ? `${completedToday} of ${habits.length} complete today`
+              ? `${completedToday} of ${habits.length} rituals kept today`
               : "Build a small rhythm that Deep can grow with."}
           </Text>
           <StudioButton
-            label="Add habit"
+            label="Add a ritual"
             icon="add"
             onPress={handleOpenAddModal}
             disabled={habits.length >= MAX_HABITS}
@@ -62,7 +68,7 @@ export default function HabitsScreen() {
         {habits.length ? (
           <>
             <HabitStat />
-            <StudioSection title="Your habits">
+            <StudioSection title="Your rituals">
               <StudioGroup>
                 {habits.map((habit, index) => (
                   <HabitItem
@@ -73,7 +79,7 @@ export default function HabitsScreen() {
                 ))}
               </StudioGroup>
             </StudioSection>
-            <StudioSection title="Consistency">
+            <StudioSection title="Your record">
               <ConsistencyCalender />
             </StudioSection>
           </>
@@ -99,8 +105,14 @@ export default function HabitsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingBottom: Spacing.xxl, gap: Spacing.lg },
+  content: { paddingTop: Spacing.sm, paddingBottom: Spacing.xxl, gap: Spacing.xl },
   intro: { paddingHorizontal: Spacing.md, gap: Spacing.sm },
+  eyebrow: {
+    ...StudioType.section,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+  },
+  title: { ...StudioType.display },
   summary: { ...StudioType.body },
-  addAction: { alignSelf: "flex-start" },
+  addAction: { width: "100%" },
 });

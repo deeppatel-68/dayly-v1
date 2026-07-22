@@ -113,6 +113,34 @@ export const shopItemPresentation: ShopItemPresentation[] = [
     rarity: "epic",
     description: "Block out distractions with style",
   },
+  {
+    id: "cozy-scarf",
+    name: "Cozy Scarf",
+    icon: "ribbon-outline",
+    rarity: "common",
+    description: "A soft wrapped scarf for chilly study evenings",
+  },
+  {
+    id: "mini-backpack",
+    name: "Mini Backpack",
+    icon: "bag-outline",
+    rarity: "rare",
+    description: "A slim daypack for a companion always on the go",
+  },
+  {
+    id: "halo-orbit-ring",
+    name: "Orbit Ring",
+    icon: "planet-outline",
+    rarity: "epic",
+    description: "A second ring of light circling your halo",
+  },
+  {
+    id: "pod-aurora",
+    name: "Pod Aurora",
+    icon: "sparkles",
+    rarity: "epic",
+    description: "Aurora light rings that shimmer around the pod",
+  },
 ];
 
 // Bootstrap values keep signed-out/offline presentation stable. Authenticated
@@ -245,6 +273,38 @@ export const fallbackShopCatalog: ShopCatalogItem[] = [
     active: true,
     starter: false,
     equipSlot: "wearable:head",
+  },
+  {
+    itemId: "cozy-scarf",
+    category: "accessory",
+    cost: 60,
+    active: true,
+    starter: false,
+    equipSlot: "wearable:neck",
+  },
+  {
+    itemId: "mini-backpack",
+    category: "accessory",
+    cost: 120,
+    active: true,
+    starter: false,
+    equipSlot: "wearable:back",
+  },
+  {
+    itemId: "halo-orbit-ring",
+    category: "accessory",
+    cost: 180,
+    active: true,
+    starter: false,
+    equipSlot: "halo:style",
+  },
+  {
+    itemId: "pod-aurora",
+    category: "decoration",
+    cost: 200,
+    active: true,
+    starter: false,
+    equipSlot: "pod:theme",
   },
 ];
 

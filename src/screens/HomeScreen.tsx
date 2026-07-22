@@ -54,15 +54,18 @@ export default function HomeScreen() {
         </FadeInView>
 
         <FadeInView delay={40} style={styles.prompt}>
+          <Text selectable style={[styles.promptKicker, { color: colors.accentLight }]}>
+            Your next move
+          </Text>
           <Text selectable style={[styles.promptTitle, { color: colors.text }]}>
             {completedToday === habits.length && habits.length > 0
               ? `${companionName} is proud of today.`
-              : "Make the next small win count."}
+              : "Make space for one good hour."}
           </Text>
           <Text selectable style={[styles.promptDetail, { color: colors.textSecondary }]}>
             {habits.length > 0
-              ? `${completedToday} of ${habits.length} habits complete`
-              : "Start with one habit or a focused session."}
+              ? `${completedToday} of ${habits.length} rituals kept today.`
+              : "Begin with one habit, or claim a quiet focus session."}
           </Text>
           <StudioButton
             label="Start a focus session"
@@ -73,7 +76,7 @@ export default function HomeScreen() {
         </FadeInView>
 
         <FadeInView delay={80}>
-          <StudioSection title="Growth">
+          <StudioSection title="A little more from today">
             <XpBar />
             <ProgressDisplay />
           </StudioSection>
@@ -81,7 +84,7 @@ export default function HomeScreen() {
 
         <FadeInView delay={120}>
           <StudioSection
-            title="Today"
+            title="Your rituals"
             action={
               <Text selectable style={[styles.sectionAction, { color: colors.textSecondary }]}>
                 {completedToday}/{habits.length}
@@ -127,11 +130,16 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingBottom: Spacing.xxl, gap: Spacing.lg },
+  content: { paddingTop: Spacing.sm, paddingBottom: Spacing.xxl, gap: Spacing.xl },
   sceneBand: { paddingHorizontal: Spacing.md },
   prompt: { paddingHorizontal: Spacing.md, gap: Spacing.xs },
-  promptTitle: { ...StudioType.title },
-  promptDetail: { ...StudioType.body },
-  focusAction: { marginTop: Spacing.sm, alignSelf: "flex-start" },
+  promptKicker: {
+    ...StudioType.section,
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
+  },
+  promptTitle: { ...StudioType.display },
+  promptDetail: { ...StudioType.body, maxWidth: 360 },
+  focusAction: { width: "100%", marginTop: Spacing.sm },
   sectionAction: { ...StudioType.detail, fontVariant: ["tabular-nums"] },
 });

@@ -64,6 +64,15 @@ interface StudyRoomSceneProps {
   selectedEquipSlot?: string | null;
 }
 
+function setMaterialBrightness(
+  material: THREE.MeshBasicMaterial,
+  intensity: number,
+) {
+  const baseColor = material.userData.baseColor as THREE.Color | undefined;
+  if (!baseColor) return;
+  material.color.copy(baseColor).multiplyScalar(Math.max(0, intensity));
+}
+
 // The My Space scene: the companion at home in a cozy study nook. Reacts to
 // focus/reward/level-up states (pet motion, desk lamp, string lights) and
 // renders every equipped shop item — wearables on the pet, decorations by
@@ -307,15 +316,16 @@ export default function StudyRoomScene({
           windowLight.intensity +=
             (environment.windowIntensity - windowLight.intensity) * 0.06;
           room.skyMat.color.setRGB(...environment.sky);
-          room.skyMat.emissive.setRGB(...environment.sky);
-          room.skyMat.emissiveIntensity = environment.skyIntensity;
           room.celestialMat.color.setRGB(...environment.celestial);
-          room.celestialMat.emissive.setRGB(...environment.celestial);
-          room.celestialMat.emissiveIntensity = environment.celestialIntensity;
+          room.celestialMat.color.multiplyScalar(
+            environment.celestialIntensity,
+          );
           room.starMat.opacity = environment.starOpacity;
-          room.screenMat.emissiveIntensity = environment.screenIntensity;
-          room.lampGlowMat.emissiveIntensity =
-            0.85 + environment.lampIntensity * 0.48;
+          setMaterialBrightness(room.screenMat, environment.screenIntensity);
+          setMaterialBrightness(
+            room.lampGlowMat,
+            0.85 + environment.lampIntensity * 0.48,
+          );
           room.lampLight.intensity +=
             (environment.lampIntensity - room.lampLight.intensity) * 0.06;
           room.lampPoolMat.opacity = Math.min(
@@ -326,11 +336,13 @@ export default function StudyRoomScene({
             0.2,
             0.05 + environment.lampIntensity * 0.06,
           );
-          room.stringMat.emissiveIntensity =
+          setMaterialBrightness(
+            room.stringMat,
             environment.stringIntensity +
             (celebrating && !reducedMotionRef.current
               ? Math.sin(t * 8) * 0.22
-              : 0);
+              : 0),
+          );
 
           const localDate = environmentDateRef.current;
           const dayProgress =

@@ -39,8 +39,8 @@ describe("shop catalog presentation", () => {
   });
 
   it("ships a complete unique fallback catalog", () => {
-    expect(fallbackShopCatalog).toHaveLength(16);
-    expect(new Set(shopItems.map((item) => item.id)).size).toBe(16);
+    expect(fallbackShopCatalog).toHaveLength(20);
+    expect(new Set(shopItems.map((item) => item.id)).size).toBe(20);
     expect(
       shopItems.find((item) => item.id === "companion-cushion"),
     ).toMatchObject({

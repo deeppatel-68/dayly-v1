@@ -60,24 +60,24 @@ export function getEquipSlotMarkerPosition(
 }
 
 interface RoomPalette {
-  wall: THREE.MeshStandardMaterial;
-  floor: THREE.MeshStandardMaterial;
-  rug: THREE.MeshStandardMaterial;
-  wood: THREE.MeshStandardMaterial;
-  darkWood: THREE.MeshStandardMaterial;
-  fabric: THREE.MeshStandardMaterial;
-  clay: THREE.MeshStandardMaterial;
-  ceramic: THREE.MeshStandardMaterial;
-  metal: THREE.MeshStandardMaterial;
-  paper: THREE.MeshStandardMaterial;
-  leaf: THREE.MeshStandardMaterial;
-  screen: THREE.MeshStandardMaterial;
-  night: THREE.MeshStandardMaterial;
-  moon: THREE.MeshStandardMaterial;
-  stars: THREE.MeshStandardMaterial;
-  string: THREE.MeshStandardMaterial;
-  lampGlow: THREE.MeshStandardMaterial;
-  accentGlow: THREE.MeshStandardMaterial;
+  wall: THREE.MeshBasicMaterial;
+  floor: THREE.MeshBasicMaterial;
+  rug: THREE.MeshBasicMaterial;
+  wood: THREE.MeshBasicMaterial;
+  darkWood: THREE.MeshBasicMaterial;
+  fabric: THREE.MeshBasicMaterial;
+  clay: THREE.MeshBasicMaterial;
+  ceramic: THREE.MeshBasicMaterial;
+  metal: THREE.MeshBasicMaterial;
+  paper: THREE.MeshBasicMaterial;
+  leaf: THREE.MeshBasicMaterial;
+  screen: THREE.MeshBasicMaterial;
+  night: THREE.MeshBasicMaterial;
+  moon: THREE.MeshBasicMaterial;
+  stars: THREE.MeshBasicMaterial;
+  string: THREE.MeshBasicMaterial;
+  lampGlow: THREE.MeshBasicMaterial;
+  accentGlow: THREE.MeshBasicMaterial;
 }
 
 interface RoomTextures {
@@ -105,9 +105,26 @@ function createTextures(): RoomTextures {
 function createPalette(accent: THREE.Color, tex: RoomTextures): RoomPalette {
   const std = (
     color: number | THREE.Color,
-    roughness = 0.85,
+    _roughness = 0.85,
     extra: Partial<THREE.MeshStandardMaterialParameters> = {},
-  ) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
+  ) => {
+    const resolvedColor = new THREE.Color(color);
+    if (extra.emissive) {
+      resolvedColor.lerp(new THREE.Color(extra.emissive), 0.35);
+    }
+    const material = new THREE.MeshBasicMaterial({
+      color: resolvedColor,
+      map: extra.map,
+      transparent: extra.transparent,
+      opacity: extra.opacity,
+      depthTest: extra.depthTest,
+      depthWrite: extra.depthWrite,
+      side: extra.side,
+    });
+    material.toneMapped = false;
+    material.userData.baseColor = material.color.clone();
+    return material;
+  };
 
   // Wall/floor/rug pulled to sit near the app's own dark-theme tokens
   // (Colors.dark.background #1F1E1D, backgroundSecondary #30302E, card
@@ -609,12 +626,12 @@ function buildStringLights(p: RoomPalette): THREE.Group {
 export interface StudyRoom {
   group: THREE.Group;
   lampLight: THREE.PointLight;
-  stringMat: THREE.MeshStandardMaterial;
-  skyMat: THREE.MeshStandardMaterial;
-  celestialMat: THREE.MeshStandardMaterial;
-  starMat: THREE.MeshStandardMaterial;
-  screenMat: THREE.MeshStandardMaterial;
-  lampGlowMat: THREE.MeshStandardMaterial;
+  stringMat: THREE.MeshBasicMaterial;
+  skyMat: THREE.MeshBasicMaterial;
+  celestialMat: THREE.MeshBasicMaterial;
+  starMat: THREE.MeshBasicMaterial;
+  screenMat: THREE.MeshBasicMaterial;
+  lampGlowMat: THREE.MeshBasicMaterial;
   celestial: THREE.Mesh;
   ambientObjects: THREE.Object3D[];
   lampPoolMat: THREE.MeshBasicMaterial;

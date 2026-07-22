@@ -39,7 +39,7 @@ mat_body = make_mat("Body_Charcoal", (0.052, 0.052, 0.06), 0.5)
 mat_base = make_mat("Base_Black", (0.012, 0.012, 0.014), 0.12, metallic=0.15)
 # Classic eye white (also reused by Kirby -- identical values).
 mat_eye = make_mat("Eye_White_Emission", (1.0, 0.89, 0.72), 0.42,
-                   emission=(1.0, 0.78, 0.52), emission_strength=2.0)
+                   emission=(1.0, 0.78, 0.52), emission_strength=1.7)
 # Eve: glossier, brighter hero eye.
 mat_eye_eve = make_mat("Eye_White_Emission_Eve", (1.0, 0.86, 0.66), 0.14,
                        emission=(1.0, 0.78, 0.50), emission_strength=3.3)
@@ -50,7 +50,7 @@ mat_pupil = make_mat("Pupil_Dark", (0.015, 0.015, 0.02), 0.25)
 mat_catch = make_mat("Catchlight_White", (1.0, 1.0, 1.0), 0.3,
                      emission=(1.0, 1.0, 1.0), emission_strength=2.2)
 mat_blush = make_mat("Blush_Peach", (0.78, 0.28, 0.20), 0.7,
-                     emission=(0.80, 0.32, 0.22), emission_strength=0.12)
+                     emission=(0.80, 0.32, 0.22), emission_strength=0.05)
 mat_accent = make_mat("Accent_Orange_Emission", ORANGE, 0.4,
                       emission=ORANGE, emission_strength=4.5)
 # Chest core runs hotter than the shared accent so the glow hierarchy reads
@@ -140,7 +140,7 @@ smooth(body)
 # ---------- FacePanel: wide glossy visor recess, shared by every face -------
 # Kept as the classic dark visor. The Screen face lays its own glossy OLED panel
 # on top; every other face reads its features against this recess.
-bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=44, radius=0.42,
+bpy.ops.mesh.primitive_uv_sphere_add(segments=80, ring_count=52, radius=0.42,
                                      location=(0, -0.34, 0.81))
 face = bpy.context.active_object
 face.name = "FacePanel"
@@ -151,11 +151,11 @@ smooth(face)
 # VisorRim: charcoal lip around the visor so the panel reads as a moulded
 # inset seam instead of a raw sphere intersection. Child of FacePanel so the
 # runtime petGroup reparent carries it.
-bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=44, radius=0.42,
-                                     location=(0, -0.320, 0.81))
+bpy.ops.mesh.primitive_uv_sphere_add(segments=80, ring_count=52, radius=0.42,
+                                     location=(0, -0.312, 0.81))
 visor_rim = bpy.context.active_object
 visor_rim.name = "VisorRim"
-visor_rim.scale = (1.17, 0.42, 0.66)
+visor_rim.scale = (1.19, 0.42, 0.68)
 visor_rim.data.materials.append(mat_body)
 smooth(visor_rim)
 parent_to(visor_rim, face)
@@ -186,7 +186,7 @@ for name, x, side in (("LeftPupil", -0.165, "LeftEye"),
                       segments=16, ring_count=10, mat=mat_pupil)
     parent_to(pupil, classic_eyes[side])
 
-for name, x, r, side in (("LeftCatchlight", -0.190, 0.017, "LeftEye"),
+for name, x, r, side in (("LeftCatchlight", -0.190, 0.014, "LeftEye"),
                          ("RightCatchlight", 0.140, 0.014, "RightEye")):
     catch = uv_sphere(name, (x, -0.532, 0.852), r, segments=12, ring_count=8,
                       mat=mat_catch)
@@ -195,12 +195,12 @@ for name, x, r, side in (("LeftCatchlight", -0.190, 0.017, "LeftEye"),
 # Secondary low catchlights: tiny wet-eye sparkle opposite the main highlight.
 for name, x, side in (("LeftCatchlight2", -0.136, "LeftEye"),
                       ("RightCatchlight2", 0.194, "RightEye")):
-    catch = uv_sphere(name, (x, -0.534, 0.800), 0.008, segments=10, ring_count=6,
+    catch = uv_sphere(name, (x, -0.534, 0.800), 0.006, segments=10, ring_count=6,
                       mat=mat_catch)
     parent_to(catch, classic_eyes[side])
 
 for name, x in (("LeftBlush", -0.30), ("RightBlush", 0.30)):
-    blush = uv_sphere(name, (x, -0.487, 0.755), 0.037, scale=(1.0, 0.3, 0.7),
+    blush = uv_sphere(name, (x, -0.487, 0.755), 0.033, scale=(1.0, 0.3, 0.7),
                       segments=14, ring_count=8, mat=mat_blush)
     parent_to(blush, face_classic)
 
@@ -403,15 +403,15 @@ parent_to(joy_mouth, face_joy)
 
 # ============================================================= SHARED ANATOMY
 # ---------- EnergyCore: framed heart on the chest ----------
-core = uv_sphere("EnergyCore", (0, -0.43, 0.36), 0.068, mat=mat_core)
+core = uv_sphere("EnergyCore", (0, -0.445, 0.36), 0.078, mat=mat_core)
 
 # CoreBezel: recessed charcoal ring around the core so it reads as a designed,
 # moulded element rather than a loose dot. Child of Body so the runtime
 # petGroup reparent carries it with the pet. Torus axis aligned to the local
 # chest surface normal (approx (0, -0.85, -0.53) -> rot.x ~= 2.13 rad).
-bpy.ops.mesh.primitive_torus_add(major_radius=0.088, minor_radius=0.020,
-                                 major_segments=36, minor_segments=12,
-                                 location=(0, -0.422, 0.365),
+bpy.ops.mesh.primitive_torus_add(major_radius=0.098, minor_radius=0.018,
+                                 major_segments=40, minor_segments=12,
+                                 location=(0, -0.442, 0.365),
                                  rotation=(2.13, 0, 0))
 core_bezel = bpy.context.active_object
 core_bezel.name = "CoreBezel"
@@ -496,7 +496,7 @@ smooth(ring)
 
 # ---------- PlatformInnerRing: faint glow ring inset on the top tier ----------
 mat_inner_glow = make_mat("Platform_Inner_Glow", ORANGE, 0.5,
-                          emission=ORANGE, emission_strength=0.7)
+                          emission=ORANGE, emission_strength=0.45)
 bpy.ops.mesh.primitive_torus_add(major_radius=0.50, minor_radius=0.007,
                                  major_segments=48, minor_segments=8,
                                  location=(0, 0, 0.091))

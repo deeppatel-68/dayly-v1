@@ -319,7 +319,7 @@ export default function FocusTimer({
               { color: colors.textSecondary },
             ]}
           >
-            FOCUS PHASE
+            FOR THIS HOUR
           </Text>
           <Text
             style={[
@@ -423,8 +423,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   timerText: {
-    fontSize: 56,
-    fontWeight: "700",
+    ...StudioType.displayLarge,
+    fontSize: 54,
     fontVariant: ["tabular-nums"],
   },
   timerTextImmersive: {

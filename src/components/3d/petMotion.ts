@@ -12,6 +12,9 @@ const TWO_PI = Math.PI * 2;
 // pre-tone-mapped tuning.
 const TONE_BOOST = 1.35;
 const EMPTY_FRAME_OPTIONS: Readonly<PetMotionFrameOptions> = Object.freeze({});
+type CompanionSurfaceMaterial =
+  | THREE.MeshBasicMaterial
+  | THREE.MeshStandardMaterial;
 
 // Everything a scene must hand the controller so state-driven motion can be
 // applied. All fields optional-safe: scenes pass what their pet instance has.
@@ -31,13 +34,13 @@ export interface PetRig {
   rightFin?: THREE.Mesh;
   orbitGroup?: THREE.Group;
   aura?: THREE.Object3D;
-  eyeMat?: THREE.MeshStandardMaterial | null;
-  mouthMat?: THREE.MeshStandardMaterial | null;
-  coreMat?: THREE.MeshStandardMaterial | null;
-  accentMat?: THREE.MeshStandardMaterial | null;
+  eyeMat?: CompanionSurfaceMaterial | null;
+  mouthMat?: CompanionSurfaceMaterial | null;
+  coreMat?: CompanionSurfaceMaterial | null;
+  accentMat?: CompanionSurfaceMaterial | null;
   haloGlowMat?: THREE.SpriteMaterial | null;
   coreGlowMat?: THREE.SpriteMaterial | null;
-  evolutionMat?: THREE.MeshStandardMaterial | null;
+  evolutionMat?: CompanionSurfaceMaterial | null;
   auraMat?: THREE.MeshBasicMaterial | null;
 }
 
@@ -256,7 +259,7 @@ export function createPetMotionController(options: PetMotionOptions) {
     petGroup.position.y -= settleEase * 0.008;
 
     // Energy core heartbeat: quickens in focus, flashes on celebration.
-    if (rig.coreMat) {
+    if (rig.coreMat instanceof THREE.MeshStandardMaterial) {
       rig.coreMat.emissiveIntensity =
         (glowBase +
           Math.sin(animationTime * (state === "focus" ? 3.4 : 1.6)) * 0.15 +
@@ -266,7 +269,7 @@ export function createPetMotionController(options: PetMotionOptions) {
     }
 
     // Halo + pod ring glow: subtle at rest, streaks deepen, celebrations flash
-    if (rig.accentMat) {
+    if (rig.accentMat instanceof THREE.MeshStandardMaterial) {
       rig.accentMat.emissiveIntensity =
         (glowBase +
           Math.sin(animationTime * (state === "focus" ? 3.0 : 1.8)) *
@@ -299,7 +302,7 @@ export function createPetMotionController(options: PetMotionOptions) {
 
     // Eyes carry the expression: focus narrows, reward soft-squints, level-up
     // opens wide. Idle retains the occasional quick blink.
-    if (rig.eyeMat) {
+    if (rig.eyeMat instanceof THREE.MeshStandardMaterial) {
       rig.eyeMat.emissiveIntensity =
         (state === "focus" ? 1.05 : celebrating ? 1.15 : 0.72) *
         TONE_BOOST *
@@ -437,7 +440,7 @@ export function createPetMotionController(options: PetMotionOptions) {
         (mood === "curious" ? Math.sin(animationTime * 0.7) * 0.08 : 0);
     }
 
-    if (rig.mouthMat) {
+    if (rig.mouthMat instanceof THREE.MeshStandardMaterial) {
       rig.mouthMat.emissiveIntensity =
         (0.46 + (celebrating ? 0.42 : 0) + environmentWarmth * 0.14) *
         TONE_BOOST;
@@ -482,7 +485,7 @@ export function createPetMotionController(options: PetMotionOptions) {
       rig.rightFin.rotation.z = 0.9 + flare + focusFold;
     }
 
-    if (rig.evolutionMat) {
+    if (rig.evolutionMat instanceof THREE.MeshStandardMaterial) {
       rig.evolutionMat.emissiveIntensity =
         (0.42 + levelTier * 0.12 + streakBoost * 0.16 + (celebrating ? 0.4 : 0)) *
         TONE_BOOST;

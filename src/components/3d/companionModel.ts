@@ -73,6 +73,33 @@ export interface CompanionInstance {
   dispose: () => void;
 }
 
+// Expo GL's iOS simulator path can drop lit material passes. The companion is
+// texture-free, so preserve its authored colour hierarchy with a reliable
+// unlit palette while sprites provide the animated glow response.
+function createExpoSafeMaterial(
+  source: THREE.Material,
+): THREE.MeshBasicMaterial {
+  const sourceMaterial = source as THREE.MeshStandardMaterial;
+  const color = sourceMaterial.color.clone();
+  if (sourceMaterial.emissive.getHex() !== 0) {
+    color.lerp(
+      sourceMaterial.emissive,
+      Math.min(0.55, 0.08 + sourceMaterial.emissiveIntensity * 0.1),
+    );
+  }
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: sourceMaterial.transparent,
+    opacity: sourceMaterial.opacity,
+    depthTest: sourceMaterial.depthTest,
+    depthWrite: sourceMaterial.depthWrite,
+    side: THREE.DoubleSide,
+  });
+  material.toneMapped = false;
+  material.name = source.name;
+  return material;
+}
+
 // Clone the cached companion for one scene: pet nodes reparented into a group
 // (so bob/sway/celebration move the pet while the pod stays grounded), and
 // per-instance materials cloned + tinted so scenes never cross-talk.
@@ -93,14 +120,12 @@ export function createCompanionInstance(
     obj.geometry = obj.geometry.clone();
     ownedGeometries.add(obj.geometry);
     if (Array.isArray(obj.material)) {
-      obj.material = obj.material.map((material: THREE.Material) =>
-        material.clone(),
-      );
+      obj.material = obj.material.map(createExpoSafeMaterial);
       obj.material.forEach((material: THREE.Material) =>
         ownedMaterials.add(material),
       );
     } else {
-      obj.material = obj.material.clone();
+      obj.material = createExpoSafeMaterial(obj.material);
       ownedMaterials.add(obj.material);
     }
   });
@@ -172,7 +197,7 @@ export function createCompanionInstance(
 
   const materialOf = (mesh?: THREE.Mesh) =>
     mesh && !Array.isArray(mesh.material)
-      ? (mesh.material as THREE.MeshStandardMaterial)
+      ? (mesh.material as THREE.MeshBasicMaterial)
       : null;
 
   // Eye glow: the active face's warm eye-white material (Eye_White_Emission,
@@ -183,7 +208,7 @@ export function createCompanionInstance(
       (mesh.material as THREE.Material).name.startsWith("Eye_White_Emission"),
   );
   const eyeMat = eyeMesh
-    ? (eyeMesh.material as THREE.MeshStandardMaterial)
+    ? (eyeMesh.material as THREE.MeshBasicMaterial)
     : null;
   const coreMat = materialOf(core);
   const accentMat = materialOf(ring);
@@ -207,22 +232,12 @@ export function createCompanionInstance(
 
   if (eyeMat) {
     eyeMat.color.set(0xffe3bd);
-    eyeMat.emissive.set(0xffbd78);
-    eyeMat.roughness = 0.3;
-    eyeMat.metalness = 0;
-    eyeMat.emissiveIntensity = 0.35;
-    eyeMat.envMapIntensity = 0.4;
   }
 
   // Tint accent parts with the user's customisation colour
   for (const mat of [coreMat, accentMat]) {
     if (!mat) continue;
     mat.color.set(accent);
-    mat.emissive.set(accent);
-    mat.roughness = 0.6;
-    mat.metalness = 0;
-    mat.emissiveIntensity = 0.12;
-    mat.envMapIntensity = 0.25;
   }
 
   // Shared (non-face) accent parts — halo beads, pod inner ring — must track
@@ -236,10 +251,8 @@ export function createCompanionInstance(
     if (accentMat && matName === "Accent_Orange_Emission") {
       obj.material = accentMat;
     } else if (matName.startsWith("Platform_Inner_Glow")) {
-      const innerMat = obj.material as THREE.MeshStandardMaterial;
+      const innerMat = obj.material as THREE.MeshBasicMaterial;
       innerMat.color.set(accent);
-      innerMat.emissive.set(accent);
-      innerMat.emissiveIntensity = 0.08;
     }
   });
 
@@ -276,24 +289,20 @@ export function createCompanionInstance(
   petGroup.add(evolution.root);
 
   // Tint the charcoal body parts (Body upper + flippers) with the user's
-  // body colour. Matching by material name keeps Base_Black, the pod, eyes,
-  // and accent parts untouched. The GLB's Body_Charcoal carries a clearcoat
-  // (MeshPhysicalMaterial) whose shader fails on expo-gl, so swap in a plain
-  // standard material rather than cloning it.
-  let bodyMat: THREE.MeshStandardMaterial | null = null;
+  // body colour. The unlit material path is deliberate: Expo GL on iOS can
+  // render the bundled geometry reliably with basic shaders, while lit PBR
+  // passes intermittently disappear in Expo Go.
+  let bodyMat: THREE.MeshBasicMaterial | null = null;
   petGroup.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
-    const mat = obj.material as THREE.MeshStandardMaterial;
+    const mat = obj.material as THREE.MeshBasicMaterial;
     if (mat?.name !== "Body_Charcoal") return;
     if (!bodyMat) {
-      bodyMat = new THREE.MeshStandardMaterial({
+      bodyMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(bodyColor),
-        roughness: 0.92,
-        metalness: 0.0,
-        emissive: new THREE.Color(bodyColor).multiplyScalar(0.5),
-        emissiveIntensity: 0.06,
-        envMapIntensity: 0.15,
+        side: THREE.DoubleSide,
       });
+      bodyMat.toneMapped = false;
       bodyMat.name = "Body_Charcoal_Runtime";
       ownedMaterials.add(bodyMat);
     }

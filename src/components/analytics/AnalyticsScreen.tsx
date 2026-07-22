@@ -7,6 +7,7 @@ import PeriodSelector from "@/components/analytics/PeriodSelector";
 import PeriodSummaryCard from "@/components/analytics/sections/PeriodSummaryCard";
 import FadeInView from "@/components/common/FadeInView";
 import { Spacing } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useAuth } from "@/context/AuthContext";
 import { useCharacter } from "@/context/CharacterContext";
 import { useHabits } from "@/context/HabitsContext";
@@ -29,7 +30,7 @@ import {
   generateInsights,
 } from "@/utils/analytics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AppState, ScrollView, StyleSheet, View } from "react-native";
+import { AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 
 const STAGGER_STEP = 40;
 
@@ -142,6 +143,20 @@ export default function AnalyticsScreen() {
         contentContainerStyle={styles.contentContainer}
       >
         <FadeInView delay={0 * STAGGER_STEP}>
+          <View style={styles.intro}>
+            <Text style={[styles.eyebrow, { color: colors.accentLight }]}>Your record</Text>
+            <Text style={[styles.introTitle, { color: colors.text }]}>
+              {character.companionName
+                ? `${character.companionName} is noticing your return.`
+                : "Your rhythm is taking shape."}
+            </Text>
+            <Text style={[styles.introDetail, { color: colors.textSecondary }]}>
+              The small things count when they happen again.
+            </Text>
+          </View>
+        </FadeInView>
+
+        <FadeInView delay={1 * STAGGER_STEP}>
           <MomentumCard
             currentStreak={currentStreak}
             bestStreak={progress?.best_streak ?? currentStreak}
@@ -150,11 +165,11 @@ export default function AnalyticsScreen() {
           />
         </FadeInView>
 
-        <FadeInView delay={1 * STAGGER_STEP}>
+        <FadeInView delay={2 * STAGGER_STEP}>
           <PeriodSelector selected={selectedPeriod} onSelect={setSelectedPeriod} />
         </FadeInView>
 
-        <FadeInView delay={2 * STAGGER_STEP}>
+        <FadeInView delay={3 * STAGGER_STEP}>
           <PeriodSummaryCard
             periodLabel={periodLabel}
             focusTimeLabel={focusTimeLabel}
@@ -164,7 +179,7 @@ export default function AnalyticsScreen() {
           />
         </FadeInView>
 
-        <FadeInView delay={3 * STAGGER_STEP}>
+        <FadeInView delay={4 * STAGGER_STEP}>
           <FocusTrendCard
             periodLabel={periodLabel}
             data={studyChartData}
@@ -174,18 +189,18 @@ export default function AnalyticsScreen() {
           />
         </FadeInView>
 
-        <FadeInView delay={4 * STAGGER_STEP}>
+        <FadeInView delay={5 * STAGGER_STEP}>
           <CompletionChartCard
             data={completionChartData}
             hasHabits={habits.length > 0}
           />
         </FadeInView>
 
-        <FadeInView delay={5 * STAGGER_STEP}>
+        <FadeInView delay={6 * STAGGER_STEP}>
           <ConsistencyMatrixCard habits={habits} />
         </FadeInView>
 
-        <FadeInView delay={6 * STAGGER_STEP}>
+        <FadeInView delay={7 * STAGGER_STEP}>
           <InsightsCard
             insights={insights}
             companionName={character.companionName}
@@ -200,9 +215,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  contentContainer: {
-    flexGrow: 1,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xxl,
+  contentContainer: { flexGrow: 1, paddingTop: Spacing.sm, paddingBottom: Spacing.xxl },
+  intro: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md, gap: Spacing.xs },
+  eyebrow: {
+    ...StudioType.section,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
   },
+  introTitle: { ...StudioType.display },
+  introDetail: { ...StudioType.body },
 });

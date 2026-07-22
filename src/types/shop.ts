@@ -4,6 +4,10 @@ export type ShopItemCategory = Exclude<ItemCategory, "all">;
 
 export type EquipSlot =
   | "wearable:head"
+  | "wearable:neck"
+  | "wearable:back"
+  | "halo:style"
+  | "pod:theme"
   | "platform:left"
   | "platform:right"
   | "room:wall_art"

@@ -11,7 +11,7 @@ interface PeriodSummaryCardProps {
   focusTimeLabel: string;
   sessionCount: number;
   averageSessionMinutes: number;
-  periodChange: number;
+  periodChange: number | null;
 }
 
 export default function PeriodSummaryCard({
@@ -22,8 +22,8 @@ export default function PeriodSummaryCard({
   periodChange,
 }: PeriodSummaryCardProps) {
   const { colors } = useTheme();
-  const showChange = Math.abs(periodChange) >= 1;
-  const isUp = periodChange > 0;
+  const showChange = periodChange !== null && Math.abs(periodChange) >= 1;
+  const isUp = (periodChange ?? 0) > 0;
   const changeColor = isUp ? colors.success : colors.error;
 
   return (
@@ -44,7 +44,7 @@ export default function PeriodSummaryCard({
           <View
             accessible
             accessibilityLabel={`${isUp ? "Up" : "Down"} ${Math.abs(
-              Math.round(periodChange)
+              Math.round(periodChange ?? 0)
             )} percent`}
             style={[
               styles.changeChip,
@@ -57,7 +57,7 @@ export default function PeriodSummaryCard({
               color={changeColor}
             />
             <Text style={[styles.changeText, { color: changeColor }]}>
-              {Math.abs(Math.round(periodChange))}%
+              {Math.abs(Math.round(periodChange ?? 0))}%
             </Text>
           </View>
         ) : null}
