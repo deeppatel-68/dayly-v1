@@ -36,6 +36,7 @@ The refinement is an evolution of `feat/friends-leaderboard`, not a new characte
 - Level-up is a one-shot 1.80-second charge → 0.19 lift → exactly one revolution → landing → settle sequence. It expands the silhouette through fins/orbit elements, peaks the aura, and returns front-facing even if the state remains active.
 - Progression tiers remain cumulative and silhouette-led: fins at tier 1, focus-node orbit at tier 2, expanded orbit/aura treatment at tier 3. Glow supports those changes instead of substituting for them.
 - Reduced motion retains expression, colour, and restrained scale feedback while removing spins, high hops, and rapid decorative motion.
+- Face motion is authored per style rather than sharing one classic squash: Orbit uses blink/focus/reward/level-up eye-Y ratios `.10/.70/.84/1.14`; Focus uses `.08/.72/.90/1.10` with no mouth; Pixel uses `.12/.58/.78/1.18` and mouth-Y `.45/1.40/1.70`; Spark uses `.08/.68/.88/1.12` and mouth-Y `.30/1.12/1.28`; Rest has no conventional blink and uses eye-Y `.82/1.08/1.16` for focus/reward/level-up.
 
 ## Budgets and Acceptance Criteria
 

@@ -171,8 +171,10 @@ Commit: `feat: add context-safe companion detail assets`
 ### Task 3: Authored state transitions and unlit-responsive energy
 
 **Files:**
+- Modify: `src/components/3d/companionModel.ts`
 - Modify: `src/components/3d/petMotion.ts`
 - Modify: `src/components/3d/companionEvolution.ts`
+- Modify: `src/components/3d/__tests__/companionModel.test.ts`
 - Modify: `src/components/3d/__tests__/petMotion.test.ts`
 - Modify: `src/components/3d/__tests__/companionEvolution.test.ts`
 
@@ -182,7 +184,7 @@ Commit: `feat: add context-safe companion detail assets`
 
 - [ ] **Step 1: Add failing timeline and material tests**
 
-Add tests proving equal state ages produce equal transforms at absolute times 1 and 101; reward crouches at 80 ms, peaks at 350 ms, lands at 580 ms, rests by 1.10 s, and does not bounce again at 2.6 s; level-up performs one turn and is stable from 1.80–5.00 s; Basic-material colours brighten without material replacement; and reduced motion stays within Y `base+.037…base+.045`, rotation `±.01`, scale `.99…1.01`.
+Add tests proving equal state ages produce equal transforms at absolute times 1 and 101; reward crouches at 80 ms, peaks at 350 ms, lands at 580 ms, rests by 1.10 s, and does not bounce again at 2.6 s; level-up performs one turn and is stable from 1.80–5.00 s; Basic-material colours brighten without material replacement; reduced motion stays within Y `base+.037…base+.045`, rotation `±.01`, scale `.99…1.01`; and every face profile matches the exact authored ratios in Step 5.
 
 - [ ] **Step 2: Run the tests and verify RED**
 
@@ -200,11 +202,19 @@ Add module-level `smoothstep`, `easeOutCubic`, and `easeInOutCubic`. On state ch
 - Focus: `400ms` entry with `4%` overshoot and `120ms` settle; hover `.010` over `4.8s`; no yaw/dart; core pulse `1.85s`.
 - Reward: `1.10s` clip with `.15` lift and anticipation/landing/rebound timing from Step 1, then proud idle; suppress reaction bounce while the clip owns root motion.
 - Level-up: `1.80s` clip with `.19` lift and exactly one `2π` turn from `180–1080ms`, then elevated idle.
-- Reduced motion: no spin/jump/squash/dart/settle/nod/wave/fin/orbit motion; use a `160ms` expression/colour transition.
+- Reduced motion: no spin/jump/squash/dart/settle/nod/wave/fin/orbit motion; use a `160ms` expression/colour transition. Keep root displacement within `.005`, rotation within `.01rad`, and every scale component within `.99…1.01`.
 
 - [ ] **Step 5: Make Basic and Standard materials responsive**
 
-Cache each Basic material's base colour once in `userData` and copy/multiply that stored colour per frame without allocating. Keep emissive-intensity behavior for Standard materials. Apply face-profile eye/mouth ratios for every active style.
+Cache each Basic material's base colour once in `userData` and copy/multiply that stored colour per frame without allocating. Keep emissive-intensity behavior for Standard materials. Apply these profile ratios to authored base transforms:
+
+| Face | Blink Y | Focus eye Y | Reward eye Y | Level-up eye Y | Focus/reward/level-up mouth Y |
+|---|---:|---:|---:|---:|---:|
+| Orbit / `classic` | `.10` | `.70` | `.84` | `1.14` | preserve current authored profile |
+| Focus / `eve` | `.08` | `.72` | `.90` | `1.10` | none |
+| Pixel / `screen` | `.12` | `.58` | `.78` | `1.18` | `.45 / 1.40 / 1.70` |
+| Spark / `kirby` | `.08` | `.68` | `.88` | `1.12` | `.30 / 1.12 / 1.28` |
+| Rest / `joy` | none | `.82` | `1.08` | `1.16` | preserve current authored profile |
 
 - [ ] **Step 6: Strengthen tier-three silhouette**
 
