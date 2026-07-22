@@ -150,6 +150,9 @@ export interface PetRig {
   mouthMat?: CompanionSurfaceMaterial | null;
   coreMat?: CompanionSurfaceMaterial | null;
   accentMat?: CompanionSurfaceMaterial | null;
+  faceMat?: CompanionSurfaceMaterial | null;
+  platformMat?: CompanionSurfaceMaterial | null;
+  innerRingMat?: CompanionSurfaceMaterial | null;
   haloGlowMat?: THREE.SpriteMaterial | null;
   coreGlowMat?: THREE.SpriteMaterial | null;
   evolutionMat?: CompanionSurfaceMaterial | null;
@@ -201,24 +204,36 @@ export function createPetMotionController(options: PetMotionOptions) {
   let lastCoreBrightness = 0.9;
   let lastAccentBrightness = 0.91;
   let lastEyeBrightness = 0.9;
+  let lastFaceBrightness = 0.87;
   let lastMouthBrightness = 0.84;
+  let lastPlatformBrightness = 0.82;
+  let lastInnerRingBrightness = 0.795;
   let lastEvolutionBrightness =
     0.84 + levelTier * 0.04 + streakBoost * 0.05;
   let transitionCoreBrightness = lastCoreBrightness;
   let transitionAccentBrightness = lastAccentBrightness;
   let transitionEyeBrightness = lastEyeBrightness;
+  let transitionFaceBrightness = lastFaceBrightness;
   let transitionMouthBrightness = lastMouthBrightness;
+  let transitionPlatformBrightness = lastPlatformBrightness;
+  let transitionInnerRingBrightness = lastInnerRingBrightness;
   let transitionEvolutionBrightness = lastEvolutionBrightness;
   let lastCoreIntensity = glowBase * TONE_BOOST;
   let lastAccentIntensity = glowBase * TONE_BOOST;
   let lastEyeIntensity = 0.72 * TONE_BOOST;
+  let lastFaceIntensity = 0.56 * TONE_BOOST;
   let lastMouthIntensity = 0.46 * TONE_BOOST;
+  let lastPlatformIntensity = 0.34 * TONE_BOOST;
+  let lastInnerRingIntensity = 0.205 * TONE_BOOST;
   let lastEvolutionIntensity =
     (0.42 + levelTier * 0.12 + streakBoost * 0.16) * TONE_BOOST;
   let transitionCoreIntensity = lastCoreIntensity;
   let transitionAccentIntensity = lastAccentIntensity;
   let transitionEyeIntensity = lastEyeIntensity;
+  let transitionFaceIntensity = lastFaceIntensity;
   let transitionMouthIntensity = lastMouthIntensity;
+  let transitionPlatformIntensity = lastPlatformIntensity;
+  let transitionInnerRingIntensity = lastInnerRingIntensity;
   let transitionEvolutionIntensity = lastEvolutionIntensity;
   let celebrationEntryHaloGlow = 0.75;
   let celebrationEntryCoreGlow = 0.85;
@@ -334,12 +349,18 @@ export function createPetMotionController(options: PetMotionOptions) {
       transitionCoreBrightness = lastCoreBrightness;
       transitionAccentBrightness = lastAccentBrightness;
       transitionEyeBrightness = lastEyeBrightness;
+      transitionFaceBrightness = lastFaceBrightness;
       transitionMouthBrightness = lastMouthBrightness;
+      transitionPlatformBrightness = lastPlatformBrightness;
+      transitionInnerRingBrightness = lastInnerRingBrightness;
       transitionEvolutionBrightness = lastEvolutionBrightness;
       transitionCoreIntensity = lastCoreIntensity;
       transitionAccentIntensity = lastAccentIntensity;
       transitionEyeIntensity = lastEyeIntensity;
+      transitionFaceIntensity = lastFaceIntensity;
       transitionMouthIntensity = lastMouthIntensity;
+      transitionPlatformIntensity = lastPlatformIntensity;
+      transitionInnerRingIntensity = lastInnerRingIntensity;
       transitionEvolutionIntensity = lastEvolutionIntensity;
       celebrationEntryHaloGlow = rig.haloGlowMat?.opacity ?? 0.75;
       celebrationEntryCoreGlow = rig.coreGlowMat?.opacity ?? 0.85;
@@ -353,10 +374,13 @@ export function createPetMotionController(options: PetMotionOptions) {
     const reducedMotion = frame.reducedMotion ?? false;
     const environmentWarmth = frame.environmentWarmth ?? 0;
     const decorationMotion = frame.decorationMotion ?? 1;
-    const celebrating = state === "reward" || state === "levelUp";
     const rewardClipOwnsRoot = state === "reward" && stateAge < 1.1;
     const levelClipOwnsRoot = state === "levelUp" && stateAge < 1.8;
     const clipOwnsRoot = rewardClipOwnsRoot || levelClipOwnsRoot;
+    // Held one-shot states become authored idle variants after their clip.
+    // Face profiles remain proud/elevated, while energy and decoration speeds
+    // leave celebration phase instead of running hot forever.
+    const celebrating = clipOwnsRoot;
 
     if (clipOwnsRoot && reactionStartedAt > -Infinity) {
       reactionStartedAt = -Infinity;
@@ -625,11 +649,6 @@ export function createPetMotionController(options: PetMotionOptions) {
         colourBlend,
       );
     }
-    applyEnergyMaterial(
-      rig.coreMat,
-      coreBrightness,
-      coreIntensity,
-    );
     const accentPulse =
       Math.sin(animationTime * (TWO_PI / (state === "focus" ? 1.85 : 3.4))) *
         0.5 +
@@ -651,35 +670,134 @@ export function createPetMotionController(options: PetMotionOptions) {
         colourBlend,
       );
     }
-    applyEnergyMaterial(
-      rig.accentMat,
-      accentBrightness,
-      accentIntensity,
-    );
-    applyEnergyMaterial(
-      rig.eyeMat,
-      eyeBrightness,
-      eyeIntensity,
-    );
-    applyEnergyMaterial(
-      rig.mouthMat,
-      mouthBrightness,
-      mouthIntensity,
-    );
-    applyEnergyMaterial(
-      rig.evolutionMat,
-      evolutionBrightness,
-      evolutionIntensity,
-    );
+    const rolePulse = state === "focus" ? focusPulse : accentPulse;
+    let faceBrightness =
+      0.84 + rolePulse * (state === "focus" ? 0.1 : 0.06) + signal * 0.18;
+    let platformBrightness =
+      0.8 + rolePulse * (state === "focus" ? 0.06 : 0.04) + signal * 0.1;
+    let innerRingBrightness =
+      0.78 + rolePulse * (state === "focus" ? 0.04 : 0.03) + signal * 0.07;
+    let faceIntensity =
+      (0.5 + rolePulse * 0.12 + signal * 0.35) * TONE_BOOST;
+    let platformIntensity =
+      (0.3 + rolePulse * 0.08 + signal * 0.2) * TONE_BOOST;
+    let innerRingIntensity =
+      (0.18 + rolePulse * 0.05 + signal * 0.12) * TONE_BOOST;
+    if (reducedMotion && stateBeforeEntry !== null && stateAge < 0.16) {
+      const colourBlend = easeOutCubic(stateAge / 0.16);
+      faceBrightness = lerp(
+        transitionFaceBrightness,
+        faceBrightness,
+        colourBlend,
+      );
+      platformBrightness = lerp(
+        transitionPlatformBrightness,
+        platformBrightness,
+        colourBlend,
+      );
+      innerRingBrightness = lerp(
+        transitionInnerRingBrightness,
+        innerRingBrightness,
+        colourBlend,
+      );
+      faceIntensity = lerp(
+        transitionFaceIntensity,
+        faceIntensity,
+        colourBlend,
+      );
+      platformIntensity = lerp(
+        transitionPlatformIntensity,
+        platformIntensity,
+        colourBlend,
+      );
+      innerRingIntensity = lerp(
+        transitionInnerRingIntensity,
+        innerRingIntensity,
+        colourBlend,
+      );
+    }
+
+    // A semantic role may intentionally alias another material (classic's
+    // mouth is the face accent). Apply each material once, in hierarchy order.
+    applyEnergyMaterial(rig.coreMat, coreBrightness, coreIntensity);
+    if (rig.accentMat !== rig.coreMat) {
+      applyEnergyMaterial(rig.accentMat, accentBrightness, accentIntensity);
+    }
+    if (rig.eyeMat !== rig.coreMat && rig.eyeMat !== rig.accentMat) {
+      applyEnergyMaterial(rig.eyeMat, eyeBrightness, eyeIntensity);
+    }
+    if (
+      rig.faceMat !== rig.coreMat &&
+      rig.faceMat !== rig.accentMat &&
+      rig.faceMat !== rig.eyeMat
+    ) {
+      applyEnergyMaterial(rig.faceMat, faceBrightness, faceIntensity);
+    }
+    if (
+      rig.mouthMat !== rig.coreMat &&
+      rig.mouthMat !== rig.accentMat &&
+      rig.mouthMat !== rig.eyeMat &&
+      rig.mouthMat !== rig.faceMat
+    ) {
+      applyEnergyMaterial(rig.mouthMat, mouthBrightness, mouthIntensity);
+    }
+    if (
+      rig.platformMat !== rig.coreMat &&
+      rig.platformMat !== rig.accentMat &&
+      rig.platformMat !== rig.eyeMat &&
+      rig.platformMat !== rig.faceMat &&
+      rig.platformMat !== rig.mouthMat
+    ) {
+      applyEnergyMaterial(
+        rig.platformMat,
+        platformBrightness,
+        platformIntensity,
+      );
+    }
+    if (
+      rig.innerRingMat !== rig.coreMat &&
+      rig.innerRingMat !== rig.accentMat &&
+      rig.innerRingMat !== rig.eyeMat &&
+      rig.innerRingMat !== rig.faceMat &&
+      rig.innerRingMat !== rig.mouthMat &&
+      rig.innerRingMat !== rig.platformMat
+    ) {
+      applyEnergyMaterial(
+        rig.innerRingMat,
+        innerRingBrightness,
+        innerRingIntensity,
+      );
+    }
+    if (
+      rig.evolutionMat !== rig.coreMat &&
+      rig.evolutionMat !== rig.accentMat &&
+      rig.evolutionMat !== rig.eyeMat &&
+      rig.evolutionMat !== rig.faceMat &&
+      rig.evolutionMat !== rig.mouthMat &&
+      rig.evolutionMat !== rig.platformMat &&
+      rig.evolutionMat !== rig.innerRingMat
+    ) {
+      applyEnergyMaterial(
+        rig.evolutionMat,
+        evolutionBrightness,
+        evolutionIntensity,
+      );
+    }
     lastCoreBrightness = coreBrightness;
     lastAccentBrightness = accentBrightness;
     lastEyeBrightness = eyeBrightness;
+    lastFaceBrightness = faceBrightness;
     lastMouthBrightness = mouthBrightness;
+    lastPlatformBrightness = platformBrightness;
+    lastInnerRingBrightness = innerRingBrightness;
     lastEvolutionBrightness = evolutionBrightness;
     lastCoreIntensity = coreIntensity;
     lastAccentIntensity = accentIntensity;
     lastEyeIntensity = eyeIntensity;
+    lastFaceIntensity = faceIntensity;
     lastMouthIntensity = mouthIntensity;
+    lastPlatformIntensity = platformIntensity;
+    lastInnerRingIntensity = innerRingIntensity;
     lastEvolutionIntensity = evolutionIntensity;
 
     if (rig.haloGlowMat || rig.coreGlowMat) {

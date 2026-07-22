@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createPetMotionController,
   EYE_DART_MICRO,
@@ -254,6 +254,97 @@ describe("pet motion", () => {
     expect(rig.petGroup.scale.toArray()).toEqual([1, 1, 1]);
   });
 
+  it.each([
+    ["reward", 1.1, 0.04, 0.84],
+    ["levelUp", 1.8, 0.052, 1.14],
+  ] as const)(
+    "settles held %s into idle-paced energy through five seconds",
+    (state, clipDuration, heldY, eyeRatio) => {
+      const rig = makeTimelineRig();
+      rig.leftFin!.rotation.z = -0.9;
+      rig.rightFin!.rotation.z = 0.9;
+      rig.aura!.scale.setScalar(1.1);
+      rig.haloGlowMat = new THREE.SpriteMaterial({ transparent: true });
+      rig.coreGlowMat = new THREE.SpriteMaterial({ transparent: true });
+      rig.eyeMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+      const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+      motion.apply(rig, "idle", 0);
+      motion.apply(rig, state, 1);
+      motion.apply(rig, state, 1 + clipDuration);
+      const endHalo = rig.halo!.rotation.z;
+      const endOrbit = rig.orbitGroup!.rotation.z;
+      const endFins = [rig.leftFin!.rotation.z, rig.rightFin!.rotation.z];
+      const endRootScale = rig.petGroup.scale.toArray();
+
+      let maxAuraScale = rig.aura!.scale.x;
+      for (let frame = 1; frame <= 30; frame += 1) {
+        motion.apply(rig, state, 1 + clipDuration + frame / 30);
+        maxAuraScale = Math.max(maxAuraScale, rig.aura!.scale.x);
+      }
+      const haloOneSecond = rig.halo!.rotation.z - endHalo;
+      const orbitOneSecond = rig.orbitGroup!.rotation.z - endOrbit;
+      expect(haloOneSecond).toBeGreaterThan(0.6);
+      expect(haloOneSecond).toBeLessThan(0.8);
+      expect(orbitOneSecond).toBeGreaterThan(0.4);
+      expect(orbitOneSecond).toBeLessThan(0.6);
+
+      for (let frame = 31; frame <= (5 - clipDuration) * 30; frame += 1) {
+        motion.apply(rig, state, 1 + clipDuration + frame / 30);
+        maxAuraScale = Math.max(maxAuraScale, rig.aura!.scale.x);
+      }
+      expect(rig.petGroup.position.y).toBeCloseTo(heldY, 6);
+      expect(rig.petGroup.scale.toArray()).toEqual(endRootScale);
+      expect([rig.leftFin!.rotation.z, rig.rightFin!.rotation.z]).toEqual(
+        endFins,
+      );
+      expect(maxAuraScale).toBeLessThanOrEqual(1.1 * 1.036);
+      expect(rig.haloGlowMat.opacity).toBeLessThan(0.56);
+      expect(rig.coreGlowMat.opacity).toBeLessThanOrEqual(0.66);
+      expect(rig.eyeMat.emissiveIntensity).toBeLessThan(1.1);
+      expect(rig.leftEye!.scale.y).toBeCloseTo(eyeRatio, 6);
+    },
+  );
+
+  it("animates every Basic energy role once in a subordinate hierarchy", () => {
+    const rig = makeTimelineRig();
+    const core = new THREE.MeshBasicMaterial({ color: 0x808080 });
+    const orbit = new THREE.MeshBasicMaterial({ color: 0x808080 });
+    const face = new THREE.MeshBasicMaterial({ color: 0x808080 });
+    const platform = new THREE.MeshBasicMaterial({ color: 0x808080 });
+    const innerRing = new THREE.MeshBasicMaterial({ color: 0x808080 });
+    rig.coreMat = core;
+    rig.accentMat = orbit;
+    rig.faceMat = face;
+    rig.mouthMat = face;
+    rig.platformMat = platform;
+    rig.innerRingMat = innerRing;
+    const identities = [core, orbit, face, platform, innerRing];
+    const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+    motion.apply(rig, "idle", 0);
+    const idle = identities.map((material) => material.color.r);
+    const faceCopy = vi.spyOn(face.color, "copy");
+
+    motion.apply(rig, "reward", 1);
+    motion.apply(rig, "reward", 1.18);
+    const peak = identities.map((material) => material.color.r);
+
+    expect([
+      rig.coreMat,
+      rig.accentMat,
+      rig.faceMat,
+      rig.platformMat,
+      rig.innerRingMat,
+    ]).toEqual(identities);
+    peak.forEach((value, index) => {
+      expect(value).toBeGreaterThan(idle[index]);
+    });
+    expect(peak[0]).toBeGreaterThanOrEqual(peak[1]);
+    expect(peak[1]).toBeGreaterThan(peak[2]);
+    expect(peak[2]).toBeGreaterThan(peak[3]);
+    expect(peak[3]).toBeGreaterThan(peak[4]);
+    expect(faceCopy).toHaveBeenCalledTimes(2);
+  });
+
   it("updates Basic material energy without replacement or per-frame colour caches", () => {
     const rig = makeTimelineRig();
     const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
@@ -506,6 +597,9 @@ describe("pet motion", () => {
     rig.eyeMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
     rig.mouthMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
     rig.evolutionMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    rig.faceMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    rig.platformMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    rig.innerRingMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
     const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
     const frame = { reducedMotion: true };
     motion.apply(rig, "idle", 0, "calm", frame);
@@ -522,6 +616,9 @@ describe("pet motion", () => {
     expect(rig.eyeMat.emissiveIntensity).toBeGreaterThan(0);
     expect(rig.mouthMat.emissiveIntensity).toBeGreaterThan(0);
     expect(rig.evolutionMat.emissiveIntensity).toBeGreaterThan(0);
+    expect(rig.faceMat.emissiveIntensity).toBeGreaterThan(0);
+    expect(rig.platformMat.emissiveIntensity).toBeGreaterThan(0);
+    expect(rig.innerRingMat.emissiveIntensity).toBeGreaterThan(0);
   });
 
   it("plays one poke bounce and returns to the base animation", () => {

@@ -373,7 +373,27 @@ describe("companion model construction", () => {
     expect(instance.rig.coreMat).toBe(materials[0]);
     expect(instance.rig.accentMat).toBe(materials[1]);
     expect(instance.rig.mouthMat).toBe(materials[2]);
+    expect(instance.rig.faceMat).toBe(materials[2]);
+    expect(instance.rig.platformMat).toBe(materials[3]);
+    expect(instance.rig.innerRingMat).toBe(materials[4]);
 
+    instance.dispose();
+  });
+
+  it("keeps the Focus face energy-responsive without a mouth role", () => {
+    const instance = create("eve");
+    expect(instance.rig.mouth).toBeUndefined();
+    expect(instance.rig.mouthMat).toBeNull();
+    expect(instance.rig.faceMat).toBeInstanceOf(THREE.MeshBasicMaterial);
+    const faceIdentity = instance.rig.faceMat;
+    const before = faceIdentity!.color.getHex();
+    const motion = createPetMotionController({ levelTier: 0, streakTier: 0 });
+
+    motion.apply(instance.rig, "reward", 1);
+    motion.apply(instance.rig, "reward", 1.18);
+
+    expect(instance.rig.faceMat).toBe(faceIdentity);
+    expect(faceIdentity!.color.getHex()).not.toBe(before);
     instance.dispose();
   });
 
