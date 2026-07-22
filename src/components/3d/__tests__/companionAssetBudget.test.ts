@@ -30,6 +30,7 @@ export const REQUIRED_PET_NODES = [
 interface GlbJson {
   accessors?: { count?: number }[];
   animations?: unknown[];
+  materials?: { name?: string }[];
   meshes?: {
     primitives?: {
       attributes?: Record<string, number>;
@@ -178,4 +179,32 @@ describe("generated companion asset contract", () => {
       { id: "joy", name: "Rest" },
     ]);
   });
+
+  it.each(["dayly-companion.glb", "dayly-companion-lite.glb"])(
+    "%s keeps the rear signature attached to Body",
+    (filename) => {
+      const json = parseGlbJson(resolve(AVATAR_DIR, filename));
+      const nodes = json.nodes ?? [];
+      const bodyIndex = nodes.findIndex((node) => node.name === "Body");
+      const bodyDescendants = descendants(json, bodyIndex);
+
+      for (const name of ["BackDial", "BackDialTick"]) {
+        const nodeIndex = nodes.findIndex((node) => node.name === name);
+        expect(nodeIndex, `${filename} must contain ${name}`).toBeGreaterThanOrEqual(0);
+        expect(bodyDescendants, `${name} must follow Body motion`).toContain(nodeIndex);
+      }
+    },
+  );
+
+  it.each(["dayly-companion.glb", "dayly-companion-lite.glb"])(
+    "%s preserves the runtime eye-material prefix",
+    (filename) => {
+      const json = parseGlbJson(resolve(AVATAR_DIR, filename));
+      const materialNames = (json.materials ?? []).map((material) => material.name ?? "");
+
+      expect(materialNames.some((name) => name.startsWith("Eye_White_Emission"))).toBe(
+        true,
+      );
+    },
+  );
 });

@@ -9,8 +9,8 @@ The refinement is an evolution of `feat/friends-leaderboard`, not a new characte
 ## Art Direction
 
 - Strengthen the body into a soft seed/pear silhouette with a weighted lower mass, subtly flattened base, gentle forward intent, and recognizable side/rear views.
-- Recess the visor into the body, reduce its projection, and integrate the rim as a moulded transition rather than a second bubble.
-- Blend tapered flippers into the body and reduce/reposition the feet so they read as planted appendages instead of pod geometry.
+- Recess the visor into the body, reduce its projection, and integrate the rim as a moulded transition rather than a second bubble. The render-reviewed final panel is `0.86 × 0.065 × 0.42` at `(0, -0.476, 0.82)` and its rim is `0.92 × 0.055 × 0.48` at `(0, -0.458, 0.82)`, using six bevel segments and `0.32` corner falloff.
+- Blend tapered flippers into the body and reduce/reposition the feet so they read as planted appendages instead of pod geometry. The render-reviewed final feet use radius `0.145`, center `(±0.25, -0.07, 0.140)`, scale `(0.96, 0.72, 0.42)`, and yaw `±0.12`; their rough dark soles use radius `0.120`, center `z=0.104`, and scale `(0.82, 0.62, 0.12)`.
 - Replace the complete circular halo with an asymmetric broken `Dayly Orbit`: a tilted arc with unequal endpoint beads and a deliberate gap that remains recognizable during animation.
 - Turn the chest light into a vertical seed/energy mark with a restrained bezel. Add a quiet rear energy signature that makes the 360-degree shop view authored without competing with the face.
 - Use a strict light hierarchy: energy core brightest, orbit secondary, pod channel tertiary. Body surfaces stay matte and the visor stays the only glossy mass in Blender previews.

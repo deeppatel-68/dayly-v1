@@ -70,8 +70,8 @@ Add triangle-count, descendant, active-face, required-name, file-size, and JSON-
 Use these locked values:
 
 - Body scale `(1.00, 0.90, 1.02)`, center `z=.62`, forward lean `3°`, seed taper `x=1-.10*t-.02*t*t`, `y=1-.05*t`, flattened lower cap.
-- Shallow beveled-squircle `FacePanel` `0.96×0.10×0.50` at `(0,-.49,.82)` and `VisorRim` `1.02×0.08×0.56` at `(0,-.465,.82)`, with 4–6 bevel segments; remove the duplicate visible screen panel while retaining the compatibility node.
-- Flippers at `(±.54,-.08,.44)`, scale `(.23,.30,.52)`, yaw `±.50`; feet at `(±.25,-.07,.145)`, radius `.17`, scale `(1.05,.78,.50)`, yaw `±.12`, with dark soles.
+- Shallow beveled-squircle `FacePanel` `0.86×0.065×0.42` at `(0,-.476,.82)` and `VisorRim` `0.92×0.055×0.48` at `(0,-.458,.82)`, with 6 bevel segments and `.32` corner falloff; remove the duplicate visible screen panel while retaining the compatibility node.
+- Flippers at `(±.54,-.08,.44)`, scale `(.23,.30,.52)`, yaw `±.50`; feet at `(±.25,-.07,.140)`, radius `.145`, scale `(.96,.72,.42)`, yaw `±.12`, with rough dark soles of radius `.120`, center `z=.104`, and scale `(.82,.62,.12)`.
 - Broken 318° `HaloCharm` orbit at `z=1.31`, major/minor radii `.155/.010`, 42° right-side gap, endpoint beads `.030/.014`.
 - Seed-shaped `EnergyCore`; `BackDial` dark ring and `BackDialTick` accent mark centered on the rear at `(0,+.49,.70)`.
 - Platform radii remain `.80/.62`; ring minor radii reduce to `.008/.005`.
@@ -275,4 +275,3 @@ Start Expo on port 8090, request the iOS router entry bundle with a 300-second t
 Run `git diff --check`, inspect `git status`, review the complete branch diff against the design spec, and commit:
 
 `docs: document refined companion pipeline`
-

@@ -65,7 +65,7 @@ ORANGE = (1.0, 0.15, 0.035)
 WARM_WHITE = (1.0, 0.86, 0.66)
 mat_body = make_mat("Body_Charcoal", (0.052, 0.052, 0.06), 0.58)
 mat_base = make_mat("Base_Black", (0.009, 0.009, 0.012), 0.16, metallic=0.12)
-mat_eye = make_mat("Eye_Warm_Emission", WARM_WHITE, 0.38,
+mat_eye = make_mat("Eye_White_Emission", WARM_WHITE, 0.38,
                    emission=WARM_WHITE, emission_strength=2.1)
 mat_pupil = make_mat("Pupil_Dark", (0.012, 0.012, 0.018), 0.3)
 mat_catch = make_mat("Catchlight_White", (1.0, 1.0, 1.0), 0.3,
@@ -329,7 +329,8 @@ for side, x, start, end in (
                     mat=mat_eye)
     parent_local(eye, face_kirby)
     crescent = arc_curve(f"Kirby{side}Pupil", (x, -0.550, 0.833), 0.031,
-                         start, end, 0.009, mat_pupil, points=18)
+                         start, end, 0.009, mat_pupil, points=18,
+                         rotation=(math.pi / 2, 0, 0))
     parent_local(crescent, eye)
     catch = uv_sphere(f"Kirby{side}Catchlight", (x - 0.018, -0.555, 0.860),
                       0.012, segments=8, ring_count=6, mat=mat_catch)
@@ -442,9 +443,11 @@ back_dial = bpy.context.active_object
 back_dial.name = "BackDial"
 back_dial.data.materials.append(mat_base)
 smooth(back_dial)
+parent_local(back_dial, body)
 back_tick = rounded_box("BackDialTick", (0, 0.505, 0.750),
                         (0.018, 0.014, 0.055), mat_accent,
                         bevel_segments=4)
+parent_local(back_tick, body)
 
 # Two-tier pod; radii remain stable for equipment and room placement.
 bpy.ops.mesh.primitive_cylinder_add(vertices=40, radius=0.80, depth=0.04,
