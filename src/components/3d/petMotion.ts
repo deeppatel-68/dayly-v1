@@ -86,6 +86,11 @@ const blinkRatioAt = (animationTime: number, closedRatio: number) => {
 const idleYawAt = (animationTime: number) =>
   Math.sin(animationTime * (TWO_PI / 8.4)) * 0.055;
 
+const normalizedAngle = (angle: number) => {
+  const normalized = Math.atan2(Math.sin(angle), Math.cos(angle));
+  return Math.abs(normalized) < 1e-10 ? 0 : normalized;
+};
+
 const celebrationSignal = (
   state: AvatarState,
   age: number,
@@ -185,6 +190,14 @@ export function createPetMotionController(options: PetMotionOptions) {
   let transitionEyeX = 1;
   let transitionEyeY = 1;
   let transitionMouthY = 1;
+  let transitionLeftFlipperZ = 0;
+  let transitionRightFlipperZ = 0;
+  let transitionLeftFinZ = 0;
+  let transitionRightFinZ = 0;
+  let transitionLeftBrowZ = 0;
+  let transitionRightBrowZ = 0;
+  let transitionLeftBrowY = 0;
+  let transitionRightBrowY = 0;
   let lastCoreBrightness = 0.9;
   let lastAccentBrightness = 0.91;
   let lastEyeBrightness = 0.9;
@@ -196,14 +209,40 @@ export function createPetMotionController(options: PetMotionOptions) {
   let transitionEyeBrightness = lastEyeBrightness;
   let transitionMouthBrightness = lastMouthBrightness;
   let transitionEvolutionBrightness = lastEvolutionBrightness;
+  let lastCoreIntensity = glowBase * TONE_BOOST;
+  let lastAccentIntensity = glowBase * TONE_BOOST;
+  let lastEyeIntensity = 0.72 * TONE_BOOST;
+  let lastMouthIntensity = 0.46 * TONE_BOOST;
+  let lastEvolutionIntensity =
+    (0.42 + levelTier * 0.12 + streakBoost * 0.16) * TONE_BOOST;
+  let transitionCoreIntensity = lastCoreIntensity;
+  let transitionAccentIntensity = lastAccentIntensity;
+  let transitionEyeIntensity = lastEyeIntensity;
+  let transitionMouthIntensity = lastMouthIntensity;
+  let transitionEvolutionIntensity = lastEvolutionIntensity;
   let haloAngle = 0;
   let orbitAngle = 0;
+  let decorationTime = 0;
+  let hasDecorationTime = false;
+  let wasReducedMotion = false;
+  let decorationResumedAt = -Infinity;
+  let resumeHaloX = 0;
+  let resumeHaloY = 0;
+  let resumeHaloZ = 0;
+  let resumeOrbitY = 0;
+  let resumeOrbitZ = 0;
   let reactionStartedAt = -Infinity;
   let activeReaction: CompanionReaction = "bounce";
   let pendingBounce = false;
+  let clipOwnedRootOnLastFrame = false;
 
   function playBounce() {
     activeReaction = "bounce";
+    if (clipOwnedRootOnLastFrame) {
+      reactionStartedAt = -Infinity;
+      pendingBounce = false;
+      return;
+    }
     reactionStartedAt = lastTime;
     pendingBounce = !hasFrameTime;
   }
@@ -214,6 +253,11 @@ export function createPetMotionController(options: PetMotionOptions) {
       return;
     }
     activeReaction = reaction;
+    if (clipOwnedRootOnLastFrame) {
+      reactionStartedAt = -Infinity;
+      pendingBounce = false;
+      return;
+    }
     reactionStartedAt = lastTime;
   }
 
@@ -263,7 +307,7 @@ export function createPetMotionController(options: PetMotionOptions) {
       transitionScaleX = rig.petGroup.scale.x;
       transitionScaleY = rig.petGroup.scale.y;
       transitionScaleZ = rig.petGroup.scale.z;
-      transitionRotationY = rig.petGroup.rotation.y;
+      transitionRotationY = normalizedAngle(rig.petGroup.rotation.y);
       transitionEyeX = rig.leftEye
         ? rig.leftEye.scale.x / (leftEyeBase?.x ?? 1)
         : 1;
@@ -273,11 +317,24 @@ export function createPetMotionController(options: PetMotionOptions) {
       transitionMouthY = rig.mouth
         ? rig.mouth.scale.y / (mouthBase?.y ?? 1)
         : 1;
+      transitionLeftFlipperZ = rig.leftFlipper?.rotation.z ?? 0;
+      transitionRightFlipperZ = rig.rightFlipper?.rotation.z ?? 0;
+      transitionLeftFinZ = rig.leftFin?.rotation.z ?? 0;
+      transitionRightFinZ = rig.rightFin?.rotation.z ?? 0;
+      transitionLeftBrowZ = rig.leftBrow?.rotation.z ?? 0;
+      transitionRightBrowZ = rig.rightBrow?.rotation.z ?? 0;
+      transitionLeftBrowY = rig.leftBrow?.position.y ?? 0;
+      transitionRightBrowY = rig.rightBrow?.position.y ?? 0;
       transitionCoreBrightness = lastCoreBrightness;
       transitionAccentBrightness = lastAccentBrightness;
       transitionEyeBrightness = lastEyeBrightness;
       transitionMouthBrightness = lastMouthBrightness;
       transitionEvolutionBrightness = lastEvolutionBrightness;
+      transitionCoreIntensity = lastCoreIntensity;
+      transitionAccentIntensity = lastAccentIntensity;
+      transitionEyeIntensity = lastEyeIntensity;
+      transitionMouthIntensity = lastMouthIntensity;
+      transitionEvolutionIntensity = lastEvolutionIntensity;
     }
     // Normalise the subtraction so the same authored clip age is bit-for-bit
     // identical at small and large host-clock values (for example 1.35/101.35).
@@ -293,7 +350,28 @@ export function createPetMotionController(options: PetMotionOptions) {
     const levelClipOwnsRoot = state === "levelUp" && stateAge < 1.8;
     const clipOwnsRoot = rewardClipOwnsRoot || levelClipOwnsRoot;
 
-    if (!reducedMotion) {
+    if (clipOwnsRoot && reactionStartedAt > -Infinity) {
+      reactionStartedAt = -Infinity;
+      pendingBounce = false;
+    }
+
+    const resumedDecorations = wasReducedMotion && !reducedMotion;
+    if (!hasDecorationTime) {
+      decorationTime = animationTime;
+      hasDecorationTime = true;
+    } else if (!reducedMotion && !resumedDecorations) {
+      decorationTime += deltaTime;
+    }
+    if (resumedDecorations) {
+      decorationResumedAt = t;
+      resumeHaloX = rig.halo?.rotation.x ?? 0;
+      resumeHaloY = rig.halo?.rotation.y ?? 0;
+      resumeHaloZ = rig.halo?.rotation.z ?? 0;
+      resumeOrbitY = rig.orbitGroup?.rotation.y ?? 0;
+      resumeOrbitZ = rig.orbitGroup?.rotation.z ?? 0;
+    }
+
+    if (!reducedMotion && !resumedDecorations) {
       const haloSpeed =
         state === "focus" ? 0.08 : celebrating ? 1.5 : 0.7;
       const orbitSpeed =
@@ -346,7 +424,7 @@ export function createPetMotionController(options: PetMotionOptions) {
         rootScaleZ = lerp(rootScaleZ, 1.016, settle);
       }
 
-      if (stateBeforeEntry === "focus" && stateAge < 0.3) {
+      if (stateBeforeEntry !== null && stateAge < 0.3) {
         const blend = smoothstep(stateAge / 0.3);
         rootY = lerp(transitionY, rootY, blend);
         rootScaleX = lerp(transitionScaleX, rootScaleX, blend);
@@ -391,11 +469,20 @@ export function createPetMotionController(options: PetMotionOptions) {
         rootScaleY = lerp(1.09, 0.9, u);
       } else if (stateAge <= 0.82) {
         const u = (stateAge - 0.58) / 0.24;
+        const settleEntry = smoothstep(u);
         rootY =
-          baseY + HOVER_BASELINE + Math.sin(clamp01(u) * Math.PI) * 0.035;
-        const settle = easeOutCubic(u);
-        rootScaleX = rootScaleZ = lerp(1.07, 1, settle);
-        rootScaleY = lerp(0.9, 1, settle);
+          baseY +
+          HOVER_BASELINE +
+          Math.sin(clamp01(u) * Math.PI) * 0.035 +
+          settleEntry * 0.008;
+        const reboundSettle = easeOutCubic(u);
+        rootScaleX = rootScaleZ = lerp(1.07, 1.012, reboundSettle);
+        rootScaleY = lerp(0.9, 0.982, reboundSettle);
+      } else if (stateAge < 1.1) {
+        const remaining = 1 - easeOutCubic((stateAge - 0.82) / 0.28);
+        rootY = baseY + HOVER_BASELINE + remaining * 0.008;
+        rootScaleX = rootScaleZ = 1 + remaining * 0.012;
+        rootScaleY = 1 - remaining * 0.018;
       }
     } else {
       if (stateAge <= 0.16) {
@@ -468,6 +555,18 @@ export function createPetMotionController(options: PetMotionOptions) {
     let mouthBrightness = 0.84 + signal * 0.24;
     let evolutionBrightness =
       0.84 + levelTier * 0.04 + streakBoost * 0.05 + signal * 0.18;
+    let coreIntensity =
+      (glowBase + focusPulse * 0.25 + signal * 0.8 + environmentWarmth * 0.18) *
+      TONE_BOOST;
+    let eyeIntensity =
+      (state === "focus" ? 1.05 : celebrating ? 1.15 : 0.72) *
+      TONE_BOOST *
+      (1 + environmentWarmth * 0.08);
+    let mouthIntensity =
+      (0.46 + signal * 0.42 + environmentWarmth * 0.14) * TONE_BOOST;
+    let evolutionIntensity =
+      (0.42 + levelTier * 0.12 + streakBoost * 0.16 + signal * 0.4) *
+      TONE_BOOST;
     if (reducedMotion && stateBeforeEntry !== null && stateAge < 0.16) {
       const colourBlend = easeOutCubic(stateAge / 0.16);
       coreBrightness = lerp(
@@ -490,54 +589,83 @@ export function createPetMotionController(options: PetMotionOptions) {
         evolutionBrightness,
         colourBlend,
       );
+      coreIntensity = lerp(
+        transitionCoreIntensity,
+        coreIntensity,
+        colourBlend,
+      );
+      eyeIntensity = lerp(
+        transitionEyeIntensity,
+        eyeIntensity,
+        colourBlend,
+      );
+      mouthIntensity = lerp(
+        transitionMouthIntensity,
+        mouthIntensity,
+        colourBlend,
+      );
+      evolutionIntensity = lerp(
+        transitionEvolutionIntensity,
+        evolutionIntensity,
+        colourBlend,
+      );
     }
     applyEnergyMaterial(
       rig.coreMat,
       coreBrightness,
-      (glowBase + focusPulse * 0.25 + signal * 0.8 + environmentWarmth * 0.18) *
-        TONE_BOOST,
+      coreIntensity,
     );
     const accentPulse =
       Math.sin(animationTime * (TWO_PI / (state === "focus" ? 1.85 : 3.4))) *
         0.5 +
       0.5;
     accentBrightness = 0.86 + accentPulse * 0.1 + signal * 0.2;
+    let accentIntensity =
+      (glowBase + accentPulse * (0.18 + streakBoost * 0.25) + signal * 0.9) *
+      TONE_BOOST;
     if (reducedMotion && stateBeforeEntry !== null && stateAge < 0.16) {
+      const colourBlend = easeOutCubic(stateAge / 0.16);
       accentBrightness = lerp(
         transitionAccentBrightness,
         accentBrightness,
-        easeOutCubic(stateAge / 0.16),
+        colourBlend,
+      );
+      accentIntensity = lerp(
+        transitionAccentIntensity,
+        accentIntensity,
+        colourBlend,
       );
     }
     applyEnergyMaterial(
       rig.accentMat,
       accentBrightness,
-      (glowBase + accentPulse * (0.18 + streakBoost * 0.25) + signal * 0.9) *
-        TONE_BOOST,
+      accentIntensity,
     );
     applyEnergyMaterial(
       rig.eyeMat,
       eyeBrightness,
-      (state === "focus" ? 1.05 : celebrating ? 1.15 : 0.72) *
-        TONE_BOOST *
-        (1 + environmentWarmth * 0.08),
+      eyeIntensity,
     );
     applyEnergyMaterial(
       rig.mouthMat,
       mouthBrightness,
-      (0.46 + signal * 0.42 + environmentWarmth * 0.14) * TONE_BOOST,
+      mouthIntensity,
     );
     applyEnergyMaterial(
       rig.evolutionMat,
       evolutionBrightness,
-      (0.42 + levelTier * 0.12 + streakBoost * 0.16 + signal * 0.4) *
-        TONE_BOOST,
+      evolutionIntensity,
     );
     lastCoreBrightness = coreBrightness;
     lastAccentBrightness = accentBrightness;
     lastEyeBrightness = eyeBrightness;
     lastMouthBrightness = mouthBrightness;
     lastEvolutionBrightness = evolutionBrightness;
+    lastCoreIntensity = coreIntensity;
+    lastAccentIntensity = accentIntensity;
+    lastEyeIntensity = eyeIntensity;
+    lastMouthIntensity = mouthIntensity;
+    lastEvolutionIntensity = evolutionIntensity;
 
     if (rig.haloGlowMat || rig.coreGlowMat) {
       const ambientGlow =
@@ -679,10 +807,24 @@ export function createPetMotionController(options: PetMotionOptions) {
       } else if (mood === "sleepy") {
         yOffset = -0.035;
       }
-      rig.leftBrow.rotation.z = leftAngle;
-      rig.rightBrow.rotation.z = rightAngle;
-      rig.leftBrow.position.y = leftY + yOffset;
-      rig.rightBrow.position.y = rightY + yOffset;
+      const leftTargetY = leftY + yOffset;
+      const rightTargetY = rightY + yOffset;
+      rig.leftBrow.rotation.z =
+        stateBeforeEntry === null
+          ? leftAngle
+          : lerp(transitionLeftBrowZ, leftAngle, expressionBlend);
+      rig.rightBrow.rotation.z =
+        stateBeforeEntry === null
+          ? rightAngle
+          : lerp(transitionRightBrowZ, rightAngle, expressionBlend);
+      rig.leftBrow.position.y =
+        stateBeforeEntry === null
+          ? leftTargetY
+          : lerp(transitionLeftBrowY, leftTargetY, expressionBlend);
+      rig.rightBrow.position.y =
+        stateBeforeEntry === null
+          ? rightTargetY
+          : lerp(transitionRightBrowY, rightTargetY, expressionBlend);
     }
 
     if (rig.mouth) {
@@ -734,8 +876,16 @@ export function createPetMotionController(options: PetMotionOptions) {
             0.4;
         }
       }
-      rig.leftFlipper.rotation.z = leftBase + outward - focusTuck;
-      rig.rightFlipper.rotation.z = rightBase - outward + focusTuck;
+      const leftTarget = leftBase + outward - focusTuck;
+      const rightTarget = rightBase - outward + focusTuck;
+      rig.leftFlipper.rotation.z =
+        stateBeforeEntry === null
+          ? leftTarget
+          : lerp(transitionLeftFlipperZ, leftTarget, expressionBlend);
+      rig.rightFlipper.rotation.z =
+        stateBeforeEntry === null
+          ? rightTarget
+          : lerp(transitionRightFlipperZ, rightTarget, expressionBlend);
     }
 
     if (rig.leftFin && rig.rightFin) {
@@ -761,16 +911,26 @@ export function createPetMotionController(options: PetMotionOptions) {
         } else if (state === "focus") {
           focusFold = -0.18 * focusEntryBlend(stateAge);
         } else {
-          flare = Math.sin(animationTime * 0.8) * 0.025;
+          flare = Math.sin(decorationTime * 0.8) * 0.025;
         }
       }
-      rig.leftFin.rotation.z = leftBase - flare - focusFold;
-      rig.rightFin.rotation.z = rightBase + flare + focusFold;
+      const leftTarget = leftBase - flare - focusFold;
+      const rightTarget = rightBase + flare + focusFold;
+      rig.leftFin.rotation.z =
+        stateBeforeEntry === null
+          ? leftTarget
+          : lerp(transitionLeftFinZ, leftTarget, expressionBlend);
+      rig.rightFin.rotation.z =
+        stateBeforeEntry === null
+          ? rightTarget
+          : lerp(transitionRightFinZ, rightTarget, expressionBlend);
     }
 
     if (rig.orbitGroup && !reducedMotion) {
-      rig.orbitGroup.rotation.z = orbitAngle;
-      rig.orbitGroup.rotation.y = Math.sin(animationTime * 0.7) * 0.04;
+      const resumeBlend = easeOutCubic((t - decorationResumedAt) / 0.16);
+      const targetY = Math.sin(decorationTime * 0.7) * 0.04;
+      rig.orbitGroup.rotation.z = lerp(resumeOrbitZ, orbitAngle, resumeBlend);
+      rig.orbitGroup.rotation.y = lerp(resumeOrbitY, targetY, resumeBlend);
     }
 
     if (rig.aura && rig.auraMat) {
@@ -781,16 +941,18 @@ export function createPetMotionController(options: PetMotionOptions) {
       const pulse =
         reducedMotion ? 0 : (Math.sin(animationTime * 1.8) + 1) * 0.5;
       const levelAuraSignal =
-        state === "levelUp"
+        state === "levelUp" && !reducedMotion
           ? stateAge <= 0.7
             ? easeOutCubic(stateAge / 0.7)
             : 1 - easeOutCubic((stateAge - 0.7) / 1.1)
           : signal;
       rig.aura.scale.setScalar(
-        baseAuraScale *
-          (1 +
-            pulse * 0.035 +
-            (reducedMotion ? 0 : levelAuraSignal * 0.1)),
+        levelTier < 3
+          ? 0.94
+          : baseAuraScale *
+              (1 +
+                pulse * 0.035 +
+                (reducedMotion ? 0 : levelAuraSignal * 0.1)),
       );
       const baseOpacity =
         levelTier >= 3 ? 0.1 : 0.025 + streakBoost * 0.045;
@@ -812,19 +974,26 @@ export function createPetMotionController(options: PetMotionOptions) {
           ? TWO_PI *
             easeInOutCubic((stateAge - HALO_LAG_SECONDS - 0.18) / 0.9)
           : 0;
-      rig.halo.rotation.x = 1.05 + Math.sin(animationTime * 0.8) * 0.05;
+      const targetX = 1.05 + Math.sin(decorationTime * 0.8) * 0.05;
       const idleLag =
         !reducedMotion && state === "idle"
-          ? idleYawAt(animationTime - HALO_LAG_SECONDS) -
-            idleYawAt(animationTime)
+          ? idleYawAt(decorationTime - HALO_LAG_SECONDS) -
+            idleYawAt(decorationTime)
           : 0;
-      rig.halo.rotation.y =
+      const targetY =
         0.12 +
         idleLag +
         delayedLevelTurn -
         levelTurn;
-      rig.halo.rotation.z = -0.16 + haloAngle;
+      const targetZ = -0.16 + haloAngle;
+      const resumeBlend = easeOutCubic((t - decorationResumedAt) / 0.16);
+      rig.halo.rotation.x = lerp(resumeHaloX, targetX, resumeBlend);
+      rig.halo.rotation.y = lerp(resumeHaloY, targetY, resumeBlend);
+      rig.halo.rotation.z = lerp(resumeHaloZ, targetZ, resumeBlend);
     }
+
+    clipOwnedRootOnLastFrame = clipOwnsRoot;
+    wasReducedMotion = reducedMotion;
   }
 
   return { apply, react, playBounce, poke, glowBase, streakBoost };

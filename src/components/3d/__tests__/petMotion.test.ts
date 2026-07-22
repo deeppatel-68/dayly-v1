@@ -160,6 +160,100 @@ describe("pet motion", () => {
     }
   });
 
+  it("normalizes a completed level turn before entering focus", () => {
+    const rig = makeTimelineRig();
+    const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+    motion.apply(rig, "idle", 0);
+    motion.apply(rig, "levelUp", 1);
+    motion.apply(rig, "levelUp", 2.8);
+    const completedY = rig.petGroup.position.y;
+    const completedScale = rig.petGroup.scale.toArray();
+    expect(rig.petGroup.rotation.y).toBeCloseTo(Math.PI * 2, 6);
+
+    motion.apply(rig, "focus", 2.8);
+    expect(rig.petGroup.position.y).toBeCloseTo(completedY, 8);
+    expect(rig.petGroup.scale.toArray()).toEqual(completedScale);
+    expect(rig.petGroup.rotation.y).toBeCloseTo(0, 8);
+    motion.apply(rig, "focus", 3);
+    expect(Math.abs(rig.petGroup.rotation.y)).toBeLessThan(0.01);
+  });
+
+  it("preserves root and appendage poses across authored state entries", () => {
+    const rig = makeTimelineRig();
+    rig.leftFin!.rotation.z = -0.9;
+    rig.rightFin!.rotation.z = 0.9;
+    const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+    motion.apply(rig, "idle", 0);
+    motion.apply(rig, "focus", 1);
+    motion.apply(rig, "focus", 1.4);
+    const focusedPose = {
+      y: rig.petGroup.position.y,
+      scale: rig.petGroup.scale.toArray(),
+      flippers: [rig.leftFlipper!.rotation.z, rig.rightFlipper!.rotation.z],
+      fins: [rig.leftFin!.rotation.z, rig.rightFin!.rotation.z],
+    };
+
+    motion.apply(rig, "reward", 1.4);
+    expect(rig.petGroup.position.y).toBeCloseTo(focusedPose.y, 8);
+    expect(rig.petGroup.scale.toArray()).toEqual(focusedPose.scale);
+    expect([
+      rig.leftFlipper!.rotation.z,
+      rig.rightFlipper!.rotation.z,
+    ]).toEqual(focusedPose.flippers);
+    expect([rig.leftFin!.rotation.z, rig.rightFin!.rotation.z]).toEqual(
+      focusedPose.fins,
+    );
+
+    motion.apply(rig, "reward", 2.5);
+    motion.apply(rig, "levelUp", 2.5);
+    const levelEntryY = rig.petGroup.position.y;
+    motion.apply(rig, "levelUp", 4.3);
+    const levelExitY = rig.petGroup.position.y;
+    motion.apply(rig, "idle", 4.3);
+    expect(levelEntryY).toBeCloseTo(0.04, 6);
+    expect(rig.petGroup.position.y).toBeCloseTo(levelExitY, 8);
+    expect(rig.petGroup.rotation.y).toBeCloseTo(0, 8);
+  });
+
+  it.each(["bounce", "nod", "tilt"] as const)(
+    "consumes a %s reaction while an authored root clip owns motion",
+    (reaction) => {
+      for (const [state, duration, expectedY] of [
+        ["reward", 1.1, 0.04],
+        ["levelUp", 1.8, 0.052],
+      ] as const) {
+        const rig = makeTimelineRig();
+        const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+        motion.apply(rig, "idle", 0);
+        motion.apply(rig, state, 1);
+        motion.apply(rig, state, 1 + duration - 0.2);
+        motion.react(reaction);
+        motion.apply(rig, state, 1 + duration);
+
+        expect(rig.petGroup.position.y).toBeCloseTo(expectedY, 6);
+        expect(rig.petGroup.rotation.x).toBe(0);
+        expect(rig.petGroup.rotation.z).toBe(0);
+        expect(rig.petGroup.scale.toArray()).toEqual([1, 1, 1]);
+      }
+    },
+  );
+
+  it("uses an ease-out settle from 820ms through the end of reward", () => {
+    const rig = makeTimelineRig();
+    const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+    motion.apply(rig, "idle", 0);
+    motion.apply(rig, "reward", 1);
+
+    motion.apply(rig, "reward", 1.82);
+    expect(rig.petGroup.position.y).toBeCloseTo(0.048, 6);
+    motion.apply(rig, "reward", 1.96);
+    expect(rig.petGroup.position.y).toBeCloseTo(0.041, 6);
+    expect(rig.petGroup.scale.y).toBeCloseTo(0.99775, 5);
+    motion.apply(rig, "reward", 2.1);
+    expect(rig.petGroup.position.y).toBeCloseTo(0.04, 8);
+    expect(rig.petGroup.scale.toArray()).toEqual([1, 1, 1]);
+  });
+
   it("updates Basic material energy without replacement or per-frame colour caches", () => {
     const rig = makeTimelineRig();
     const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
@@ -258,6 +352,118 @@ describe("pet motion", () => {
     expect((rig.coreMat as THREE.MeshBasicMaterial).color.getHex()).not.toBe(
       idleColor,
     );
+  });
+
+  it.each(["reward", "levelUp"] as const)(
+    "ramps reduced-motion %s opacity to 180ms then settles",
+    (state) => {
+      const rig = makeTimelineRig();
+      rig.haloGlowMat = new THREE.SpriteMaterial({ transparent: true });
+      rig.coreGlowMat = new THREE.SpriteMaterial({ transparent: true });
+      const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+      const frame = { reducedMotion: true };
+      motion.apply(rig, "idle", 0, "calm", frame);
+      motion.apply(rig, state, 1, "celebrating", frame);
+      const entryHalo = rig.haloGlowMat.opacity;
+      const entryAura = rig.auraMat!.opacity;
+
+      motion.apply(rig, state, 1.18, "celebrating", frame);
+      expect(rig.haloGlowMat.opacity).toBeGreaterThan(entryHalo);
+      expect(rig.coreGlowMat.opacity).toBeGreaterThanOrEqual(
+        rig.haloGlowMat.opacity,
+      );
+      expect(rig.auraMat!.opacity).toBeGreaterThan(entryAura);
+
+      const settleAge = state === "reward" ? 0.68 : 0.88;
+      motion.apply(rig, state, 1 + settleAge, "celebrating", frame);
+      expect(rig.haloGlowMat.opacity).toBeCloseTo(entryHalo, 6);
+      expect(rig.auraMat!.opacity).toBeCloseTo(entryAura, 6);
+    },
+  );
+
+  it("eases reduced-motion brow expressions over 160ms", () => {
+    const rig = makeTimelineRig();
+    rig.leftBrow = new THREE.Group();
+    rig.rightBrow = new THREE.Group();
+    rig.leftBrow.userData.baseRotationZ = 0;
+    rig.rightBrow.userData.baseRotationZ = 0;
+    rig.leftBrow.userData.baseY = 1;
+    rig.rightBrow.userData.baseY = 1;
+    const motion = createPetMotionController({ levelTier: 0, streakTier: 0 });
+    const frame = { reducedMotion: true };
+    motion.apply(rig, "idle", 0, "calm", frame);
+    motion.apply(rig, "focus", 1, "focused", frame);
+    expect(rig.leftBrow.rotation.z).toBe(0);
+    expect(rig.leftBrow.position.y).toBe(1);
+
+    motion.apply(rig, "focus", 1.08, "focused", frame);
+    expect(rig.leftBrow.rotation.z).toBeGreaterThan(-0.16);
+    expect(rig.leftBrow.rotation.z).toBeLessThan(0);
+    motion.apply(rig, "focus", 1.16, "focused", frame);
+    expect(rig.leftBrow.rotation.z).toBeCloseTo(-0.16, 6);
+    expect(rig.rightBrow.rotation.z).toBeCloseTo(0.16, 6);
+  });
+
+  it("rebases decoration phases when reduced motion is disabled", () => {
+    const rig = makeTimelineRig();
+    const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+    motion.apply(rig, "idle", 0);
+    motion.apply(rig, "idle", 1 / 30);
+    motion.apply(rig, "idle", 2 / 30, "calm", { reducedMotion: true });
+    for (let frame = 3; frame <= 303; frame += 1) {
+      motion.apply(rig, "idle", frame / 30, "calm", {
+        reducedMotion: true,
+      });
+    }
+    const haloBefore = rig.halo!.rotation.toArray();
+    const orbitBefore = rig.orbitGroup!.rotation.toArray();
+
+    motion.apply(rig, "idle", 304 / 30, "calm", { reducedMotion: false });
+    expect(rig.halo!.rotation.toArray()).toEqual(haloBefore);
+    expect(rig.orbitGroup!.rotation.toArray()).toEqual(orbitBefore);
+  });
+
+  it("keeps streak-only aura subordinate in every state", () => {
+    const rig = makeTimelineRig();
+    rig.aura!.scale.setScalar(0.94);
+    const motion = createPetMotionController({ levelTier: 2, streakTier: 3 });
+    motion.apply(rig, "idle", 0);
+    for (const [state, enteredAt, age] of [
+      ["focus", 1, 0.4],
+      ["reward", 2, 0.35],
+      ["levelUp", 3, 0.7],
+      ["idle", 5, 0.2],
+    ] as const) {
+      motion.apply(rig, state, enteredAt);
+      motion.apply(rig, state, enteredAt + age);
+      expect(rig.aura!.scale.toArray()).toEqual([0.94, 0.94, 0.94]);
+      expect(rig.auraMat!.opacity).toBeLessThanOrEqual(0.09);
+    }
+  });
+
+  it("preserves Standard emissive response and reduced-motion easing", () => {
+    const rig = makeTimelineRig();
+    rig.coreMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    rig.accentMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    rig.eyeMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    rig.mouthMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    rig.evolutionMat = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    const motion = createPetMotionController({ levelTier: 3, streakTier: 3 });
+    const frame = { reducedMotion: true };
+    motion.apply(rig, "idle", 0, "calm", frame);
+    const idleIntensity = rig.coreMat.emissiveIntensity;
+
+    motion.apply(rig, "focus", 1, "focused", frame);
+    expect(rig.coreMat.emissiveIntensity).toBeCloseTo(idleIntensity, 8);
+    motion.apply(rig, "focus", 1.16, "focused", frame);
+    expect(rig.coreMat.emissiveIntensity).not.toBeCloseTo(idleIntensity, 3);
+    motion.apply(rig, "reward", 2, "celebrating", frame);
+    motion.apply(rig, "reward", 2.18, "celebrating", frame);
+    expect(rig.coreMat.emissiveIntensity).toBeGreaterThan(idleIntensity);
+    expect(rig.accentMat.emissiveIntensity).toBeGreaterThan(0);
+    expect(rig.eyeMat.emissiveIntensity).toBeGreaterThan(0);
+    expect(rig.mouthMat.emissiveIntensity).toBeGreaterThan(0);
+    expect(rig.evolutionMat.emissiveIntensity).toBeGreaterThan(0);
   });
 
   it("plays one poke bounce and returns to the base animation", () => {
