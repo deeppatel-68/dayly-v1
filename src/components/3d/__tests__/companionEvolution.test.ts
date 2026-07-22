@@ -20,6 +20,13 @@ describe("companion evolution", () => {
     expect(emerging.leftFin?.name).toBe("LeftEvolutionFin");
     expect(focused.orbitGroup?.children).toHaveLength(3);
     expect(ascended.aura?.name).toBe("StreakAura");
+    expect(ascended.orbitGroup?.children).toHaveLength(3);
+    expect(ascended.leftFin?.scale.x).toBeCloseTo(1.15);
+    expect(Math.abs(ascended.leftFin!.position.x)).toBeCloseTo(
+      Math.abs(emerging.leftFin!.position.x) + 0.03,
+    );
+    expect(ascended.aura?.scale.x).toBeCloseTo(1.1);
+    expect(ascended.auraMat?.opacity).toBeGreaterThanOrEqual(0.1);
 
     base.dispose();
     emerging.dispose();
@@ -31,6 +38,8 @@ describe("companion evolution", () => {
     const streakCompanion = create(0, 1);
     expect(streakCompanion.auraMat?.transparent).toBe(true);
     expect(streakCompanion.auraMat?.depthWrite).toBe(false);
+    expect(streakCompanion.aura?.scale.x).toBeCloseTo(0.94);
+    expect(streakCompanion.auraMat?.opacity).toBeLessThanOrEqual(0.09);
     streakCompanion.dispose();
   });
 });

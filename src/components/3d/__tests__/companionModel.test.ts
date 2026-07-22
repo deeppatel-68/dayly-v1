@@ -6,6 +6,7 @@ import {
   FACE_RIG_NODES,
 } from "../companionModel";
 import type { FaceRigNodes } from "../companionModel";
+import { createPetMotionController } from "../petMotion";
 
 vi.mock("expo-three", () => ({ loadAsync: vi.fn() }));
 
@@ -33,10 +34,10 @@ const EXPECTED_FACE_RIG_NODES: Record<FaceStyle, FaceRigNodes> = {
     leftPupil: "EveLeftPupil",
     rightPupil: "EveRightPupil",
     motion: {
-      blinkScaleY: 0.16,
-      focus: { eyeScaleX: 0.96, eyeScaleY: 0.62 },
-      reward: { eyeScaleX: 1.04, eyeScaleY: 0.82 },
-      levelUp: { eyeScaleX: 1.08, eyeScaleY: 1 },
+      blinkScaleY: 0.08,
+      focus: { eyeScaleX: 0.96, eyeScaleY: 0.72 },
+      reward: { eyeScaleX: 1.04, eyeScaleY: 0.9 },
+      levelUp: { eyeScaleX: 1.08, eyeScaleY: 1.1 },
     },
   },
   screen: {
@@ -45,10 +46,10 @@ const EXPECTED_FACE_RIG_NODES: Record<FaceStyle, FaceRigNodes> = {
     rightEye: "ScreenRightEye",
     mouth: "ScreenMouth",
     motion: {
-      blinkScaleY: 0.14,
-      focus: { eyeScaleX: 0.88, eyeScaleY: 0.58, mouthScaleY: 0.18 },
-      reward: { eyeScaleX: 1.06, eyeScaleY: 1.12, mouthScaleY: 1.25 },
-      levelUp: { eyeScaleX: 1.12, eyeScaleY: 1.2, mouthScaleY: 1.4 },
+      blinkScaleY: 0.12,
+      focus: { eyeScaleX: 0.88, eyeScaleY: 0.58, mouthScaleY: 0.45 },
+      reward: { eyeScaleX: 1.06, eyeScaleY: 0.78, mouthScaleY: 1.4 },
+      levelUp: { eyeScaleX: 1.12, eyeScaleY: 1.18, mouthScaleY: 1.7 },
     },
   },
   kirby: {
@@ -59,10 +60,10 @@ const EXPECTED_FACE_RIG_NODES: Record<FaceStyle, FaceRigNodes> = {
     rightPupil: "KirbyRightPupil",
     mouth: "KirbyMouth",
     motion: {
-      blinkScaleY: 0.12,
-      focus: { eyeScaleX: 0.88, eyeScaleY: 0.68, mouthScaleY: 0.16 },
-      reward: { eyeScaleX: 1.02, eyeScaleY: 0.82, mouthScaleY: 1.08 },
-      levelUp: { eyeScaleX: 1.1, eyeScaleY: 1.16, mouthScaleY: 1.22 },
+      blinkScaleY: 0.08,
+      focus: { eyeScaleX: 0.88, eyeScaleY: 0.68, mouthScaleY: 0.3 },
+      reward: { eyeScaleX: 1.02, eyeScaleY: 0.88, mouthScaleY: 1.12 },
+      levelUp: { eyeScaleX: 1.1, eyeScaleY: 1.12, mouthScaleY: 1.28 },
     },
   },
   joy: {
@@ -234,6 +235,35 @@ describe("companion model construction", () => {
       if (style === "eve") expect(profile.mouth).toBeUndefined();
 
       instance.dispose();
+    },
+  );
+
+  it.each(Object.keys(EXPECTED_FACE_RIG_NODES) as FaceStyle[])(
+    "animates the %s face from its authored base transform",
+    (style) => {
+      const profile = EXPECTED_FACE_RIG_NODES[style];
+      const states = ["focus", "reward", "levelUp"] as const;
+
+      for (const state of states) {
+        const instance = create(style);
+        const eyeBase = instance.rig.leftEye!.userData
+          .baseScale as THREE.Vector3;
+        const mouthBase = instance.rig.mouth?.userData
+          .baseScale as THREE.Vector3 | undefined;
+        const motion = createPetMotionController({ levelTier: 0, streakTier: 0 });
+
+        motion.apply(instance.rig, state, 10);
+
+        expect(instance.rig.leftEye!.scale.y).toBeCloseTo(
+          eyeBase.y * profile.motion[state].eyeScaleY,
+        );
+        if (instance.rig.mouth && mouthBase) {
+          expect(instance.rig.mouth.scale.y).toBeCloseTo(
+            mouthBase.y * profile.motion[state].mouthScaleY!,
+          );
+        }
+        instance.dispose();
+      }
     },
   );
 

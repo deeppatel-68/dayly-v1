@@ -51,6 +51,12 @@ export function createCompanionEvolution({
     rightFin.position.set(0.5, 0.74, -0.08);
     leftFin.rotation.set(0, 0, -0.9);
     rightFin.rotation.set(0, 0, 0.9);
+    if (levelTier >= 3) {
+      leftFin.position.x -= 0.03;
+      rightFin.position.x += 0.03;
+      leftFin.scale.setScalar(1.15);
+      rightFin.scale.setScalar(1.15);
+    }
     root.add(leftFin, rightFin);
   }
 
@@ -91,6 +97,12 @@ export function createCompanionEvolution({
     aura = new THREE.Mesh(auraGeometry, auraMat);
     aura.name = "StreakAura";
     aura.position.set(0, 0.78, -0.18);
+    if (levelTier >= 3) {
+      aura.scale.setScalar(1.1);
+      auraMat.opacity = 0.1;
+    } else {
+      aura.scale.setScalar(0.94);
+    }
     root.add(aura);
   }
 
