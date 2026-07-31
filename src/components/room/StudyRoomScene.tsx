@@ -64,6 +64,15 @@ interface StudyRoomSceneProps {
   selectedEquipSlot?: string | null;
 }
 
+function setMaterialBrightness(
+  material: THREE.MeshBasicMaterial,
+  intensity: number,
+) {
+  const baseColor = material.userData.baseColor as THREE.Color | undefined;
+  if (!baseColor) return;
+  material.color.copy(baseColor).multiplyScalar(Math.max(0, intensity));
+}
+
 // The My Space scene: the companion at home in a cozy study nook. Reacts to
 // focus/reward/level-up states (pet motion, desk lamp, string lights) and
 // renders every equipped shop item — wearables on the pet, decorations by
@@ -269,7 +278,9 @@ export default function StudyRoomScene({
         let previousTime = 0;
         let didNotifyReady = false;
 
+        let renderFailed = false;
         const animate = () => {
+          if (renderFailed) return;
           frameRef.current = setTimeout(
             animate,
             appActiveRef.current ? 1000 / 30 : 250,
@@ -307,15 +318,16 @@ export default function StudyRoomScene({
           windowLight.intensity +=
             (environment.windowIntensity - windowLight.intensity) * 0.06;
           room.skyMat.color.setRGB(...environment.sky);
-          room.skyMat.emissive.setRGB(...environment.sky);
-          room.skyMat.emissiveIntensity = environment.skyIntensity;
           room.celestialMat.color.setRGB(...environment.celestial);
-          room.celestialMat.emissive.setRGB(...environment.celestial);
-          room.celestialMat.emissiveIntensity = environment.celestialIntensity;
+          room.celestialMat.color.multiplyScalar(
+            environment.celestialIntensity,
+          );
           room.starMat.opacity = environment.starOpacity;
-          room.screenMat.emissiveIntensity = environment.screenIntensity;
-          room.lampGlowMat.emissiveIntensity =
-            0.85 + environment.lampIntensity * 0.48;
+          setMaterialBrightness(room.screenMat, environment.screenIntensity);
+          setMaterialBrightness(
+            room.lampGlowMat,
+            0.85 + environment.lampIntensity * 0.48,
+          );
           room.lampLight.intensity +=
             (environment.lampIntensity - room.lampLight.intensity) * 0.06;
           room.lampPoolMat.opacity = Math.min(
@@ -326,11 +338,13 @@ export default function StudyRoomScene({
             0.2,
             0.05 + environment.lampIntensity * 0.06,
           );
-          room.stringMat.emissiveIntensity =
+          setMaterialBrightness(
+            room.stringMat,
             environment.stringIntensity +
             (celebrating && !reducedMotionRef.current
               ? Math.sin(t * 8) * 0.22
-              : 0);
+              : 0),
+          );
 
           const localDate = environmentDateRef.current;
           const dayProgress =
@@ -378,11 +392,20 @@ export default function StudyRoomScene({
             );
           }
 
-          renderer.render(scene, camera);
-          gl.endFrameEXP();
-          if (!didNotifyReady) {
-            didNotifyReady = true;
-            onReadyRef.current?.();
+          try {
+            renderer.render(scene, camera);
+            gl.endFrameEXP();
+            if (!didNotifyReady) {
+              didNotifyReady = true;
+              onReadyRef.current?.();
+            }
+          } catch (error) {
+            renderFailed = true;
+            console.error("Error rendering Dayly study room scene:", error);
+            const isCurrentGeneration =
+              generation === setupGenerationRef.current;
+            stopAndDispose();
+            if (isCurrentGeneration) setFailed(true);
           }
         };
 
@@ -390,7 +413,7 @@ export default function StudyRoomScene({
         // source graph, but createCompanionInstance deep-clones every geometry
         // and material (the GLB carries no textures), so this GL context owns
         // fully independent resources even while the dashboard scene is mounted.
-        const source = await loadCompanion();
+        const source = await loadCompanion("lite");
         if (generation !== setupGenerationRef.current) {
           teardown();
           return;
@@ -398,6 +421,7 @@ export default function StudyRoomScene({
         const companion = createCompanionInstance(source, {
           accent,
           bodyColor,
+          detail: "lite",
           faceStyle,
           levelTier,
           streakTier,

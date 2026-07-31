@@ -56,10 +56,14 @@ export default function ConsistencyMatrixCard({
     [currentMonth]
   );
 
+  const today = new Date();
+  const isCurrentMonth =
+    currentMonth.getFullYear() === today.getFullYear() &&
+    currentMonth.getMonth() === today.getMonth();
+
   const changeMonth = (delta: number) => {
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1)
-    );
+    if (delta > 0 && isCurrentMonth) return;
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1));
   };
 
   if (habits.length === 0 || !selectedHabit) {
@@ -140,11 +144,14 @@ export default function ConsistencyMatrixCard({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Next month"
+          accessibilityState={{ disabled: isCurrentMonth }}
+          disabled={isCurrentMonth}
           hitSlop={4}
           onPress={() => changeMonth(1)}
           style={({ pressed }) => [
             styles.navButton,
-            pressed && { backgroundColor: colors.surfaceSelected },
+            pressed && !isCurrentMonth && { backgroundColor: colors.surfaceSelected },
+            isCurrentMonth && { opacity: 0.32 },
           ]}
         >
           <Ionicons name="chevron-forward" size={20} color={colors.text} />
@@ -170,26 +177,43 @@ export default function ConsistencyMatrixCard({
 
             const dateKey = toLocalDateKey(date);
             const isCompleted = selectedHabit.completionHistory?.[dateKey] === true;
-            const isToday = date.toDateString() === new Date().toDateString();
+            const isToday = date.toDateString() === today.toDateString();
+            const isFuture = dateKey > toLocalDateKey(today);
+            const isActiveDate =
+              dateKey >= selectedHabit.startsOn &&
+              (!selectedHabit.archivedOn || dateKey < selectedHabit.archivedOn);
+            const isAvailable = isActiveDate && !isFuture;
 
             return (
               <View
                 key={dateKey}
                 accessibilityLabel={`${date.toLocaleDateString()}, ${
-                  isCompleted ? "completed" : "not completed"
+                  !isAvailable
+                    ? "unavailable"
+                    : isCompleted
+                      ? "completed"
+                      : "not completed"
                 }`}
                 style={[
                   styles.calendarCell,
                   {
-                    backgroundColor: isCompleted
-                      ? colors.accent
-                      : colors.checkboxEmpty,
-                    borderColor: isToday
-                      ? colors.focusRing
+                    backgroundColor: !isAvailable
+                      ? "transparent"
                       : isCompleted
                         ? colors.accent
-                        : colors.border,
-                    borderWidth: isToday ? 2 : StyleSheet.hairlineWidth,
+                        : colors.checkboxEmpty,
+                    borderColor: !isAvailable
+                      ? "transparent"
+                      : isToday
+                        ? colors.focusRing
+                        : isCompleted
+                          ? colors.accent
+                          : colors.border,
+                    borderWidth: !isAvailable
+                      ? 0
+                      : isToday
+                        ? 2
+                        : StyleSheet.hairlineWidth,
                   },
                 ]}
               >
@@ -197,14 +221,18 @@ export default function ConsistencyMatrixCard({
                   style={[
                     styles.dateNumber,
                     {
-                      color: isCompleted ? colors.onAccent : colors.text,
+                      color: !isAvailable
+                        ? colors.textTertiary
+                        : isCompleted
+                          ? colors.onAccent
+                          : colors.text,
                       fontWeight: isToday ? "700" : "400",
                     },
                   ]}
                 >
                   {date.getDate()}
                 </Text>
-                {isCompleted ? (
+                {isCompleted && isAvailable ? (
                   <Ionicons
                     name="checkmark"
                     size={10}

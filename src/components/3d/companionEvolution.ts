@@ -12,7 +12,7 @@ export interface CompanionEvolution {
   rightFin?: THREE.Mesh;
   orbitGroup?: THREE.Group;
   aura?: THREE.Mesh;
-  evolutionMat: THREE.MeshStandardMaterial;
+  evolutionMat: THREE.MeshBasicMaterial;
   auraMat?: THREE.MeshBasicMaterial;
   dispose: () => void;
 }
@@ -27,12 +27,9 @@ export function createCompanionEvolution({
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
 
-  const evolutionMat = new THREE.MeshStandardMaterial({
+  const evolutionMat = new THREE.MeshBasicMaterial({
     color: accent.clone().multiplyScalar(0.92),
-    emissive: accent,
-    emissiveIntensity: 0.58,
-    metalness: 0.18,
-    roughness: 0.32,
+    toneMapped: false,
   });
   evolutionMat.name = "Evolution_Accent_Runtime";
   materials.add(evolutionMat);
@@ -54,6 +51,12 @@ export function createCompanionEvolution({
     rightFin.position.set(0.5, 0.74, -0.08);
     leftFin.rotation.set(0, 0, -0.9);
     rightFin.rotation.set(0, 0, 0.9);
+    if (levelTier >= 3) {
+      leftFin.position.x -= 0.03;
+      rightFin.position.x += 0.03;
+      leftFin.scale.setScalar(1.15);
+      rightFin.scale.setScalar(1.15);
+    }
     root.add(leftFin, rightFin);
   }
 
@@ -94,6 +97,12 @@ export function createCompanionEvolution({
     aura = new THREE.Mesh(auraGeometry, auraMat);
     aura.name = "StreakAura";
     aura.position.set(0, 0.78, -0.18);
+    if (levelTier >= 3) {
+      aura.scale.setScalar(1.1);
+      auraMat.opacity = 0.1;
+    } else {
+      aura.scale.setScalar(0.94);
+    }
     root.add(aura);
   }
 

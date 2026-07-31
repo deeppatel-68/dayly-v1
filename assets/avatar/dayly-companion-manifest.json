@@ -1,0 +1,68 @@
+{
+  "hero": {
+    "activeTriangles": {
+      "Face_Classic": 10212,
+      "Face_Eve": 10036,
+      "Face_Joy": 9716,
+      "Face_Kirby": 10544,
+      "Face_Screen": 9704
+    },
+    "animations": 0,
+    "bytes": 403324,
+    "indexCount": 47388,
+    "primitiveCount": 66,
+    "requiredNames": [
+      "Body",
+      "Body_Charcoal",
+      "FacePanel",
+      "VisorRim",
+      "LeftEye",
+      "RightEye",
+      "VisorLip",
+      "HaloCharm",
+      "EnergyCore",
+      "LeftFlipper",
+      "RightFlipper",
+      "Face_Classic",
+      "Face_Eve",
+      "Face_Screen",
+      "Face_Kirby",
+      "Face_Joy"
+    ],
+    "skins": 0,
+    "textures": 0
+  },
+  "lite": {
+    "activeTriangles": {
+      "Face_Classic": 6132,
+      "Face_Eve": 5956,
+      "Face_Joy": 6116,
+      "Face_Kirby": 6482,
+      "Face_Screen": 5862
+    },
+    "animations": 0,
+    "bytes": 250168,
+    "indexCount": 27564,
+    "primitiveCount": 50,
+    "requiredNames": [
+      "Body",
+      "Body_Charcoal",
+      "FacePanel",
+      "VisorRim",
+      "LeftEye",
+      "RightEye",
+      "VisorLip",
+      "HaloCharm",
+      "EnergyCore",
+      "LeftFlipper",
+      "RightFlipper",
+      "Face_Classic",
+      "Face_Eve",
+      "Face_Screen",
+      "Face_Kirby",
+      "Face_Joy"
+    ],
+    "skins": 0,
+    "textures": 0
+  }
+}

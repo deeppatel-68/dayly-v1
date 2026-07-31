@@ -111,6 +111,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <View style={styles.heroCopy}>
+            <Text style={[styles.heroEyebrow, { color: colors.accent }]}>YOUR SPACE</Text>
             <View style={styles.nameRow}>
               <Text numberOfLines={1} style={[styles.username, { color: colors.text }]}>
                 {username}
@@ -125,15 +126,20 @@ export default function ProfileScreen() {
             <Text numberOfLines={1} style={[styles.email, { color: colors.textSecondary }]}>
               {email}
             </Text>
-            <View style={[styles.levelBadge, { backgroundColor: colors.surfaceRaised }]}>
-              <Ionicons name="sparkles-outline" size={13} color={colors.accent} />
+            <View
+              style={[
+                styles.levelBadge,
+                { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons name="sparkles" size={12} color={colors.accent} />
               <Text style={[styles.levelText, { color: colors.text }]}>Level {level}</Text>
               <Text style={[styles.levelXp, { color: colors.textSecondary }]}>{xp} XP</Text>
             </View>
           </View>
         </View>
 
-        <StudioSection title="Activity">
+        <StudioSection title="Your rhythm">
           <StudioGroup style={styles.metricsGroup}>
             <Metric value={totalCount} label="Habits" />
             <Metric value={`${Math.round(percentage)}%`} label="Today" divider />
@@ -141,11 +147,11 @@ export default function ProfileScreen() {
           </StudioGroup>
         </StudioSection>
 
-        <StudioSection title="Companion">
+        <StudioSection title="Companion gallery">
           <StudioGroup>
             <StudioRow
               title={companionName}
-              detail="Appearance and equipment"
+              detail="Appearance, equipment, and room"
               leading={
                 <View style={[styles.rowIcon, { backgroundColor: colors.completedBackground }]}>
                   <Ionicons name="happy-outline" size={19} color={colors.accent} />
@@ -158,11 +164,11 @@ export default function ProfileScreen() {
           </StudioGroup>
         </StudioSection>
 
-        <StudioSection title="Community">
+        <StudioSection title="Shared momentum">
           <StudioGroup>
             <StudioRow
               title="Friends"
-              detail="Compare your shared momentum"
+              detail="See the rhythms you share"
               leading={
                 <View style={[styles.rowIcon, { backgroundColor: colors.surfaceRaised }]}>
                   <Ionicons name="people-outline" size={19} color={colors.accent} />
@@ -175,7 +181,7 @@ export default function ProfileScreen() {
           </StudioGroup>
         </StudioSection>
 
-        <StudioSection title="Appearance">
+        <StudioSection title="Studio appearance">
           <StudioGroup>
             <View style={styles.preferenceRow}>
               <View style={styles.preferenceCopy}>
@@ -206,7 +212,7 @@ export default function ProfileScreen() {
           </StudioGroup>
         </StudioSection>
 
-        <StudioSection title="Account">
+        <StudioSection title="Account session">
           <StudioGroup>
             <StudioRow
               title="Sign out"
@@ -316,17 +322,28 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xxl,
   },
-  hero: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.sm },
+  hero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
+  },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: BorderRadius.xl,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { fontSize: 30, fontWeight: "700" },
-  heroCopy: { flex: 1, minWidth: 0, gap: 3 },
+  avatarText: { fontSize: 30, fontWeight: "700", fontVariant: ["small-caps"] },
+  heroCopy: { flex: 1, minWidth: 0, gap: 3, paddingVertical: 2 },
+  heroEyebrow: {
+    ...StudioType.detail,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+  },
   nameRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
   username: { ...StudioType.title, flex: 1 },
   editButton: { width: 36, height: 36, borderRadius: BorderRadius.sm },
@@ -337,6 +354,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.xs,
     borderRadius: BorderRadius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 5,
     marginTop: Spacing.xs,

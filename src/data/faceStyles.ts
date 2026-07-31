@@ -9,14 +9,14 @@ export interface AvatarFaceStyle {
 }
 
 export const AVATAR_FACE_STYLES: AvatarFaceStyle[] = [
-  { id: "classic", name: "Classic" },
-  { id: "eve", name: "Eve" },
-  { id: "screen", name: "Screen" },
-  { id: "kirby", name: "Kirby" },
-  { id: "joy", name: "Joy" },
+  { id: "classic", name: "Orbit" },
+  { id: "eve", name: "Focus" },
+  { id: "screen", name: "Pixel" },
+  { id: "kirby", name: "Spark" },
+  { id: "joy", name: "Rest" },
 ];
 
-export const DEFAULT_FACE_STYLE: FaceStyle = "joy";
+export const DEFAULT_FACE_STYLE: FaceStyle = "classic";
 
 const FACE_STYLE_IDS = new Set<string>(AVATAR_FACE_STYLES.map((f) => f.id));
 

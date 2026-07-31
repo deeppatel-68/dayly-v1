@@ -7,9 +7,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 const PERIODS: { id: AnalyticsPeriod; label: string }[] = [
   { id: "day", label: "Today" },
-  { id: "week", label: "7 Days" },
-  { id: "month", label: "30 Days" },
-  { id: "3months", label: "13 Weeks" },
+  { id: "week", label: "7D" },
+  { id: "month", label: "30D" },
+  { id: "3months", label: "13W" },
 ];
 
 interface PeriodSelectorProps {
@@ -37,7 +37,15 @@ export default function PeriodSelector({
           <Pressable
             key={period.id}
             accessibilityRole="tab"
-            accessibilityLabel={`${period.label} analytics period`}
+            accessibilityLabel={`${
+              period.id === "day"
+                ? "Today"
+                : period.id === "week"
+                  ? "7 days"
+                  : period.id === "month"
+                    ? "30 days"
+                    : "13 weeks"
+            } analytics period`}
             accessibilityState={{ selected: isSelected }}
             onPress={() => onSelect(period.id)}
             style={({ pressed }) => [

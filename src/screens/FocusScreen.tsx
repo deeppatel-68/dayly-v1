@@ -20,15 +20,27 @@ export default function FocusScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.intro}>
+          <Text selectable style={[styles.eyebrow, { color: colors.accentLight }]}>
+            Deep work
+          </Text>
           <Text selectable style={[styles.message, { color: colors.text }]}>
-            Protect one block of time.
+            Make a room for one good hour.
           </Text>
           <Text selectable style={[styles.detail, { color: colors.textSecondary }]}>
-            Every completed minute becomes progress your companion can wear.
+            Every finished minute becomes progress that Deep can carry with you.
           </Text>
         </View>
-        {!showStudySpace ? <FocusTimer onStart={() => setShowStudySpace(true)} /> : null}
-        <StudioSection title="Session intention">
+        {!showStudySpace ? (
+          <View
+            style={[
+              styles.focusStage,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <FocusTimer onStart={() => setShowStudySpace(true)} />
+          </View>
+        ) : null}
+        <StudioSection title="A small intention">
           <SessionTasks />
         </StudioSection>
       </ScrollView>
@@ -43,8 +55,19 @@ export default function FocusScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingBottom: Spacing.xxl, gap: Spacing.lg },
+  content: { paddingTop: Spacing.sm, paddingBottom: Spacing.xxl, gap: Spacing.xl },
   intro: { paddingHorizontal: Spacing.md, gap: Spacing.xs },
-  message: { ...StudioType.title },
+  eyebrow: {
+    ...StudioType.section,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+  },
+  message: { ...StudioType.display },
   detail: { ...StudioType.body },
+  focusStage: {
+    marginHorizontal: Spacing.md,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
 });

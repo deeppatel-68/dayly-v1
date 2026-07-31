@@ -26,12 +26,13 @@ export type RoomAnchor =
   | "companion_corner";
 
 export interface EquipmentMaterials {
-  dark: THREE.MeshStandardMaterial;
-  frame: THREE.MeshStandardMaterial;
-  glow: THREE.MeshStandardMaterial;
-  leaf: THREE.MeshStandardMaterial;
-  wood: THREE.MeshStandardMaterial;
-  screen: THREE.MeshStandardMaterial;
+  dark: THREE.MeshBasicMaterial;
+  frame: THREE.MeshBasicMaterial;
+  glow: THREE.MeshBasicMaterial;
+  leaf: THREE.MeshBasicMaterial;
+  wood: THREE.MeshBasicMaterial;
+  screen: THREE.MeshBasicMaterial;
+  cloth: THREE.MeshBasicMaterial;
   dispose: () => void;
 }
 
@@ -40,37 +41,19 @@ export interface EquipmentMaterials {
 export function createEquipmentMaterials(
   accent: THREE.Color,
 ): EquipmentMaterials {
-  const dark = new THREE.MeshStandardMaterial({
-    color: 0x1f1f23,
-    roughness: 0.5,
-    metalness: 0.1,
-  });
-  const frame = new THREE.MeshStandardMaterial({
-    color: 0x111111,
-    roughness: 0.4,
-  });
-  const glow = new THREE.MeshStandardMaterial({
-    color: accent,
-    emissive: accent,
-    // Retuned ~1.3x hotter for ACES tone mapping (sceneRenderer.ts)
-    emissiveIntensity: 1.2,
-  });
-  const leaf = new THREE.MeshStandardMaterial({
-    color: 0x4a7c59,
-    flatShading: true,
-    roughness: 0.7,
-  });
-  const wood = new THREE.MeshStandardMaterial({
-    color: 0x4a3b2e,
-    roughness: 0.75,
-  });
-  const screen = new THREE.MeshStandardMaterial({
-    color: 0x0d0d10,
-    emissive: 0x8fb3c7,
-    emissiveIntensity: 0.35,
-    roughness: 0.3,
-  });
-  const all = [dark, frame, glow, leaf, wood, screen];
+  const material = (color: THREE.ColorRepresentation) => {
+    const value = new THREE.MeshBasicMaterial({ color });
+    value.toneMapped = false;
+    return value;
+  };
+  const dark = material(0x1f1f23);
+  const frame = material(0x111111);
+  const glow = material(accent);
+  const leaf = material(0x4a7c59);
+  const wood = material(0x4a3b2e);
+  const screen = material(0x8fb3c7);
+  const cloth = material(0x9c6b52);
+  const all = [dark, frame, glow, leaf, wood, screen, cloth];
   return {
     dark,
     frame,
@@ -78,6 +61,7 @@ export function createEquipmentMaterials(
     leaf,
     wood,
     screen,
+    cloth,
     dispose: () => all.forEach((m) => m.dispose()),
   };
 }
@@ -192,6 +176,81 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
       return group;
     },
   },
+  // Wrapped band fit-checked against the GLB in node (bbox pass): the hull is
+  // widest (x ±0.577) around y 0.75 and the flippers own y 0.31-0.63 on the
+  // front sides, so the band rides above them (sides y≈0.7) and pitches
+  // forward (+0.25 rad) so the front dips to y≈0.58 — below every face
+  // style's mouth (lowest: Joy at y 0.662) instead of covering it. The tube
+  // annulus straddles the measured surface on all sides (embeds ~0.03-0.06,
+  // outer edge proud), so it reads as wrapped rather than floating.
+  "cozy-scarf": {
+    slot: "pet",
+    equipSlot: "wearable:neck",
+    build: (m) => {
+      const group = new THREE.Group();
+      const band = mesh(new THREE.TorusGeometry(0.5, 0.075, 10, 24), m.cloth, 0, 0.7, 0);
+      band.rotation.x = Math.PI / 2 + 0.25;
+      band.scale.set(1.08, 1.0, 0.8);
+      const knot = mesh(new THREE.SphereGeometry(0.075, 10, 8), m.cloth, 0.24, 0.585, 0.46);
+      const tail = mesh(new THREE.BoxGeometry(0.11, 0.22, 0.035), m.cloth, 0.26, 0.46, 0.45);
+      tail.rotation.z = 0.18;
+      tail.rotation.x = 0.35;
+      const tailTip = mesh(new THREE.BoxGeometry(0.11, 0.05, 0.037), m.frame, 0.28, 0.36, 0.42);
+      tailTip.rotation.z = 0.18;
+      tailTip.rotation.x = 0.35;
+      group.add(band, knot, tail, tailTip);
+      return group;
+    },
+  },
+  // Slim daypack fit-checked against the GLB in node: back surface bottoms
+  // out at z −0.524, so the pack body overlaps it by ~0.05 (seated, not
+  // floating). Strap arcs stay under y 1.04 so a co-equipped focus-cap dome
+  // (rim y 1.056) never intersects them.
+  "mini-backpack": {
+    slot: "pet",
+    equipSlot: "wearable:back",
+    build: (m) => {
+      const group = new THREE.Group();
+      const pack = mesh(new THREE.SphereGeometry(0.24, 14, 10), m.dark, 0, 0.72, -0.6);
+      pack.scale.set(0.82, 1.05, 0.55);
+      const flap = mesh(new THREE.SphereGeometry(0.2, 12, 8), m.frame, 0, 0.86, -0.62);
+      flap.scale.set(0.78, 0.5, 0.55);
+      const clasp = mesh(new THREE.BoxGeometry(0.05, 0.035, 0.02), m.glow, 0, 0.8, -0.74);
+      const strapGeo = new THREE.TorusGeometry(0.26, 0.02, 6, 12, Math.PI * 0.75);
+      const leftStrap = mesh(strapGeo, m.frame, -0.13, 0.78, -0.38);
+      leftStrap.rotation.y = Math.PI / 2;
+      leftStrap.rotation.z = 0.4;
+      const rightStrap = mesh(strapGeo, m.frame, 0.13, 0.78, -0.38);
+      rightStrap.rotation.y = Math.PI / 2;
+      rightStrap.rotation.z = 0.4;
+      group.add(pack, flap, clasp, leftStrap, rightStrap);
+      return group;
+    },
+  },
+  // Second orbit ring around the built-in HaloCharm — GLB check: charm spans
+  // y 1.304-1.387 at radius ~0.15, crown tops out at y 1.168. Radius 0.3 at
+  // 0.38 rad tilt keeps the ring's low point (y ≈ 1.229) above both the
+  // crown and a co-equipped focus-cap dome (top y 1.225).
+  "halo-orbit-ring": {
+    slot: "pet",
+    equipSlot: "halo:style",
+    build: (m) => {
+      const group = new THREE.Group();
+      group.position.set(0, 1.34, 0);
+      group.rotation.x = 0.38;
+      group.rotation.z = -0.12;
+      const ring = mesh(new THREE.TorusGeometry(0.3, 0.012, 6, 28), m.glow);
+      ring.rotation.x = Math.PI / 2;
+      const beadGeo = new THREE.SphereGeometry(0.028, 8, 6);
+      for (const angle of [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3]) {
+        group.add(
+          mesh(beadGeo, m.glow, Math.cos(angle) * 0.3, 0, Math.sin(angle) * 0.3),
+        );
+      }
+      group.add(ring);
+      return group;
+    },
+  },
   // Render-verified against the pod: the pod's raised puck tier (where the
   // pet stands) has radius 0.62, but the old (0.62, _, 0.3) position is
   // radius 0.69 from the pod origin — past the puck edge, so despite y=0.09
@@ -242,6 +301,30 @@ export const EQUIPMENT: Record<string, EquipmentDef> = {
         ),
         mesh(new THREE.SphereGeometry(0.05, 12, 10), m.glow, -0.64, 0.48, 0.26),
       );
+      return group;
+    },
+  },
+  // Aurora floor treatment for the pod, fit-checked against the GLB: the
+  // base tier surface sits at y ≈ 0.04 (neon-lamp base bottoms out there and
+  // PlatformRing rides proud of it), and the pod's own ring occupies radius
+  // 0.701-0.723 — so the aurora pair straddles it at 0.68/0.76 with sparkle
+  // dots pulled inside the pair at radius 0.65, all within the 0.80 base.
+  "pod-aurora": {
+    slot: "platform",
+    equipSlot: "pod:theme",
+    build: (m) => {
+      const group = new THREE.Group();
+      const inner = mesh(new THREE.TorusGeometry(0.68, 0.01, 6, 32), m.glow, 0, 0.048, 0);
+      inner.rotation.x = -Math.PI / 2;
+      const outer = mesh(new THREE.TorusGeometry(0.76, 0.008, 6, 32), m.glow, 0, 0.048, 0);
+      outer.rotation.x = -Math.PI / 2;
+      group.add(inner, outer);
+      const dotGeo = new THREE.SphereGeometry(0.02, 8, 6);
+      for (const angle of [0.25, 0.75, 1.25, 1.75].map((t) => t * Math.PI)) {
+        group.add(
+          mesh(dotGeo, m.glow, Math.cos(angle) * 0.65, 0.05, Math.sin(angle) * 0.65),
+        );
+      }
       return group;
     },
   },

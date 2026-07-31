@@ -23,7 +23,12 @@ export function createProceduralCompanion({
   const materials = new Set<THREE.Material>();
 
   const material = (params: THREE.MeshStandardMaterialParameters) => {
-    const value = new THREE.MeshStandardMaterial(params);
+    const color = new THREE.Color(params.color ?? 0xffffff);
+    if (params.emissive) {
+      color.lerp(new THREE.Color(params.emissive), 0.32);
+    }
+    const value = new THREE.MeshBasicMaterial({ color });
+    value.toneMapped = false;
     materials.add(value);
     return value;
   };

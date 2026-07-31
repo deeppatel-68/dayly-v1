@@ -75,8 +75,31 @@ export default function FocusTrendCard({
       <View style={[styles.stateCard, surfaceStyle]}>
         <Ionicons name="timer-outline" size={24} color={colors.textSecondary} />
         <Text style={[styles.stateText, { color: colors.textSecondary }]}>
-          No focus sessions yet
+          No focus sessions in this period
         </Text>
+      </View>
+    );
+  }
+
+  if (data.length === 1) {
+    return (
+      <View style={[styles.todayCard, surfaceStyle]}>
+        <View
+          style={[
+            styles.todayIcon,
+            { backgroundColor: colors.completedBackground },
+          ]}
+        >
+          <Ionicons name="timer-outline" size={20} color={colors.accent} />
+        </View>
+        <View>
+          <Text style={[styles.todayValue, { color: colors.text }]}>
+            {data[0].value} min
+          </Text>
+          <Text style={[styles.todayDetail, { color: colors.textSecondary }]}>
+            Focused today
+          </Text>
+        </View>
       </View>
     );
   }
@@ -87,7 +110,6 @@ export default function FocusTrendCard({
         data={data}
         color={colors.accent}
         height={150}
-        showValues={data.length <= 7}
         gridColor={colors.border}
         axisColor={colors.textSecondary}
         labelColor={colors.text}
@@ -117,6 +139,26 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   stateText: { ...StudioType.bodyStrong, textAlign: "center" },
+  todayCard: {
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+    minHeight: 116,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  todayIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  todayValue: { ...StudioType.display, fontVariant: ["tabular-nums"] },
+  todayDetail: { ...StudioType.detail, marginTop: 2 },
   retryButton: {
     minHeight: TouchTarget,
     flexDirection: "row",

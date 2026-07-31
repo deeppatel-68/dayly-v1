@@ -23,6 +23,10 @@ export default function CompletionChartCard({
   if (!hasHabits) return null;
 
   const showLabels = data.some((point) => point.label);
+  const hasApplicableDates = data.some((point) => point.applicable !== false);
+  const hasActivity = data.some(
+    (point) => point.applicable !== false && point.value > 0
+  );
 
   return (
     <View
@@ -34,58 +38,77 @@ export default function CompletionChartCard({
       <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
         Habit completion
       </Text>
-      <View
-        accessible
-        accessibilityRole="image"
-        accessibilityLabel="Habit completion chart"
-      >
-        <Svg
-          width="100%"
-          height={CHART_HEIGHT}
-          viewBox={`0 0 ${data.length * 10} ${CHART_HEIGHT}`}
-        >
-          {data.map((point, index) => {
-            const barWidth = 10 - BAR_GAP;
-            const x = index * 10 + BAR_GAP / 2;
-            const barHeight = Math.max(2, (point.value / 100) * CHART_HEIGHT);
-            const y = CHART_HEIGHT - barHeight;
-
-            return (
-              <React.Fragment key={index}>
-                <Rect
-                  x={x}
-                  y={0}
-                  width={barWidth}
-                  height={CHART_HEIGHT}
-                  rx={2}
-                  fill={colors.checkboxEmpty}
-                />
-                <Rect
-                  x={x}
-                  y={y}
-                  width={barWidth}
-                  height={barHeight}
-                  rx={2}
-                  fill={colors.accent}
-                />
-              </React.Fragment>
-            );
-          })}
-        </Svg>
-      </View>
-      {showLabels ? (
-        <View style={styles.labelsRow}>
-          {data.map((point, index) => (
-            <Text
-              key={index}
-              numberOfLines={1}
-              style={[styles.labelText, { color: colors.textSecondary }]}
+      {!hasApplicableDates ? (
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          No habits were active in this period.
+        </Text>
+      ) : !hasActivity ? (
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          No rituals kept in this period yet.
+        </Text>
+      ) : (
+        <>
+          <View
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel="Habit completion chart"
+          >
+            <Svg
+              width="100%"
+              height={CHART_HEIGHT}
+              viewBox={`0 0 ${data.length * 10} ${CHART_HEIGHT}`}
             >
-              {point.label}
-            </Text>
-          ))}
-        </View>
-      ) : null}
+              {data.map((point, index) => {
+                const barWidth = 10 - BAR_GAP;
+                const x = index * 10 + BAR_GAP / 2;
+                const barHeight =
+                  point.value > 0
+                    ? Math.max(2, (point.value / 100) * CHART_HEIGHT)
+                    : 0;
+                const y = CHART_HEIGHT - barHeight;
+
+                return (
+                  <React.Fragment key={index}>
+                    {point.applicable !== false ? (
+                      <Rect
+                        x={x}
+                        y={0}
+                        width={barWidth}
+                        height={CHART_HEIGHT}
+                        rx={2}
+                        fill={colors.checkboxEmpty}
+                      />
+                    ) : null}
+                    {barHeight > 0 ? (
+                      <Rect
+                        x={x}
+                        y={y}
+                        width={barWidth}
+                        height={barHeight}
+                        rx={2}
+                        fill={colors.accent}
+                      />
+                    ) : null}
+                  </React.Fragment>
+                );
+              })}
+            </Svg>
+          </View>
+          {showLabels ? (
+            <View style={styles.labelsRow}>
+              {data.map((point, index) => (
+                <Text
+                  key={index}
+                  numberOfLines={1}
+                  style={[styles.labelText, { color: colors.textSecondary }]}
+                >
+                  {point.label}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+        </>
+      )}
     </View>
   );
 }
@@ -115,4 +138,5 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
   },
+  emptyText: { ...StudioType.body, minHeight: CHART_HEIGHT },
 });

@@ -1,4 +1,5 @@
-import { BorderRadius, Spacing } from "@/constants/Spacing";
+import { BorderRadius, Spacing, TouchTarget } from "@/constants/Spacing";
+import { StudioType } from "@/constants/Typography";
 import { useHabits } from "@/context/HabitsContext";
 import { useTheme } from "@/context/ThemeContext";
 import { toLocalDateKey } from "@/utils/dateKey";
@@ -29,11 +30,19 @@ function ConsistencyCalender() {
   }, [currentDate]);
 
   const todayKey = toLocalDateKey();
+  const currentWeekStartKey = useMemo(() => {
+    const date = new Date();
+    const weekday = date.getDay();
+    date.setDate(date.getDate() - (weekday === 0 ? 6 : weekday - 1));
+    return toLocalDateKey(date);
+  }, []);
+  const canMoveForward = toLocalDateKey(weekDays[0]) < currentWeekStartKey;
 
   const dayNames = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 
   // Navigate to previous week
   const changeWeek = (direction: "prev" | "next") => {
+    if (direction === "next" && !canMoveForward) return;
     const newDate = new Date(currentDate);
     newDate.setDate(currentDate.getDate() + (direction === "prev" ? -7 : 7));
     setCurrentDate(newDate);
@@ -63,11 +72,9 @@ function ConsistencyCalender() {
 
   return (
     <View style={styles.container}>
-      {/* Header with month navigation */}
-
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textSecondary }]}>
-          CONSISTENCY CALENDAR
+          THIS WEEK
         </Text>
         <View style={styles.navigation}>
           <Pressable
@@ -81,20 +88,20 @@ function ConsistencyCalender() {
           </Text>
           <Pressable
             onPress={() => changeWeek("next")}
-            style={styles.navButton}
+            disabled={!canMoveForward}
+            accessibilityState={{ disabled: !canMoveForward }}
+            style={[styles.navButton, !canMoveForward && styles.navButtonDisabled]}
           >
             <Ionicons name="chevron-forward" size={20} color={colors.text} />
           </Pressable>
         </View>
       </View>
-      {/* Calendar cards for each day of the week */}
       <View
         style={[
           styles.calendarCard,
           { backgroundColor: colors.card, borderColor: colors.border },
         ]}
       >
-        {/* Day names header — same 30/70 split as habit rows so columns align */}
         <View style={[styles.daysRow, { borderBottomColor: colors.border }]}>
           <View style={styles.dayLabelSpacer} />
           <View style={styles.daysColumns}>
@@ -130,7 +137,6 @@ function ConsistencyCalender() {
             })}
           </View>
         </View>
-        {/* Habit rows */}
         {habits.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -203,18 +209,17 @@ export default ConsistencyCalender;
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing.sm,
-    marginBottom: Spacing.xl, // Add this line
+    marginBottom: Spacing.xl,
   },
   header: {
-    flexDirection: "row", // Add this
-    alignItems: "center", // Add this
-    justifyContent: "space-between", // Add this
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: Spacing.md,
   },
   title: {
-    fontSize: 12,
-    fontFamily: "Outfit-Regular",
-    letterSpacing: 1,
+    ...StudioType.section,
+    letterSpacing: 1.1,
   },
   navigation: {
     flexDirection: "row",
@@ -222,25 +227,21 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   navButton: {
-    padding: Spacing.xs,
+    width: TouchTarget,
+    height: TouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  navButtonDisabled: { opacity: 0.32 },
   monthText: {
-    fontSize: 14,
-    fontFamily: "Outfit-SemiBold",
+    ...StudioType.bodyStrong,
     minWidth: 100,
     textAlign: "center",
   },
-  // UPDATE calendarCard style (around line 212):
   calendarCard: {
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.md,
-    // ADD THESE:
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
   },
   daysRow: {
     flexDirection: "row",
@@ -265,14 +266,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dayName: {
+    ...StudioType.detail,
     fontSize: 10,
-    fontFamily: "Outfit-Regular",
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   dayNumber: {
+    ...StudioType.detail,
     fontSize: 14,
-    fontFamily: "Outfit-Bold",
+    fontWeight: "700",
   },
   habitRow: {
     flexDirection: "row",
@@ -282,8 +284,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   habitTitle: {
-    fontSize: 12,
-    fontFamily: "Outfit-Medium",
+    ...StudioType.detail,
+    fontWeight: "600",
     flex: 0.3,
     marginRight: Spacing.sm,
   },
@@ -291,7 +293,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flex: 0.7,
     justifyContent: "space-between",
-    paddingHorizontal: 0, // Match daysRow padding
+    paddingHorizontal: 0,
   },
   checkboxContainer: {
     flex: 1,
@@ -312,8 +314,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyText: {
-    fontSize: 14,
-    fontFamily: "Outfit-Regular",
+    ...StudioType.body,
     textAlign: "center",
   },
 });

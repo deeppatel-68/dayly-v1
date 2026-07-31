@@ -25,6 +25,7 @@ export const AuthScreen = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [focusedField, setFocusedField] = useState<"email" | "password" | null>(null);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -134,57 +135,67 @@ export const AuthScreen = () => {
           contentContainerStyle={styles.content}
         >
           <AuthBrand colors={colors} />
-          <Text style={[styles.title, { color: colors.accent }]}>
-            Reset Password
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Enter your email to receive a reset link
-          </Text>
+          <View style={styles.entryCopy}>
+            <Text style={[styles.eyebrow, { color: colors.accent }]}>ACCOUNT RECOVERY</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Find your way back</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              We will send a secure reset link to your inbox.
+            </Text>
+          </View>
 
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.surface,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            placeholder="Email"
-            placeholderTextColor={colors.textTertiary}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            editable={!loading}
-          />
+          <View style={[styles.formSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Email address</Text>
+            <TextInput
+              accessibilityLabel="Email address"
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surfaceRaised,
+                  color: colors.text,
+                  borderColor: focusedField === "email" ? colors.focusRing : colors.border,
+                },
+              ]}
+              placeholder="you@example.com"
+              placeholderTextColor={colors.textTertiary}
+              value={email}
+              onChangeText={setEmail}
+              onFocus={() => setFocusedField("email")}
+              onBlur={() => setFocusedField(null)}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!loading}
+            />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send password reset link"
+              accessibilityState={{ disabled: loading, busy: loading }}
+              style={({ pressed }) => [
+                styles.button,
+                { backgroundColor: colors.accent },
+                loading && styles.buttonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={handleForgotPassword}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.onAccent} />
+              ) : (
+                <Text style={[styles.buttonText, { color: colors.onAccent }]}>Send Reset Link</Text>
+              )}
+            </Pressable>
+          </View>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              { backgroundColor: colors.accent },
-              loading && styles.buttonDisabled,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={handleForgotPassword}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.onAccent} />
-            ) : (
-              <Text style={[styles.buttonText, { color: colors.onAccent }]}>Send Reset Link</Text>
-            )}
-          </Pressable>
-
-          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to sign in"
             onPress={() => setShowForgotPassword(false)}
             disabled={loading}
             style={styles.switchButton}
           >
-            <Text style={[styles.switchText, { color: colors.textSecondary }]}>
-              Back to Sign In
-            </Text>
+            <Text style={[styles.switchText, { color: colors.textSecondary }]}>Back to Sign In</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -203,84 +214,104 @@ export const AuthScreen = () => {
         contentContainerStyle={styles.content}
       >
         <AuthBrand colors={colors} />
-        <Text style={[styles.title, { color: colors.text }]}>
-          {isSignUp ? "Create your Dayly" : "Welcome back"}
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {isSignUp
-            ? "Build habits, focus deeply, and grow a companion of your own."
-            : "Your habits, focus history, and companion are waiting."}
-        </Text>
+        <View style={styles.entryCopy}>
+          <Text style={[styles.eyebrow, { color: colors.accent }]}>
+            {isSignUp ? "BEGIN YOUR RHYTHM" : "YOUR COMPANION STUDIO"}
+          </Text>
+          <Text style={[styles.title, { color: colors.text }]}>
+            {isSignUp ? "Make space for progress" : "Welcome back"}
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            {isSignUp
+              ? "Build habits, focus deeply, and grow a companion of your own."
+              : "Your habits, focus history, and companion are waiting."}
+          </Text>
+        </View>
 
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.surface,
-              color: colors.text,
-              borderColor: colors.border,
-            },
-          ]}
-          placeholder="Email"
-          placeholderTextColor={colors.textTertiary}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          autoComplete="email"
-          editable={!loading}
-        />
+        <View style={[styles.formSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Email address</Text>
+          <TextInput
+            accessibilityLabel="Email address"
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surfaceRaised,
+                color: colors.text,
+                borderColor: focusedField === "email" ? colors.focusRing : colors.border,
+              },
+            ]}
+            placeholder="you@example.com"
+            placeholderTextColor={colors.textTertiary}
+            value={email}
+            onChangeText={setEmail}
+            onFocus={() => setFocusedField("email")}
+            onBlur={() => setFocusedField(null)}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            editable={!loading}
+          />
 
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.surface,
-              color: colors.text,
-              borderColor: colors.border,
-            },
-          ]}
-          placeholder="Password (min 6 characters)"
-          placeholderTextColor={colors.textTertiary}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoComplete={isSignUp ? "new-password" : "current-password"}
-          editable={!loading}
-        />
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Password</Text>
+          <TextInput
+            accessibilityLabel={isSignUp ? "Create a password" : "Password"}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surfaceRaised,
+                color: colors.text,
+                borderColor: focusedField === "password" ? colors.focusRing : colors.border,
+              },
+            ]}
+            placeholder={isSignUp ? "At least 6 characters" : "Enter your password"}
+            placeholderTextColor={colors.textTertiary}
+            value={password}
+            onChangeText={setPassword}
+            onFocus={() => setFocusedField("password")}
+            onBlur={() => setFocusedField(null)}
+            secureTextEntry
+            autoComplete={isSignUp ? "new-password" : "current-password"}
+            editable={!loading}
+          />
 
-        {!isSignUp && (
+          {!isSignUp && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password"
+              onPress={() => setShowForgotPassword(true)}
+              style={styles.forgotPassword}
+              disabled={loading}
+            >
+              <Text style={[styles.forgotPasswordText, { color: colors.accent }]}>Forgot Password?</Text>
+            </Pressable>
+          )}
+
           <Pressable
-            onPress={() => setShowForgotPassword(true)}
-            style={styles.forgotPassword}
+            accessibilityRole="button"
+            accessibilityLabel={isSignUp ? "Create account" : "Sign in"}
+            accessibilityState={{ disabled: loading, busy: loading }}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: colors.accent },
+              loading && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={handleAuth}
             disabled={loading}
           >
-            <Text style={[styles.forgotPasswordText, { color: colors.accent }]}>
-              Forgot Password?
-            </Text>
+            {loading ? (
+              <ActivityIndicator color={colors.onAccent} />
+            ) : (
+              <Text style={[styles.buttonText, { color: colors.onAccent }]}>
+                {isSignUp ? "Create account" : "Sign In"}
+              </Text>
+            )}
           </Pressable>
-        )}
+        </View>
 
         <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            { backgroundColor: colors.accent },
-            loading && styles.buttonDisabled,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={handleAuth}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.onAccent} />
-          ) : (
-            <Text style={[styles.buttonText, { color: colors.onAccent }]}>
-              {isSignUp ? "Sign Up" : "Sign In"}
-            </Text>
-          )}
-        </Pressable>
-
-        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={isSignUp ? "Switch to sign in" : "Switch to create account"}
           onPress={() => setIsSignUp(!isSignUp)}
           disabled={loading}
           style={styles.switchButton}
@@ -319,39 +350,41 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: Spacing.lg,
     justifyContent: "center",
-    gap: Spacing.md,
+    gap: Spacing.lg,
   },
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.sm,
   },
   brandMark: { width: 9, height: 9, borderRadius: 5 },
   brand: { fontFamily: FontFamilies.semibold, fontSize: 28 },
-  title: {
-    ...StudioType.largeTitle,
-    marginBottom: Spacing.xs,
-    textAlign: "center",
-  },
+  entryCopy: { gap: Spacing.xs },
+  eyebrow: { ...StudioType.detail, fontWeight: "700", letterSpacing: 0.8 },
+  title: { ...StudioType.displayLarge },
   subtitle: {
     ...StudioType.body,
-    marginBottom: Spacing.xl,
-    textAlign: "center",
   },
+  formSurface: {
+    gap: Spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+  },
+  fieldLabel: { ...StudioType.detail, fontWeight: "600", marginTop: Spacing.xs },
   input: {
     minHeight: 52,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
     ...StudioType.body,
     borderWidth: 1,
   },
   forgotPassword: {
     alignSelf: "flex-end",
-    marginTop: -Spacing.sm,
-    marginBottom: Spacing.sm,
+    minHeight: 44,
+    justifyContent: "center",
   },
   forgotPasswordText: {
     ...StudioType.detail,

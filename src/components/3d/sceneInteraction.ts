@@ -2,6 +2,10 @@ import * as THREE from "three";
 
 const TWO_PI = Math.PI * 2;
 
+// Dashboard and shop share this authored three-quarter hero composition.
+// Keep it separate from room navigation, whose home view has its own camera.
+export const HERO_HOME_AZIMUTH = (10 * Math.PI) / 180;
+
 // Camera orbit + pet hit-testing shared by the interactive scenes. The rig
 // owns the azimuth; scenes feed it drag deltas from SceneTouchLayer and call
 // applyTo(camera, t) every frame, so interaction never recreates a GL
@@ -30,6 +34,15 @@ export interface OrbitRigOptions {
 export interface OrbitRig {
   orbitBy: (dxNormalized: number, dyNormalized?: number) => void;
   applyTo: (camera: THREE.PerspectiveCamera, t: number) => void;
+}
+
+export type HeroPresentationVariant = "dashboard" | "shop";
+
+/** @internal */
+export interface HeroCameraOrbit {
+  camera: THREE.PerspectiveCamera;
+  orbit: OrbitRig;
+  orbitOptions: OrbitRigOptions;
 }
 
 // Full-width drag rotates ~200°
@@ -99,6 +112,38 @@ export function createOrbitRig(options: OrbitRigOptions): OrbitRig {
       camera.lookAt(options.target);
     },
   };
+}
+
+// Internal presentation factory shared by Avatar3D and its framing tests. The
+// complete tier-three runtime envelope, including glows, evolution geometry,
+// compatible equipment, level-up lift, and pod, fits the compact portrait and
+// square safety areas at the home angle.
+/** @internal */
+export function createHeroCameraOrbit(
+  variant: HeroPresentationVariant,
+  aspect: number,
+): HeroCameraOrbit {
+  const shop = variant === "shop";
+  const orbitOptions: OrbitRigOptions = {
+    target: new THREE.Vector3(0, shop ? 0.89 : 0.86, 0),
+    radius: shop ? 3.6 : 3.7,
+    height: shop ? 1.29 : 1.25,
+    initialAzimuth: HERO_HOME_AZIMUTH,
+    ...(shop
+      ? {
+          minElevation: (-12 * Math.PI) / 180,
+          maxElevation: (12 * Math.PI) / 180,
+        }
+      : {
+          minAzimuth: -0.45,
+          maxAzimuth: 0.45,
+          easeBackAfter: 1.5,
+        }),
+  };
+  const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+  const orbit = createOrbitRig(orbitOptions);
+  orbit.applyTo(camera, 0);
+  return { camera, orbit, orbitOptions };
 }
 
 // Screen-point → "did the user touch the pet?" hit test

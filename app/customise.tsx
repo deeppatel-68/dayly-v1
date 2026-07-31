@@ -9,7 +9,7 @@ import { useCharacter } from "@/context/CharacterContext";
 import { useCoins } from "@/context/CoinsContext";
 import { useShop } from "@/context/ShopContext";
 import { useTheme } from "@/context/ThemeContext";
-import { ItemCategory, ShopItem } from "@/types/shop";
+import { EquipSlot, ShopItem } from "@/types/shop";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
@@ -28,9 +28,14 @@ import {
 
 const NAME_MAX_LENGTH = 20;
 const RENDERED_IDS = new Set(RENDERED_EQUIPMENT_IDS);
-const GROUPS: { category: Exclude<ItemCategory, "all">; title: string }[] = [
-  { category: "accessory", title: "Accessories" },
+const GROUPS: { equipSlot: EquipSlot; title: string }[] = [
+  { equipSlot: "wearable:head", title: "Head" },
+  { equipSlot: "wearable:neck", title: "Neck" },
+  { equipSlot: "wearable:back", title: "Back" },
+  { equipSlot: "halo:style", title: "Halo" },
+  { equipSlot: "pod:theme", title: "Pod" },
 ];
+const GROUP_SLOTS = new Set<string>(GROUPS.map((group) => group.equipSlot));
 
 const RARITY_COLORS = {
   common: "#A5A29A",
@@ -89,8 +94,7 @@ export default function CustomiseScreen() {
   const renderedItems = useMemo(
     () =>
       shopItems.filter(
-        (item) =>
-          RENDERED_IDS.has(item.id) && item.equipSlot === "wearable:head",
+        (item) => RENDERED_IDS.has(item.id) && GROUP_SLOTS.has(item.equipSlot),
       ),
     [shopItems],
   );
@@ -230,7 +234,7 @@ export default function CustomiseScreen() {
           )}
 
           {GROUPS.map((group) => (
-            <View key={group.category} style={styles.equipmentGroup}>
+            <View key={group.equipSlot} style={styles.equipmentGroup}>
               <Text
                 style={[styles.groupTitle, { color: colors.textSecondary }]}
               >
@@ -238,7 +242,7 @@ export default function CustomiseScreen() {
               </Text>
               <View style={styles.itemGrid}>
                 {renderedItems
-                  .filter((item) => item.category === group.category)
+                  .filter((item) => item.equipSlot === group.equipSlot)
                   .map((item) => (
                     <EquipmentItem
                       key={item.id}

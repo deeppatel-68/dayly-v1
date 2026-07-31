@@ -73,18 +73,9 @@ Choose habits → complete habits/study → earn XP/coins → keep streak → un
 ## Commands
 
 - Before every commit: `npm run typecheck` && `npm run lint` && `npm test`
-- Bundle check: `npx expo start --port 8090` then curl `/node_modules/expo-router/entry.bundle?platform=ios&dev=true&minify=false` → expect 200, no ERROR in log; kill server after
-- Companion model is GENERATED: `/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python assets/avatar/dayly-companion-build.py` rebuilds blend/glb/preview; iterate by Reading the preview PNG
 - metro.config.js changes (e.g. assetExts) require `expo start -c`
-
-## 3D / expo-gl gotchas
-
-- MeshStandardMaterial only — clearcoat/MeshPhysicalMaterial shaders fail on expo-gl
-- Keep `renderer.debug.checkShaderErrors = false` (expo-gl returns undefined shader logs → three crashes on `.trim()`)
-- Load the GLB per scene mount; sharing a parsed graph across GL contexts blanks later scenes
-- three.js `fov` is VERTICAL: portrait GLViews get only ~fov×aspect horizontal — check framing at portrait aspect
-- Blender→three coords: blender (x, y, z) → three (x, z, −y)
-- Screens import only AvatarRenderer, never a concrete renderer (docs/avatar-architecture.md)
+- Bundle check and companion-model rebuild steps: see the `bundle-check` and `companion-preview` skills
+- 3D/expo-gl rendering gotchas: see `src/components/CLAUDE.md`
 
 ## Supabase
 

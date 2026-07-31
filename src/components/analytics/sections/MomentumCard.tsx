@@ -39,7 +39,7 @@ export default function MomentumCard({
       ]}
     >
       <Text style={[styles.title, { color: colors.textSecondary }]}>
-        {companionName ? `${companionName}'s growth record` : "Your growth record"}
+        {companionName ? `${companionName}'s lifetime record` : "Your lifetime record"}
       </Text>
 
       <View style={styles.heroRow}>

@@ -6,15 +6,130 @@ import type {
 } from "@/components/companion/companionBehavior";
 
 const TWO_PI = Math.PI * 2;
-
-// Scenes render with ACESFilmic tone mapping (see sceneRenderer.ts), which
-// compresses highlights — emissives must run hotter to read the same as the
-// pre-tone-mapped tuning.
 const TONE_BOOST = 1.35;
+const HOVER_BASELINE = 0.04;
 const EMPTY_FRAME_OPTIONS: Readonly<PetMotionFrameOptions> = Object.freeze({});
 
-// Everything a scene must hand the controller so state-driven motion can be
-// applied. All fields optional-safe: scenes pass what their pet instance has.
+type CompanionSurfaceMaterial =
+  | THREE.MeshBasicMaterial
+  | THREE.MeshStandardMaterial;
+
+interface MotionPose {
+  eyeScaleX: number;
+  eyeScaleY: number;
+  mouthScaleY?: number;
+}
+
+interface MotionProfile {
+  blinkScaleY: number | null;
+  focus: MotionPose;
+  reward: MotionPose;
+  levelUp: MotionPose;
+}
+
+const DEFAULT_FACE_PROFILE: MotionProfile = {
+  blinkScaleY: 0.1,
+  focus: { eyeScaleX: 0.9, eyeScaleY: 0.7, mouthScaleY: 0.12 },
+  reward: { eyeScaleX: 1, eyeScaleY: 0.84, mouthScaleY: 1 },
+  levelUp: { eyeScaleX: 1.08, eyeScaleY: 1.14, mouthScaleY: 1.18 },
+};
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+const lerp = (from: number, to: number, amount: number) =>
+  from + (to - from) * amount;
+
+// Module-level curves keep the render loop allocation-free and make every
+// authored state clip use the same timing language.
+const smoothstep = (value: number) => {
+  const u = clamp01(value);
+  return u * u * (3 - 2 * u);
+};
+
+const easeOutCubic = (value: number) => {
+  const u = 1 - clamp01(value);
+  return 1 - u * u * u;
+};
+
+const easeInOutCubic = (value: number) => {
+  const u = clamp01(value);
+  return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+};
+
+const focusEntryBlend = (age: number) => {
+  if (age >= 0.4) return 1;
+  if (age <= 0.28) return easeOutCubic(age / 0.28) * 1.04;
+  return lerp(1.04, 1, easeOutCubic((age - 0.28) / 0.12));
+};
+
+const singleBlinkRatio = (elapsed: number, closedRatio: number) => {
+  if (elapsed < 0 || elapsed >= 0.18) return 1;
+  if (elapsed < 0.055) {
+    return lerp(1, closedRatio, smoothstep(elapsed / 0.055));
+  }
+  if (elapsed < 0.08) return closedRatio;
+  return lerp(closedRatio, 1, smoothstep((elapsed - 0.08) / 0.1));
+};
+
+const blinkRatioAt = (animationTime: number, closedRatio: number) => {
+  const cycle = animationTime % 4.7;
+  const blinkStart = 4.52;
+  const primary = singleBlinkRatio(cycle - blinkStart, closedRatio);
+  const doubleBlink = Math.floor(animationTime / 4.7) % 3 === 2;
+  return doubleBlink
+    ? Math.min(
+        primary,
+        singleBlinkRatio(cycle - (blinkStart - 0.3), closedRatio),
+      )
+    : primary;
+};
+
+const idleYawAt = (animationTime: number) =>
+  Math.sin(animationTime * (TWO_PI / 8.4)) * 0.055;
+
+const normalizedAngle = (angle: number) => {
+  const normalized = Math.atan2(Math.sin(angle), Math.cos(angle));
+  return Math.abs(normalized) < 1e-10 ? 0 : normalized;
+};
+
+const celebrationSignal = (
+  state: AvatarState,
+  age: number,
+  reducedMotion: boolean,
+) => {
+  if (state !== "reward" && state !== "levelUp") return 0;
+  const peak = 0.18;
+  const settle =
+    state === "reward"
+      ? reducedMotion
+        ? 0.5
+        : 0.72
+      : reducedMotion
+        ? 0.7
+        : 1.62;
+  if (age <= peak) return easeOutCubic(age / peak);
+  return 1 - easeOutCubic((age - peak) / settle);
+};
+
+const applyEnergyMaterial = (
+  material: CompanionSurfaceMaterial | null | undefined,
+  basicBrightness: number,
+  standardIntensity: number,
+) => {
+  if (material instanceof THREE.MeshStandardMaterial) {
+    material.emissiveIntensity = standardIntensity;
+    return;
+  }
+  if (!(material instanceof THREE.MeshBasicMaterial)) return;
+  let baseColor = material.userData.baseColor as THREE.Color | undefined;
+  if (!baseColor) {
+    baseColor = material.color.clone();
+    material.userData.baseColor = baseColor;
+  }
+  material.color
+    .copy(baseColor)
+    .multiplyScalar(Math.max(0.78, Math.min(1.12, basicBrightness)));
+};
+
 export interface PetRig {
   petGroup: THREE.Group;
   leftEye?: THREE.Mesh;
@@ -31,64 +146,22 @@ export interface PetRig {
   rightFin?: THREE.Mesh;
   orbitGroup?: THREE.Group;
   aura?: THREE.Object3D;
-  eyeMat?: THREE.MeshStandardMaterial | null;
-  mouthMat?: THREE.MeshStandardMaterial | null;
-  coreMat?: THREE.MeshStandardMaterial | null;
-  accentMat?: THREE.MeshStandardMaterial | null;
+  eyeMat?: CompanionSurfaceMaterial | null;
+  mouthMat?: CompanionSurfaceMaterial | null;
+  coreMat?: CompanionSurfaceMaterial | null;
+  accentMat?: CompanionSurfaceMaterial | null;
+  faceMat?: CompanionSurfaceMaterial | null;
+  platformMat?: CompanionSurfaceMaterial | null;
+  innerRingMat?: CompanionSurfaceMaterial | null;
   haloGlowMat?: THREE.SpriteMaterial | null;
   coreGlowMat?: THREE.SpriteMaterial | null;
-  evolutionMat?: THREE.MeshStandardMaterial | null;
+  evolutionMat?: CompanionSurfaceMaterial | null;
   auraMat?: THREE.MeshBasicMaterial | null;
 }
 
-// Fake-bloom sprite opacity per state. Idle/focus pulse sinusoidally off the
-// shared animation clock; reward/levelUp flare to 1.0 then ease to baseline.
-// Chest dot runs CORE_HOTTER above the halo (clamped to 1). All tunable here.
-const GLOW_PULSE = {
-  idle: { min: 0.35, max: 0.55, period: 2.8 },
-  focus: { min: 0.55, max: 0.8, period: 1.6 },
-  celebrate: { baseline: 0.75, flareDuration: 0.7 },
-  coreHotter: 0.1,
-};
-
-// Idle hover tuning. The pet's rest pose sits its feet on the pod (petGroup
-// origin ≈ world y=0, pod/contact surface ≈ y=0.08–0.096). HOVER_BASELINE
-// lifts the whole bob so even its LOWEST point keeps daylight above the pod
-// top; amplitudes stay gentle. Invariant: HOVER_BASELINE − bobAmp must stay
-// comfortably positive (never sink toward the platform).
-const HOVER_BASELINE = 0.04;
-const BOB_AMP = { idle: 0.02, focus: 0.014, sleepy: 0.012 };
-
-// Flipper wave tuning. Waves are rectified so they only ever swing OUTWARD
-// from the resting pose (left rest = +z, right rest = −z ⇒ outward is +z for
-// left / −z for right); this guarantees a flipper never rotates inward across
-// the torso, which was the source of the clipping. Amplitudes are conservative
-// — a subtle wave is preferred over any body intersection.
-const FLIPPER_WAVE = { celebrate: 0.32, reaction: 0.4 };
-
-// Idle micro-motions: a rare "settle" squash-and-recover, a quick pupil
-// dart, and the halo trailing the body sway. Periods are deliberately
-// non-round so the beats don't sync with the bob/blink cycles.
-export const SETTLE_MICRO = { period: 16.3, duration: 0.9, squash: 0.03 };
-export const EYE_DART_MICRO = { period: 9.7, duration: 0.22, offset: 0.01 };
-// The halo is light jewellery: it lags the body sway by ~120ms, which sells
-// mass without a physics sim.
-export const HALO_LAG_SECONDS = 0.12;
-
-// Module-level (not a per-frame closure): the ambient yaw sway at a given
-// time. Focus locks the body forward, so sway is zero there.
-const swayAt = (
-  time: number,
-  focused: boolean,
-  ambientStrength: number,
-  decorationMotion: number,
-) =>
-  focused ? 0 : Math.sin(time * 0.48) * 0.2 * ambientStrength * decorationMotion;
-
 export interface PetMotionOptions {
-  levelTier: number; // 0..3
-  streakTier: number; // 0..3
-  // Pet's resting Y in the scene (0 for a scene where the pod sits at origin)
+  levelTier: number;
+  streakTier: number;
   baseY?: number;
 }
 
@@ -98,25 +171,99 @@ export interface PetMotionFrameOptions {
   decorationMotion?: number;
 }
 
-// State→motion mapping for the companion, shared by every 3D scene that
-// renders the pet (avatar card, study room). One place to tune; scenes only
-// apply numbers. Stateful because celebration spin eases back to front.
+export const SETTLE_MICRO = { period: 16.3, duration: 0.72, squash: 0.025 };
+export const EYE_DART_MICRO = { period: 9.7, duration: 0.22, offset: 0.01 };
+export const HALO_LAG_SECONDS = 0.12;
+
 export function createPetMotionController(options: PetMotionOptions) {
   const { levelTier, streakTier, baseY = 0 } = options;
   const glowBase = 0.7 + levelTier * 0.2;
   const streakBoost = streakTier / 3;
-  let rewardSpin = 0;
   let lastTime = 0;
   let hasFrameTime = false;
   let animationTime = 0;
+  let previousState: AvatarState | null = null;
+  let stateBeforeEntry: AvatarState | null = null;
+  let stateEnteredAt = 0;
+  let transitionY = baseY + HOVER_BASELINE;
+  let transitionScaleX = 1;
+  let transitionScaleY = 1;
+  let transitionScaleZ = 1;
+  let transitionRotationY = 0;
+  let transitionEyeX = 1;
+  let transitionEyeY = 1;
+  let transitionMouthY = 1;
+  let transitionLeftFlipperZ = 0;
+  let transitionRightFlipperZ = 0;
+  let transitionLeftFinZ = 0;
+  let transitionRightFinZ = 0;
+  let transitionLeftBrowZ = 0;
+  let transitionRightBrowZ = 0;
+  let transitionLeftBrowY = 0;
+  let transitionRightBrowY = 0;
+  let lastCoreBrightness = 0.9;
+  let lastAccentBrightness = 0.91;
+  let lastEyeBrightness = 0.9;
+  let lastFaceBrightness = 0.87;
+  let lastMouthBrightness = 0.84;
+  let lastPlatformBrightness = 0.82;
+  let lastInnerRingBrightness = 0.795;
+  let lastEvolutionBrightness =
+    0.84 + levelTier * 0.04 + streakBoost * 0.05;
+  let transitionCoreBrightness = lastCoreBrightness;
+  let transitionAccentBrightness = lastAccentBrightness;
+  let transitionEyeBrightness = lastEyeBrightness;
+  let transitionFaceBrightness = lastFaceBrightness;
+  let transitionMouthBrightness = lastMouthBrightness;
+  let transitionPlatformBrightness = lastPlatformBrightness;
+  let transitionInnerRingBrightness = lastInnerRingBrightness;
+  let transitionEvolutionBrightness = lastEvolutionBrightness;
+  let lastCoreIntensity = glowBase * TONE_BOOST;
+  let lastAccentIntensity = glowBase * TONE_BOOST;
+  let lastEyeIntensity = 0.72 * TONE_BOOST;
+  let lastFaceIntensity = 0.56 * TONE_BOOST;
+  let lastMouthIntensity = 0.46 * TONE_BOOST;
+  let lastPlatformIntensity = 0.34 * TONE_BOOST;
+  let lastInnerRingIntensity = 0.205 * TONE_BOOST;
+  let lastEvolutionIntensity =
+    (0.42 + levelTier * 0.12 + streakBoost * 0.16) * TONE_BOOST;
+  let transitionCoreIntensity = lastCoreIntensity;
+  let transitionAccentIntensity = lastAccentIntensity;
+  let transitionEyeIntensity = lastEyeIntensity;
+  let transitionFaceIntensity = lastFaceIntensity;
+  let transitionMouthIntensity = lastMouthIntensity;
+  let transitionPlatformIntensity = lastPlatformIntensity;
+  let transitionInnerRingIntensity = lastInnerRingIntensity;
+  let transitionEvolutionIntensity = lastEvolutionIntensity;
+  let celebrationEntryHaloGlow = 0.75;
+  let celebrationEntryCoreGlow = 0.85;
+  let haloAngle = 0;
+  let orbitAngle = 0;
+  let decorationTime = 0;
+  let hasDecorationTime = false;
+  let wasReducedMotion = false;
+  let decorationResumedAt = -Infinity;
+  let resumeHaloX = 0;
+  let resumeHaloY = 0;
+  let resumeHaloZ = 0;
+  let resumeOrbitY = 0;
+  let resumeOrbitZ = 0;
+  let resumeLeftFinZ = 0;
+  let resumeRightFinZ = 0;
+  let resumeAuraScale = 1;
+  let resumeAuraOpacity = 0;
   let reactionStartedAt = -Infinity;
   let activeReaction: CompanionReaction = "bounce";
   let pendingBounce = false;
-  let glowFlareStartedAt = -Infinity;
-  let wasCelebrating = false;
+  let clipOwnedRootOnLastFrame = false;
 
   function playBounce() {
     activeReaction = "bounce";
+    if (clipOwnedRootOnLastFrame) {
+      reactionStartedAt = -Infinity;
+      pendingBounce = false;
+      return;
+    }
     reactionStartedAt = lastTime;
     pendingBounce = !hasFrameTime;
   }
@@ -127,6 +274,11 @@ export function createPetMotionController(options: PetMotionOptions) {
       return;
     }
     activeReaction = reaction;
+    if (clipOwnedRootOnLastFrame) {
+      reactionStartedAt = -Infinity;
+      pendingBounce = false;
+      return;
+    }
     reactionStartedAt = lastTime;
   }
 
@@ -139,255 +291,643 @@ export function createPetMotionController(options: PetMotionOptions) {
     state: AvatarState,
     t: number,
     mood: CompanionMood = "calm",
-    frame: PetMotionFrameOptions = EMPTY_FRAME_OPTIONS
+    frame: PetMotionFrameOptions = EMPTY_FRAME_OPTIONS,
   ) {
     const deltaTime = hasFrameTime
       ? Math.max(0, Math.min(0.1, t - lastTime))
       : 0;
     if (!hasFrameTime) animationTime = t;
+    else animationTime += deltaTime;
     hasFrameTime = true;
     lastTime = t;
-    if (deltaTime > 0) animationTime += deltaTime;
     if (pendingBounce) {
       reactionStartedAt = t;
       pendingBounce = false;
     }
-    const celebrating = state === "reward" || state === "levelUp";
+
+    const profile =
+      (rig.petGroup.userData.faceMotionProfile as MotionProfile | undefined) ??
+      DEFAULT_FACE_PROFILE;
+    const leftEyeBase = rig.leftEye?.userData.baseScale as
+      | THREE.Vector3
+      | undefined;
+    const mouthBase = rig.mouth?.userData.baseScale as
+      | THREE.Vector3
+      | undefined;
+
+    let stateChanged = false;
+    if (previousState === null) {
+      previousState = state;
+      stateEnteredAt = t;
+    } else if (previousState !== state) {
+      stateChanged = true;
+      stateBeforeEntry = previousState;
+      previousState = state;
+      stateEnteredAt = t;
+      transitionY = rig.petGroup.position.y;
+      transitionScaleX = rig.petGroup.scale.x;
+      transitionScaleY = rig.petGroup.scale.y;
+      transitionScaleZ = rig.petGroup.scale.z;
+      transitionRotationY = normalizedAngle(rig.petGroup.rotation.y);
+      transitionEyeX = rig.leftEye
+        ? rig.leftEye.scale.x / (leftEyeBase?.x ?? 1)
+        : 1;
+      transitionEyeY = rig.leftEye
+        ? rig.leftEye.scale.y / (leftEyeBase?.y ?? 1)
+        : 1;
+      transitionMouthY = rig.mouth
+        ? rig.mouth.scale.y / (mouthBase?.y ?? 1)
+        : 1;
+      transitionLeftFlipperZ = rig.leftFlipper?.rotation.z ?? 0;
+      transitionRightFlipperZ = rig.rightFlipper?.rotation.z ?? 0;
+      transitionLeftFinZ = rig.leftFin?.rotation.z ?? 0;
+      transitionRightFinZ = rig.rightFin?.rotation.z ?? 0;
+      transitionLeftBrowZ = rig.leftBrow?.rotation.z ?? 0;
+      transitionRightBrowZ = rig.rightBrow?.rotation.z ?? 0;
+      transitionLeftBrowY = rig.leftBrow?.position.y ?? 0;
+      transitionRightBrowY = rig.rightBrow?.position.y ?? 0;
+      transitionCoreBrightness = lastCoreBrightness;
+      transitionAccentBrightness = lastAccentBrightness;
+      transitionEyeBrightness = lastEyeBrightness;
+      transitionFaceBrightness = lastFaceBrightness;
+      transitionMouthBrightness = lastMouthBrightness;
+      transitionPlatformBrightness = lastPlatformBrightness;
+      transitionInnerRingBrightness = lastInnerRingBrightness;
+      transitionEvolutionBrightness = lastEvolutionBrightness;
+      transitionCoreIntensity = lastCoreIntensity;
+      transitionAccentIntensity = lastAccentIntensity;
+      transitionEyeIntensity = lastEyeIntensity;
+      transitionFaceIntensity = lastFaceIntensity;
+      transitionMouthIntensity = lastMouthIntensity;
+      transitionPlatformIntensity = lastPlatformIntensity;
+      transitionInnerRingIntensity = lastInnerRingIntensity;
+      transitionEvolutionIntensity = lastEvolutionIntensity;
+      celebrationEntryHaloGlow = rig.haloGlowMat?.opacity ?? 0.75;
+      celebrationEntryCoreGlow = rig.coreGlowMat?.opacity ?? 0.85;
+    }
+    // Normalise the subtraction so the same authored clip age is bit-for-bit
+    // identical at small and large host-clock values (for example 1.35/101.35).
+    const stateAge = Math.max(
+      0,
+      Math.round((t - stateEnteredAt) * 1_000_000) / 1_000_000,
+    );
     const reducedMotion = frame.reducedMotion ?? false;
     const environmentWarmth = frame.environmentWarmth ?? 0;
     const decorationMotion = frame.decorationMotion ?? 1;
-    const { petGroup } = rig;
-    const reactionProgress = Math.min(
-      1,
-      Math.max(0, (t - reactionStartedAt) / 1.2)
+    const rewardClipOwnsRoot = state === "reward" && stateAge < 1.1;
+    const levelClipOwnsRoot = state === "levelUp" && stateAge < 1.8;
+    const clipOwnsRoot = rewardClipOwnsRoot || levelClipOwnsRoot;
+    // Held one-shot states become authored idle variants after their clip.
+    // Face profiles remain proud/elevated, while energy and decoration speeds
+    // leave celebration phase instead of running hot forever.
+    const celebrating = clipOwnsRoot;
+
+    if (clipOwnsRoot && reactionStartedAt > -Infinity) {
+      reactionStartedAt = -Infinity;
+      pendingBounce = false;
+    }
+
+    const resumedDecorations = wasReducedMotion && !reducedMotion;
+    if (!hasDecorationTime) {
+      decorationTime = animationTime;
+      hasDecorationTime = true;
+    } else if (!reducedMotion && !resumedDecorations) {
+      decorationTime += deltaTime;
+    }
+    if (resumedDecorations) {
+      decorationResumedAt = t;
+      resumeHaloX = rig.halo?.rotation.x ?? 0;
+      resumeHaloY = rig.halo?.rotation.y ?? 0;
+      resumeHaloZ = rig.halo?.rotation.z ?? 0;
+      resumeOrbitY = rig.orbitGroup?.rotation.y ?? 0;
+      resumeOrbitZ = rig.orbitGroup?.rotation.z ?? 0;
+      resumeLeftFinZ = rig.leftFin?.rotation.z ?? 0;
+      resumeRightFinZ = rig.rightFin?.rotation.z ?? 0;
+      resumeAuraScale = rig.aura?.scale.x ?? 1;
+      resumeAuraOpacity = rig.auraMat?.opacity ?? 0;
+    }
+    const decorationResumeBlend = smoothstep(
+      (t - decorationResumedAt) / 0.3,
     );
-    const reacting = reactionProgress < 1;
-    const reactionEase = reacting ? Math.sin(reactionProgress * Math.PI) : 0;
-    const bounceElapsed = Math.max(0, t - reactionStartedAt);
-    const bounceActive = activeReaction === "bounce" && bounceElapsed < 1.2;
-    const bounceSpring = bounceActive
-      ? Math.exp(-1.8 * bounceElapsed) *
-        Math.sin((Math.PI * bounceElapsed) / 1.2)
+
+    if (!reducedMotion && !resumedDecorations) {
+      const haloSpeed =
+        state === "focus" ? 0.08 : celebrating ? 1.5 : 0.7;
+      const orbitSpeed =
+        state === "focus" ? 0.12 : celebrating ? 1.5 : 0.5;
+      haloAngle += deltaTime * haloSpeed * decorationMotion;
+      orbitAngle += deltaTime * orbitSpeed * decorationMotion;
+    }
+
+    const reactionAge = Math.max(0, t - reactionStartedAt);
+    const reactionProgress = clamp01(reactionAge / 1.2);
+    const reactionActive = reactionAge < 1.2;
+    const reactionEase = reactionActive
+      ? Math.sin(reactionProgress * Math.PI)
       : 0;
-    const bounceImpact = bounceActive ? Math.exp(-18 * bounceElapsed) : 0;
-    const reactionLift = activeReaction === "bounce" ? 0 : reactionEase * 0.025;
-    const ambientStrength = reducedMotion ? 0.22 : 1;
-    const breathing =
-      Math.sin(animationTime * 1.25) * 0.009 * ambientStrength;
-
-    // Bob: gentle idle float, calmer in focus, bouncy when celebrating
-    if (celebrating && !reducedMotion) {
-      // Ride the hover baseline so the bottom of each celebration bounce lands
-      // at hover height (never feet-in-pod), matching the idle/focus/sleepy bobs.
-      petGroup.position.y =
-        baseY + HOVER_BASELINE + Math.abs(Math.sin(animationTime * 3.2)) * 0.1;
-    } else {
-      const bobAmp =
-        (state === "focus"
-          ? BOB_AMP.focus
-          : mood === "sleepy"
-            ? BOB_AMP.sleepy
-            : BOB_AMP.idle) * ambientStrength;
-      const bobFreq = state === "focus" ? 2.0 : 1.6;
-      petGroup.position.y =
-        baseY + HOVER_BASELINE + Math.sin(animationTime * bobFreq) * bobAmp;
-    }
-    petGroup.position.y +=
-      bounceSpring * (reducedMotion ? 0.07 : 0.38) + reactionLift;
-
-    // Sway faces mostly forward; celebrations spin, then ease back to front
-    if (state === "levelUp" && !reducedMotion) {
-      rewardSpin += deltaTime * 3.6;
-    } else if (rewardSpin % TWO_PI !== 0) {
-      const target = Math.round(rewardSpin / TWO_PI) * TWO_PI;
-      const returnAlpha = 1 - Math.exp(-5 * deltaTime);
-      rewardSpin = THREE.MathUtils.lerp(rewardSpin, target, returnAlpha);
-      if (Math.abs(target - rewardSpin) < 0.001) rewardSpin = target;
-    }
-    const focused = state === "focus";
-    const sway = swayAt(
-      animationTime,
-      focused,
-      ambientStrength,
-      decorationMotion,
-    );
-    petGroup.rotation.y = sway + rewardSpin;
-    const moodTilt =
-      mood === "curious"
-        ? Math.sin(animationTime * 0.7) * 0.055 * ambientStrength
+    const bounce =
+      activeReaction === "bounce" && reactionActive && !clipOwnsRoot
+        ? Math.exp(-1.8 * reactionAge) *
+          Math.sin((Math.PI * reactionAge) / 1.2)
         : 0;
-    const interactionTilt =
-      activeReaction === "tilt" ? reactionEase * 0.16 : 0;
-    petGroup.rotation.x =
-      activeReaction === "nod"
+    const reactionLift =
+      activeReaction !== "bounce" && reactionActive && !clipOwnsRoot
+        ? reactionEase * 0.025
+        : 0;
+
+    let rootY = baseY + HOVER_BASELINE;
+    let rootScaleX = 1;
+    let rootScaleY = 1;
+    let rootScaleZ = 1;
+    let rootRotationY = 0;
+
+    if (reducedMotion) {
+      rootY += Math.sin(animationTime * (TWO_PI / 3.8)) * 0.003;
+      rootRotationY = Math.sin(animationTime * (TWO_PI / 8.4)) * 0.01;
+    } else if (state === "idle") {
+      rootY += Math.sin(animationTime * (TWO_PI / 3.8)) * 0.018;
+      const breath = Math.sin(animationTime * (TWO_PI / 5.2)) * 0.008;
+      rootScaleY = 1 + breath;
+      rootScaleX = rootScaleZ = 1 / Math.sqrt(rootScaleY);
+      rootRotationY = idleYawAt(animationTime);
+
+      const settleCycle = animationTime % SETTLE_MICRO.period;
+      const settleStart = SETTLE_MICRO.period - SETTLE_MICRO.duration;
+      if (!reactionActive && settleCycle >= settleStart) {
+        const settle = Math.sin(
+          ((settleCycle - settleStart) / SETTLE_MICRO.duration) * Math.PI,
+        );
+        rootY -= settle * 0.005;
+        rootScaleX = lerp(rootScaleX, 1.016, settle);
+        rootScaleY = lerp(rootScaleY, 0.975, settle);
+        rootScaleZ = lerp(rootScaleZ, 1.016, settle);
+      }
+
+      if (stateBeforeEntry !== null && stateAge < 0.3) {
+        const blend = smoothstep(stateAge / 0.3);
+        rootY = lerp(transitionY, rootY, blend);
+        rootScaleX = lerp(transitionScaleX, rootScaleX, blend);
+        rootScaleY = lerp(transitionScaleY, rootScaleY, blend);
+        rootScaleZ = lerp(transitionScaleZ, rootScaleZ, blend);
+        rootRotationY = lerp(transitionRotationY, rootRotationY, blend);
+      }
+    } else if (state === "focus") {
+      rootY =
+        baseY +
+        HOVER_BASELINE -
+        0.008 +
+        Math.sin(animationTime * (TWO_PI / 4.8)) * 0.01;
+      const breath = Math.sin(animationTime * (TWO_PI / 5.6)) * 0.005;
+      rootScaleY = 1 + breath;
+      rootScaleX = rootScaleZ = 1 / Math.sqrt(rootScaleY);
+      if (stateChanged || stateBeforeEntry !== null) {
+        const blend = focusEntryBlend(stateAge);
+        rootY = lerp(transitionY, rootY, blend);
+        rootScaleX = lerp(transitionScaleX, rootScaleX, blend);
+        rootScaleY = lerp(transitionScaleY, rootScaleY, blend);
+        rootScaleZ = lerp(transitionScaleZ, rootScaleZ, blend);
+        rootRotationY = lerp(transitionRotationY, 0, blend);
+      }
+    } else if (state === "reward") {
+      if (stateAge <= 0.12) {
+        const blend = smoothstep(stateAge / 0.12);
+        rootY = lerp(transitionY, baseY + HOVER_BASELINE - 0.018, blend);
+        rootScaleX = lerp(transitionScaleX, 1.035, blend);
+        rootScaleY = lerp(transitionScaleY, 0.945, blend);
+        rootScaleZ = lerp(transitionScaleZ, 1.035, blend);
+        rootRotationY = lerp(transitionRotationY, 0, blend);
+      } else if (stateAge <= 0.35) {
+        const u = smoothstep((stateAge - 0.12) / 0.23);
+        rootY = baseY + HOVER_BASELINE + lerp(-0.018, 0.15, u);
+        rootScaleX = rootScaleZ = lerp(1.035, 0.96, u);
+        rootScaleY = lerp(0.945, 1.09, u);
+      } else if (stateAge <= 0.58) {
+        const u = smoothstep((stateAge - 0.35) / 0.23);
+        rootY = baseY + HOVER_BASELINE + lerp(0.15, 0, u);
+        rootScaleX = rootScaleZ = lerp(0.96, 1.07, u);
+        rootScaleY = lerp(1.09, 0.9, u);
+      } else if (stateAge <= 0.82) {
+        const u = (stateAge - 0.58) / 0.24;
+        const settleEntry = smoothstep(u);
+        rootY =
+          baseY +
+          HOVER_BASELINE +
+          Math.sin(clamp01(u) * Math.PI) * 0.035 +
+          settleEntry * 0.008;
+        const reboundSettle = easeOutCubic(u);
+        rootScaleX = rootScaleZ = lerp(1.07, 1.012, reboundSettle);
+        rootScaleY = lerp(0.9, 0.982, reboundSettle);
+      } else if (stateAge < 1.1) {
+        const remaining = 1 - easeOutCubic((stateAge - 0.82) / 0.28);
+        rootY = baseY + HOVER_BASELINE + remaining * 0.008;
+        rootScaleX = rootScaleZ = 1 + remaining * 0.012;
+        rootScaleY = 1 - remaining * 0.018;
+      }
+    } else {
+      if (stateAge <= 0.16) {
+        const blend = smoothstep(stateAge / 0.16);
+        rootY = lerp(transitionY, baseY + HOVER_BASELINE - 0.022, blend);
+        rootScaleX = lerp(transitionScaleX, 1.045, blend);
+        rootScaleY = lerp(transitionScaleY, 0.93, blend);
+        rootScaleZ = lerp(transitionScaleZ, 1.045, blend);
+        rootRotationY = lerp(transitionRotationY, 0, blend);
+      } else if (stateAge <= 0.39) {
+        const u = smoothstep((stateAge - 0.16) / 0.23);
+        rootY = baseY + HOVER_BASELINE + lerp(-0.022, 0.19, u);
+        rootScaleX = rootScaleZ = lerp(1.045, 0.94, u);
+        rootScaleY = lerp(0.93, 1.12, u);
+      } else if (stateAge <= 0.62) {
+        const u = smoothstep((stateAge - 0.39) / 0.23);
+        rootY = baseY + HOVER_BASELINE + lerp(0.19, 0, u);
+        rootScaleX = rootScaleZ = lerp(0.94, 1.1, u);
+        rootScaleY = lerp(1.12, 0.88, u);
+      } else if (stateAge <= 0.98) {
+        const u = (stateAge - 0.62) / 0.36;
+        rootY =
+          baseY + HOVER_BASELINE + Math.sin(clamp01(u) * Math.PI) * 0.045;
+        const settle = easeOutCubic(u);
+        rootScaleX = rootScaleZ = lerp(1.1, 1, settle);
+        rootScaleY = lerp(0.88, 1, settle);
+      } else if (stateAge < 1.8) {
+        rootY =
+          baseY + HOVER_BASELINE + easeOutCubic((stateAge - 0.98) / 0.82) * 0.012;
+      } else {
+        rootY = baseY + HOVER_BASELINE + 0.012;
+      }
+      rootRotationY =
+        stateAge <= 0.18
+          ? 0
+          : TWO_PI * easeInOutCubic((stateAge - 0.18) / 0.9);
+    }
+
+    if (!reducedMotion && !clipOwnsRoot) {
+      rootY += bounce * 0.38 + reactionLift;
+      rootScaleX += bounce * 0.26;
+      rootScaleY += bounce * 0.38;
+      rootScaleZ -= bounce * 0.18;
+    }
+
+    rig.petGroup.position.y = rootY;
+    rig.petGroup.scale.set(rootScaleX, rootScaleY, rootScaleZ);
+    rig.petGroup.rotation.y = rootRotationY;
+    rig.petGroup.rotation.x =
+      !reducedMotion && activeReaction === "nod" && reactionActive && !clipOwnsRoot
         ? Math.sin(reactionProgress * Math.PI * 2) * reactionEase * 0.12
         : 0;
-    petGroup.rotation.z = moodTilt + interactionTilt;
+    rig.petGroup.rotation.z =
+      !reducedMotion && activeReaction === "tilt" && reactionActive && !clipOwnsRoot
+        ? reactionEase * 0.16
+        : !reducedMotion && mood === "curious"
+          ? Math.sin(animationTime * 0.7) * 0.055
+          : 0;
 
-    // Level-up celebration adds a scale pulse
-    const levelScale =
-      state === "levelUp" && !reducedMotion
-        ? Math.sin(animationTime * 6) * 0.05
+    const signal = celebrationSignal(state, stateAge, reducedMotion);
+    const focusPulse =
+      state === "focus"
+        ? Math.sin(animationTime * (TWO_PI / 1.85)) * 0.5 + 0.5
         : 0;
-    const scale = 1 + levelScale;
-    const bounceStrength = reducedMotion ? 0.35 : 1;
-    const squash =
-      (bounceSpring * 0.26 + bounceImpact * 0.1) * bounceStrength;
-    const stretch =
-      (bounceSpring * 0.38 - bounceImpact * 0.08) * bounceStrength;
-    const depthCompression =
-      (bounceImpact * 0.06 - bounceSpring * 0.18) * bounceStrength;
-    // Rare idle settle: a soft squash-and-recover, like shifting weight.
-    const settleCycle = animationTime % SETTLE_MICRO.period;
-    const settleStart = SETTLE_MICRO.period - SETTLE_MICRO.duration;
-    const settleEase =
-      state === "idle" && !reacting && settleCycle > settleStart
-        ? Math.sin(
-            ((settleCycle - settleStart) / SETTLE_MICRO.duration) * Math.PI
-          ) *
-          ambientStrength
-        : 0;
-    const settleSquash = settleEase * SETTLE_MICRO.squash;
-    petGroup.scale.set(
-      scale + squash + settleSquash * 0.65,
-      scale + breathing + stretch - settleSquash,
-      scale + depthCompression + settleSquash * 0.65
-    );
-    petGroup.position.y -= settleEase * 0.008;
-
-    // Energy core heartbeat: quickens in focus, flashes on celebration.
-    if (rig.coreMat) {
-      rig.coreMat.emissiveIntensity =
-        (glowBase +
-          Math.sin(animationTime * (state === "focus" ? 3.4 : 1.6)) * 0.15 +
-          (celebrating ? 0.8 : 0) +
-          environmentWarmth * 0.18) *
-        TONE_BOOST;
+    let coreBrightness =
+      0.9 + focusPulse * 0.1 + signal * 0.22 + environmentWarmth * 0.04;
+    let accentBrightness = 0;
+    let eyeBrightness =
+      (state === "focus" ? 0.94 : 0.9) + signal * 0.2;
+    let mouthBrightness = 0.84 + signal * 0.24;
+    let evolutionBrightness =
+      0.84 + levelTier * 0.04 + streakBoost * 0.05 + signal * 0.18;
+    let coreIntensity =
+      (glowBase + focusPulse * 0.25 + signal * 0.8 + environmentWarmth * 0.18) *
+      TONE_BOOST;
+    let eyeIntensity =
+      (state === "focus" ? 1.05 : celebrating ? 1.15 : 0.72) *
+      TONE_BOOST *
+      (1 + environmentWarmth * 0.08);
+    let mouthIntensity =
+      (0.46 + signal * 0.42 + environmentWarmth * 0.14) * TONE_BOOST;
+    let evolutionIntensity =
+      (0.42 + levelTier * 0.12 + streakBoost * 0.16 + signal * 0.4) *
+      TONE_BOOST;
+    if (reducedMotion && stateBeforeEntry !== null && stateAge < 0.16) {
+      const colourBlend = easeOutCubic(stateAge / 0.16);
+      coreBrightness = lerp(
+        transitionCoreBrightness,
+        coreBrightness,
+        colourBlend,
+      );
+      eyeBrightness = lerp(
+        transitionEyeBrightness,
+        eyeBrightness,
+        colourBlend,
+      );
+      mouthBrightness = lerp(
+        transitionMouthBrightness,
+        mouthBrightness,
+        colourBlend,
+      );
+      evolutionBrightness = lerp(
+        transitionEvolutionBrightness,
+        evolutionBrightness,
+        colourBlend,
+      );
+      coreIntensity = lerp(
+        transitionCoreIntensity,
+        coreIntensity,
+        colourBlend,
+      );
+      eyeIntensity = lerp(
+        transitionEyeIntensity,
+        eyeIntensity,
+        colourBlend,
+      );
+      mouthIntensity = lerp(
+        transitionMouthIntensity,
+        mouthIntensity,
+        colourBlend,
+      );
+      evolutionIntensity = lerp(
+        transitionEvolutionIntensity,
+        evolutionIntensity,
+        colourBlend,
+      );
+    }
+    const accentPulse =
+      Math.sin(animationTime * (TWO_PI / (state === "focus" ? 1.85 : 3.4))) *
+        0.5 +
+      0.5;
+    accentBrightness = 0.86 + accentPulse * 0.1 + signal * 0.2;
+    let accentIntensity =
+      (glowBase + accentPulse * (0.18 + streakBoost * 0.25) + signal * 0.9) *
+      TONE_BOOST;
+    if (reducedMotion && stateBeforeEntry !== null && stateAge < 0.16) {
+      const colourBlend = easeOutCubic(stateAge / 0.16);
+      accentBrightness = lerp(
+        transitionAccentBrightness,
+        accentBrightness,
+        colourBlend,
+      );
+      accentIntensity = lerp(
+        transitionAccentIntensity,
+        accentIntensity,
+        colourBlend,
+      );
+    }
+    const rolePulse = state === "focus" ? focusPulse : accentPulse;
+    let faceBrightness =
+      0.84 + rolePulse * (state === "focus" ? 0.1 : 0.06) + signal * 0.18;
+    let platformBrightness =
+      0.8 + rolePulse * (state === "focus" ? 0.06 : 0.04) + signal * 0.1;
+    let innerRingBrightness =
+      0.78 + rolePulse * (state === "focus" ? 0.04 : 0.03) + signal * 0.07;
+    let faceIntensity =
+      (0.5 + rolePulse * 0.12 + signal * 0.35) * TONE_BOOST;
+    let platformIntensity =
+      (0.3 + rolePulse * 0.08 + signal * 0.2) * TONE_BOOST;
+    let innerRingIntensity =
+      (0.18 + rolePulse * 0.05 + signal * 0.12) * TONE_BOOST;
+    if (reducedMotion && stateBeforeEntry !== null && stateAge < 0.16) {
+      const colourBlend = easeOutCubic(stateAge / 0.16);
+      faceBrightness = lerp(
+        transitionFaceBrightness,
+        faceBrightness,
+        colourBlend,
+      );
+      platformBrightness = lerp(
+        transitionPlatformBrightness,
+        platformBrightness,
+        colourBlend,
+      );
+      innerRingBrightness = lerp(
+        transitionInnerRingBrightness,
+        innerRingBrightness,
+        colourBlend,
+      );
+      faceIntensity = lerp(
+        transitionFaceIntensity,
+        faceIntensity,
+        colourBlend,
+      );
+      platformIntensity = lerp(
+        transitionPlatformIntensity,
+        platformIntensity,
+        colourBlend,
+      );
+      innerRingIntensity = lerp(
+        transitionInnerRingIntensity,
+        innerRingIntensity,
+        colourBlend,
+      );
     }
 
-    // Halo + pod ring glow: subtle at rest, streaks deepen, celebrations flash
-    if (rig.accentMat) {
-      rig.accentMat.emissiveIntensity =
-        (glowBase +
-          Math.sin(animationTime * (state === "focus" ? 3.0 : 1.8)) *
-            (0.18 + streakBoost * 0.25) +
-          (celebrating ? 0.9 : 0) +
-          environmentWarmth * 0.12) *
-        TONE_BOOST;
+    // A semantic role may intentionally alias another material (classic's
+    // mouth is the face accent). Apply each material once, in hierarchy order.
+    applyEnergyMaterial(rig.coreMat, coreBrightness, coreIntensity);
+    if (rig.accentMat !== rig.coreMat) {
+      applyEnergyMaterial(rig.accentMat, accentBrightness, accentIntensity);
     }
+    if (rig.eyeMat !== rig.coreMat && rig.eyeMat !== rig.accentMat) {
+      applyEnergyMaterial(rig.eyeMat, eyeBrightness, eyeIntensity);
+    }
+    if (
+      rig.faceMat !== rig.coreMat &&
+      rig.faceMat !== rig.accentMat &&
+      rig.faceMat !== rig.eyeMat
+    ) {
+      applyEnergyMaterial(rig.faceMat, faceBrightness, faceIntensity);
+    }
+    if (
+      rig.mouthMat !== rig.coreMat &&
+      rig.mouthMat !== rig.accentMat &&
+      rig.mouthMat !== rig.eyeMat &&
+      rig.mouthMat !== rig.faceMat
+    ) {
+      applyEnergyMaterial(rig.mouthMat, mouthBrightness, mouthIntensity);
+    }
+    if (
+      rig.platformMat !== rig.coreMat &&
+      rig.platformMat !== rig.accentMat &&
+      rig.platformMat !== rig.eyeMat &&
+      rig.platformMat !== rig.faceMat &&
+      rig.platformMat !== rig.mouthMat
+    ) {
+      applyEnergyMaterial(
+        rig.platformMat,
+        platformBrightness,
+        platformIntensity,
+      );
+    }
+    if (
+      rig.innerRingMat !== rig.coreMat &&
+      rig.innerRingMat !== rig.accentMat &&
+      rig.innerRingMat !== rig.eyeMat &&
+      rig.innerRingMat !== rig.faceMat &&
+      rig.innerRingMat !== rig.mouthMat &&
+      rig.innerRingMat !== rig.platformMat
+    ) {
+      applyEnergyMaterial(
+        rig.innerRingMat,
+        innerRingBrightness,
+        innerRingIntensity,
+      );
+    }
+    if (
+      rig.evolutionMat !== rig.coreMat &&
+      rig.evolutionMat !== rig.accentMat &&
+      rig.evolutionMat !== rig.eyeMat &&
+      rig.evolutionMat !== rig.faceMat &&
+      rig.evolutionMat !== rig.mouthMat &&
+      rig.evolutionMat !== rig.platformMat &&
+      rig.evolutionMat !== rig.innerRingMat
+    ) {
+      applyEnergyMaterial(
+        rig.evolutionMat,
+        evolutionBrightness,
+        evolutionIntensity,
+      );
+    }
+    lastCoreBrightness = coreBrightness;
+    lastAccentBrightness = accentBrightness;
+    lastEyeBrightness = eyeBrightness;
+    lastFaceBrightness = faceBrightness;
+    lastMouthBrightness = mouthBrightness;
+    lastPlatformBrightness = platformBrightness;
+    lastInnerRingBrightness = innerRingBrightness;
+    lastEvolutionBrightness = evolutionBrightness;
+    lastCoreIntensity = coreIntensity;
+    lastAccentIntensity = accentIntensity;
+    lastEyeIntensity = eyeIntensity;
+    lastFaceIntensity = faceIntensity;
+    lastMouthIntensity = mouthIntensity;
+    lastPlatformIntensity = platformIntensity;
+    lastInnerRingIntensity = innerRingIntensity;
+    lastEvolutionIntensity = evolutionIntensity;
 
-    // Fake-bloom sprites: sinusoidal at idle/focus (phase-locked to the shared
-    // clock), flaring to 1.0 and easing back on reward/level-up wins.
     if (rig.haloGlowMat || rig.coreGlowMat) {
-      if (celebrating && !wasCelebrating) glowFlareStartedAt = t;
-      let haloGlow: number;
-      if (celebrating) {
-        const { baseline, flareDuration } = GLOW_PULSE.celebrate;
-        const flare = Math.max(0, 1 - (t - glowFlareStartedAt) / flareDuration);
-        haloGlow = baseline + (1 - baseline) * flare * flare;
-      } else {
-        const c = state === "focus" ? GLOW_PULSE.focus : GLOW_PULSE.idle;
-        const wave = Math.sin(animationTime * (TWO_PI / c.period)) * 0.5 + 0.5;
-        haloGlow = c.min + (c.max - c.min) * wave;
-      }
-      if (rig.haloGlowMat) rig.haloGlowMat.opacity = haloGlow;
-      if (rig.coreGlowMat) {
-        rig.coreGlowMat.opacity = Math.min(1, haloGlow + GLOW_PULSE.coreHotter);
-      }
-    }
-    wasCelebrating = celebrating;
-
-    // Eyes carry the expression: focus narrows, reward soft-squints, level-up
-    // opens wide. Idle retains the occasional quick blink.
-    if (rig.eyeMat) {
-      rig.eyeMat.emissiveIntensity =
-        (state === "focus" ? 1.05 : celebrating ? 1.15 : 0.72) *
-        TONE_BOOST *
-        (1 + environmentWarmth * 0.08);
-    }
-    if (rig.leftEye && rig.rightEye) {
-      const blinkPhase = animationTime % 4.7;
-      const doubleBlink = Math.floor(animationTime / 4.7) % 3 === 2;
-      const blinking =
-        state === "idle" &&
-        (blinkPhase > 4.56 || (doubleBlink && blinkPhase > 4.28 && blinkPhase < 4.4));
-      const blink = blinking ? 0.1 : 1;
-      const expressionY =
+      const ambientGlow =
         state === "focus"
-          ? 0.7
-          : state === "reward"
-            ? 0.78 + Math.sin(animationTime * 7) * 0.06
-            : state === "levelUp"
-              ? 1.14
-              : mood === "sleepy"
-                ? 0.48
-                : mood === "proud"
-                  ? 0.82 + Math.sin(animationTime * 2.4) * 0.03
-                  : mood === "curious"
-                    ? 1.05
-                    : blink;
-      const expressionX = state === "focus" ? 0.9 : state === "levelUp" ? 1.08 : 1;
-      const leftBase = rig.leftEye.userData.baseScale as
+          ? 0.55 + focusPulse * 0.25
+          : 0.35 + accentPulse * 0.2;
+      const haloGlow = celebrating
+        ? reducedMotion
+          ? lerp(celebrationEntryHaloGlow, 1, signal)
+          : 0.75 + signal * 0.25
+        : ambientGlow;
+      const coreGlow =
+        celebrating && reducedMotion
+          ? lerp(celebrationEntryCoreGlow, 1, signal)
+          : Math.min(1, haloGlow + 0.1);
+      if (rig.haloGlowMat) rig.haloGlowMat.opacity = haloGlow;
+      if (rig.coreGlowMat) rig.coreGlowMat.opacity = coreGlow;
+    }
+
+    let eyeX = 1;
+    let eyeY = 1;
+    let mouthY = 0.62;
+    if (state === "focus") {
+      eyeX = profile.focus.eyeScaleX;
+      eyeY = profile.focus.eyeScaleY;
+      mouthY = profile.focus.mouthScaleY ?? mouthY;
+    } else if (state === "reward") {
+      eyeX = profile.reward.eyeScaleX;
+      eyeY = profile.reward.eyeScaleY;
+      mouthY = profile.reward.mouthScaleY ?? mouthY;
+    } else if (state === "levelUp") {
+      eyeX = profile.levelUp.eyeScaleX;
+      eyeY = profile.levelUp.eyeScaleY;
+      mouthY = profile.levelUp.mouthScaleY ?? mouthY;
+    } else if (mood === "sleepy") {
+      eyeY = 0.48;
+      mouthY = 0.2;
+    } else if (mood === "proud") {
+      eyeY = 0.82;
+      mouthY = 1;
+    } else if (mood === "curious") {
+      eyeY = 1.05;
+      mouthY = 0.42;
+    } else if (profile.blinkScaleY !== null) {
+      eyeY = blinkRatioAt(animationTime, profile.blinkScaleY);
+    }
+
+    let expressionBlend = 1;
+    if (stateBeforeEntry !== null) {
+      const duration = reducedMotion
+        ? 0.16
+        : state === "focus"
+          ? 0.4
+          : state === "idle"
+            ? 0.3
+            : state === "reward"
+              ? 0.12
+              : 0.16;
+      expressionBlend =
+        state === "focus" && !reducedMotion
+          ? focusEntryBlend(stateAge)
+          : easeOutCubic(stateAge / duration);
+      eyeX = lerp(transitionEyeX, eyeX, expressionBlend);
+      eyeY = lerp(transitionEyeY, eyeY, expressionBlend);
+      mouthY = lerp(transitionMouthY, mouthY, expressionBlend);
+    }
+
+    if (rig.leftEye && rig.rightEye) {
+      const rightEyeBase = rig.rightEye.userData.baseScale as
         | THREE.Vector3
         | undefined;
-      const rightBase =
-        rig.rightEye.userData.baseScale as THREE.Vector3 | undefined;
       rig.leftEye.scale.set(
-        (leftBase?.x ?? 1) * expressionX,
-        (leftBase?.y ?? 1) * expressionY,
-        leftBase?.z ?? 1
+        (leftEyeBase?.x ?? 1) * eyeX,
+        (leftEyeBase?.y ?? 1) * eyeY,
+        leftEyeBase?.z ?? 1,
       );
       rig.rightEye.scale.set(
-        (rightBase?.x ?? 1) * expressionX,
-        (rightBase?.y ?? 1) *
-          (mood === "curious" ? expressionY * 0.9 : expressionY),
-        rightBase?.z ?? 1
+        (rightEyeBase?.x ?? 1) * eyeX,
+        (rightEyeBase?.y ?? 1) * (mood === "curious" ? eyeY * 0.9 : eyeY),
+        rightEyeBase?.z ?? 1,
       );
     }
 
     if (rig.leftPupil && rig.rightPupil) {
-      // Quick micro-dart layered over the slow glance; direction alternates
-      // per cycle so it reads as curiosity, not a tic.
+      const faceStyle = String(rig.petGroup.userData.faceStyle ?? "classic");
+      const dartAllowed = faceStyle !== "joy" && faceStyle !== "screen";
       const dartCycle = animationTime % EYE_DART_MICRO.period;
       const dartDirection =
         Math.floor(animationTime / EYE_DART_MICRO.period) % 2 === 0 ? 1 : -1;
       const dart =
-        state === "idle" && dartCycle < EYE_DART_MICRO.duration
+        !reducedMotion &&
+        state === "idle" &&
+        dartAllowed &&
+        dartCycle < EYE_DART_MICRO.duration
           ? Math.sin((dartCycle / EYE_DART_MICRO.duration) * Math.PI) *
             EYE_DART_MICRO.offset *
-            dartDirection *
-            ambientStrength
+            dartDirection
           : 0;
-      const glance =
-        Math.sin(animationTime * 0.43) *
-          0.014 *
-          ambientStrength *
-          decorationMotion +
-        dart;
+      const glance = reducedMotion
+        ? 0
+        : Math.sin(animationTime * 0.43) * 0.014 * decorationMotion + dart;
       const lift = mood === "curious" ? 0.008 : mood === "sleepy" ? -0.012 : 0;
-      const leftBase =
-        (rig.leftPupil.userData.basePosition as THREE.Vector3 | undefined) ??
-        rig.leftPupil.position;
-      const rightBase =
-        (rig.rightPupil.userData.basePosition as THREE.Vector3 | undefined) ??
-        rig.rightPupil.position;
-      rig.leftPupil.position.set(
-        leftBase.x + glance,
-        leftBase.y + lift,
-        leftBase.z
-      );
-      rig.rightPupil.position.set(
-        rightBase.x + glance,
-        rightBase.y + lift,
-        rightBase.z
-      );
+      const leftBase = rig.leftPupil.userData.basePosition as
+        | THREE.Vector3
+        | undefined;
+      const rightBase = rig.rightPupil.userData.basePosition as
+        | THREE.Vector3
+        | undefined;
+      if (leftBase && rightBase) {
+        rig.leftPupil.position.set(
+          leftBase.x + glance,
+          leftBase.y + lift,
+          leftBase.z,
+        );
+        rig.rightPupil.position.set(
+          rightBase.x + glance,
+          rightBase.y + lift,
+          rightBase.z,
+        );
+      }
     }
 
     if (rig.leftBrow && rig.rightBrow) {
       const leftBase = Number(rig.leftBrow.userData.baseRotationZ ?? 0);
       const rightBase = Number(rig.rightBrow.userData.baseRotationZ ?? 0);
       const leftY = Number(rig.leftBrow.userData.baseY ?? rig.leftBrow.position.y);
-      const rightY = Number(rig.rightBrow.userData.baseY ?? rig.rightBrow.position.y);
+      const rightY = Number(
+        rig.rightBrow.userData.baseY ?? rig.rightBrow.position.y,
+      );
       let leftAngle = leftBase;
       let rightAngle = rightBase;
       let yOffset = 0;
@@ -406,130 +946,224 @@ export function createPetMotionController(options: PetMotionOptions) {
       } else if (mood === "sleepy") {
         yOffset = -0.035;
       }
-      rig.leftBrow.rotation.z = leftAngle;
-      rig.rightBrow.rotation.z = rightAngle;
-      rig.leftBrow.position.y = leftY + yOffset;
-      rig.rightBrow.position.y = rightY + yOffset;
+      const leftTargetY = leftY + yOffset;
+      const rightTargetY = rightY + yOffset;
+      rig.leftBrow.rotation.z =
+        stateBeforeEntry === null
+          ? leftAngle
+          : lerp(transitionLeftBrowZ, leftAngle, expressionBlend);
+      rig.rightBrow.rotation.z =
+        stateBeforeEntry === null
+          ? rightAngle
+          : lerp(transitionRightBrowZ, rightAngle, expressionBlend);
+      rig.leftBrow.position.y =
+        stateBeforeEntry === null
+          ? leftTargetY
+          : lerp(transitionLeftBrowY, leftTargetY, expressionBlend);
+      rig.rightBrow.position.y =
+        stateBeforeEntry === null
+          ? rightTargetY
+          : lerp(transitionRightBrowY, rightTargetY, expressionBlend);
     }
 
     if (rig.mouth) {
-      const base = rig.mouth.userData.baseScale as THREE.Vector3 | undefined;
-      const smile =
-        state === "focus" || mood === "focused"
-          ? 0.12
-          : state === "levelUp" || mood === "celebrating"
-            ? 1.18
-            : state === "reward" || mood === "proud"
-              ? 1
-              : mood === "sleepy"
-                ? 0.2
-                : mood === "curious"
-                  ? 0.42
-                  : 0.62;
-      const width = celebrating ? 1.12 : mood === "curious" ? 0.88 : 1;
       rig.mouth.scale.set(
-        (base?.x ?? 1) * width,
-        (base?.y ?? 1) * smile,
-        base?.z ?? 1
+        (mouthBase?.x ?? 1) * (celebrating ? 1.12 : mood === "curious" ? 0.88 : 1),
+        (mouthBase?.y ?? 1) * mouthY,
+        mouthBase?.z ?? 1,
       );
+      const baseRotation = rig.mouth.userData.baseRotation as
+        | THREE.Euler
+        | undefined;
       rig.mouth.rotation.z =
-        Math.PI +
-        (mood === "curious" ? Math.sin(animationTime * 0.7) * 0.08 : 0);
+        (baseRotation?.z ?? Math.PI) +
+        (!reducedMotion && mood === "curious"
+          ? Math.sin(animationTime * 0.7) * 0.08
+          : 0);
     }
 
-    if (rig.mouthMat) {
-      rig.mouthMat.emissiveIntensity =
-        (0.46 + (celebrating ? 0.42 : 0) + environmentWarmth * 0.14) *
-        TONE_BOOST;
-    }
-
-    // Flippers make state changes legible even when the face is small.
     if (rig.leftFlipper && rig.rightFlipper) {
-      const leftBase = Number(rig.leftFlipper.userData.baseRotationZ ?? 0);
-      const rightBase = Number(rig.rightFlipper.userData.baseRotationZ ?? 0);
-      // Rectified (abs) ⇒ outward-only swing; magnitude added on the outward
-      // side of each rest angle (+ for left, − for right) so the flipper never
-      // crosses inward into the torso.
-      const stateWave =
-        celebrating && !reducedMotion
-          ? Math.abs(Math.sin(animationTime * 8)) * FLIPPER_WAVE.celebrate
-          : 0;
-      const reactionWave =
-        activeReaction === "wave"
-          ? Math.abs(Math.sin(reactionProgress * Math.PI * 5)) *
+      const leftBase = Number(
+        rig.leftFlipper.userData.baseRotationZ ?? rig.leftFlipper.rotation.z,
+      );
+      const rightBase = Number(
+        rig.rightFlipper.userData.baseRotationZ ?? rig.rightFlipper.rotation.z,
+      );
+      rig.leftFlipper.userData.baseRotationZ = leftBase;
+      rig.rightFlipper.userData.baseRotationZ = rightBase;
+      let outward = 0;
+      let focusTuck = 0;
+      if (!reducedMotion) {
+        if (state === "reward") {
+          outward =
+            Math.sin(clamp01((stateAge - 0.07) / 0.46) * Math.PI) * 0.38;
+        } else if (state === "levelUp") {
+          outward =
+            Math.sin(clamp01((stateAge - 0.09) / 0.62) * Math.PI) * 0.42;
+        } else if (state === "focus") {
+          focusTuck = 0.18 * focusEntryBlend(stateAge);
+        } else {
+          const idleCycle = animationTime % 11;
+          if (idleCycle > 8 && idleCycle < 9.3) {
+            outward = Math.sin(((idleCycle - 8) / 1.3) * Math.PI) * 0.12;
+          }
+        }
+        if (activeReaction === "wave" && reactionActive && !clipOwnsRoot) {
+          outward +=
+            Math.abs(Math.sin(reactionProgress * Math.PI * 5)) *
             reactionEase *
-            FLIPPER_WAVE.reaction
-          : 0;
-      const idleCycle = animationTime % 11;
-      const stretch =
-        state === "idle" && idleCycle > 8 && idleCycle < 9.3
-          ? Math.sin(((idleCycle - 8) / 1.3) * Math.PI) * 0.12 * ambientStrength
-          : 0;
-      const focusTuck = state === "focus" ? 0.18 : 0;
-      const outward = stateWave + reactionWave;
-      rig.leftFlipper.rotation.z = leftBase + outward + stretch - focusTuck;
+            0.4;
+        }
+      }
+      const leftTarget = leftBase + outward - focusTuck;
+      const rightTarget = rightBase - outward + focusTuck;
+      rig.leftFlipper.rotation.z =
+        stateBeforeEntry === null
+          ? leftTarget
+          : lerp(transitionLeftFlipperZ, leftTarget, expressionBlend);
       rig.rightFlipper.rotation.z =
-        rightBase - outward - stretch * 0.45 + focusTuck;
+        stateBeforeEntry === null
+          ? rightTarget
+          : lerp(transitionRightFlipperZ, rightTarget, expressionBlend);
     }
 
-    // Evolution fins breathe at rest, tuck into focus, and flare for wins.
     if (rig.leftFin && rig.rightFin) {
-      const flare = celebrating
-        ? 0.32 + Math.sin(animationTime * 7) * 0.12
-        : 0;
-      const focusFold = state === "focus" ? -0.18 : 0;
-      rig.leftFin.rotation.z = -0.9 - flare - focusFold;
-      rig.rightFin.rotation.z = 0.9 + flare + focusFold;
+      const leftBase = Number(
+        rig.leftFin.userData.motionBaseRotationZ ?? rig.leftFin.rotation.z,
+      );
+      const rightBase = Number(
+        rig.rightFin.userData.motionBaseRotationZ ?? rig.rightFin.rotation.z,
+      );
+      rig.leftFin.userData.motionBaseRotationZ = leftBase;
+      rig.rightFin.userData.motionBaseRotationZ = rightBase;
+      let flare = 0;
+      let focusFold = 0;
+      if (!reducedMotion) {
+        if (state === "reward") {
+          flare =
+            Math.sin(clamp01((stateAge - 0.16) / 0.46) * Math.PI) * 0.32;
+        } else if (state === "levelUp") {
+          flare =
+            stateAge <= 0.71
+              ? easeOutCubic((stateAge - 0.18) / 0.53) * 0.38
+              : (1 - easeOutCubic((stateAge - 0.71) / 1.09)) * 0.38;
+        } else if (state === "focus") {
+          focusFold = -0.18 * focusEntryBlend(stateAge);
+        } else {
+          flare = Math.sin(decorationTime * 0.8) * 0.025;
+        }
+      }
+      const leftTarget = leftBase - flare - focusFold;
+      const rightTarget = rightBase + flare + focusFold;
+      const leftPose =
+        stateBeforeEntry === null
+          ? leftTarget
+          : lerp(transitionLeftFinZ, leftTarget, expressionBlend);
+      const rightPose =
+        stateBeforeEntry === null
+          ? rightTarget
+          : lerp(transitionRightFinZ, rightTarget, expressionBlend);
+      rig.leftFin.rotation.z = reducedMotion
+        ? leftPose
+        : lerp(resumeLeftFinZ, leftPose, decorationResumeBlend);
+      rig.rightFin.rotation.z = reducedMotion
+        ? rightPose
+        : lerp(resumeRightFinZ, rightPose, decorationResumeBlend);
     }
 
-    if (rig.evolutionMat) {
-      rig.evolutionMat.emissiveIntensity =
-        (0.42 + levelTier * 0.12 + streakBoost * 0.16 + (celebrating ? 0.4 : 0)) *
-        TONE_BOOST;
+    if (rig.orbitGroup && !reducedMotion) {
+      const targetY = Math.sin(decorationTime * 0.7) * 0.04;
+      rig.orbitGroup.rotation.z = lerp(
+        resumeOrbitZ,
+        orbitAngle,
+        decorationResumeBlend,
+      );
+      rig.orbitGroup.rotation.y = lerp(
+        resumeOrbitY,
+        targetY,
+        decorationResumeBlend,
+      );
     }
 
-    // Tier-two focus nodes orbit slowly at rest, lock in while focusing, and
-    // accelerate through reward/level-up moments.
-    if (rig.orbitGroup) {
-      const speed =
-        (state === "focus" ? 0.22 : celebrating ? 1.8 : 0.5) *
-        (reducedMotion ? 0.25 : decorationMotion);
-      rig.orbitGroup.rotation.z = animationTime * speed;
-      rig.orbitGroup.rotation.y = Math.sin(animationTime * 0.7) * 0.04;
-    }
-
-    // Streak aura remains restrained at rest and blooms only when momentum
-    // or a celebration calls for it.
     if (rig.aura && rig.auraMat) {
-      const pulse = (Math.sin(animationTime * 1.8) + 1) * 0.5;
-      rig.auraMat.opacity =
-        0.025 + streakBoost * 0.045 + pulse * 0.015 + (celebrating ? 0.055 : 0);
-      const auraScale = 1 + pulse * 0.035 + (state === "levelUp" ? 0.1 : 0);
-      rig.aura.scale.setScalar(auraScale);
+      const baseAuraScale = Number(
+        rig.aura.userData.motionBaseScale ?? rig.aura.scale.x,
+      );
+      rig.aura.userData.motionBaseScale = baseAuraScale;
+      const pulse =
+        reducedMotion ? 0 : (Math.sin(decorationTime * 1.8) + 1) * 0.5;
+      const levelAuraSignal =
+        state === "levelUp" && !reducedMotion
+          ? stateAge <= 0.7
+            ? easeOutCubic(stateAge / 0.7)
+            : 1 - easeOutCubic((stateAge - 0.7) / 1.1)
+          : signal;
+      const auraScale =
+        levelTier < 3
+          ? 0.94
+          : baseAuraScale *
+              (1 +
+                pulse * 0.035 +
+                (reducedMotion ? 0 : levelAuraSignal * 0.1));
+      rig.aura.scale.setScalar(
+        reducedMotion
+          ? auraScale
+          : lerp(resumeAuraScale, auraScale, decorationResumeBlend),
+      );
+      const baseOpacity =
+        levelTier >= 3 ? 0.1 : 0.025 + streakBoost * 0.045;
+      const opacity =
+        baseOpacity +
+        (reducedMotion ? 0 : pulse * 0.015) +
+        levelAuraSignal * 0.055;
+      const auraOpacity =
+        levelTier >= 3 ? Math.max(0.1, opacity) : Math.min(0.09, opacity);
+      rig.auraMat.opacity = reducedMotion
+        ? auraOpacity
+        : lerp(resumeAuraOpacity, auraOpacity, decorationResumeBlend);
     }
 
-    // Halo charm: lazy spin at rest, intentional lock during focus, and a
-    // quick orbit during celebrations.
-    if (rig.halo) {
-      rig.halo.rotation.x =
-        1.05 + Math.sin(animationTime * 0.8) * 0.05 * ambientStrength;
-      // Secondary motion: trail the body sway slightly (the halo inherits the
-      // pet group's rotation, so the offset is delayed-minus-current sway).
-      rig.halo.rotation.y =
+    if (rig.halo && !reducedMotion) {
+      const levelTurn =
+        state === "levelUp"
+          ? TWO_PI * easeInOutCubic((stateAge - 0.18) / 0.9)
+          : 0;
+      const delayedLevelTurn =
+        state === "levelUp"
+          ? TWO_PI *
+            easeInOutCubic((stateAge - HALO_LAG_SECONDS - 0.18) / 0.9)
+          : 0;
+      const targetX = 1.05 + Math.sin(decorationTime * 0.8) * 0.05;
+      const idleLag =
+        !reducedMotion && state === "idle"
+          ? idleYawAt(decorationTime - HALO_LAG_SECONDS) -
+            idleYawAt(decorationTime)
+          : 0;
+      const targetY =
         0.12 +
-        (swayAt(
-          animationTime - HALO_LAG_SECONDS,
-          focused,
-          ambientStrength,
-          decorationMotion,
-        ) -
-          sway);
-      rig.halo.rotation.z =
-        -0.16 +
-        animationTime *
-          (state === "focus" ? 0.2 : celebrating ? 2.1 : 0.7) *
-          (reducedMotion ? 0.15 : decorationMotion);
+        idleLag +
+        delayedLevelTurn -
+        levelTurn;
+      const targetZ = -0.16 + haloAngle;
+      rig.halo.rotation.x = lerp(
+        resumeHaloX,
+        targetX,
+        decorationResumeBlend,
+      );
+      rig.halo.rotation.y = lerp(
+        resumeHaloY,
+        targetY,
+        decorationResumeBlend,
+      );
+      rig.halo.rotation.z = lerp(
+        resumeHaloZ,
+        targetZ,
+        decorationResumeBlend,
+      );
     }
+
+    clipOwnedRootOnLastFrame = clipOwnsRoot;
+    wasReducedMotion = reducedMotion;
   }
 
   return { apply, react, playBounce, poke, glowBase, streakBoost };

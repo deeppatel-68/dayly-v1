@@ -59,7 +59,7 @@ function ArenaPlaceholder({
       style={[
         styles.container,
         {
-          backgroundColor: colors.surface,
+          backgroundColor: colors.backgroundSecondary,
           borderColor: colors.border,
         },
       ]}
@@ -88,8 +88,8 @@ function ArenaPlaceholder({
       <View style={[styles.dock, { backgroundColor: colors.glassFallback }]}>
         <View style={styles.identity}>
           <View style={{ opacity: presence.cue ? 0 : 1 }}>
-            <Text style={styles.identityLabel}>COMPANION</Text>
-            <Text numberOfLines={1} style={styles.identityName}>
+            <Text style={[styles.identityLabel, { color: colors.textSecondary }]}>COMPANION</Text>
+            <Text numberOfLines={1} style={[styles.identityName, { color: colors.text }]}>
               {character.companionName || "Your companion"}
             </Text>
           </View>
@@ -142,14 +142,15 @@ export default ArenaPlaceholder;
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    height: 264,
+    height: 336,
     marginVertical: Spacing.xs,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     overflow: "hidden",
   },
   scene: {
-    height: 204,
+    height: 276,
+    overflow: "hidden",
   },
   sceneLoading: {
     ...StyleSheet.absoluteFillObject,
@@ -159,6 +160,8 @@ const styles = StyleSheet.create({
   },
   dock: {
     height: 60,
+    position: "relative",
+    zIndex: 1,
     paddingHorizontal: Spacing.md,
     flexDirection: "row",
     alignItems: "center",
@@ -181,13 +184,12 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   identityLabel: {
-    color: "#AAB6C5",
     fontSize: 10,
     fontWeight: "600",
-    letterSpacing: 0.3,
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
   identityName: {
-    color: "#F4F7FA",
     fontSize: 17,
     fontWeight: "700",
     marginTop: 1,

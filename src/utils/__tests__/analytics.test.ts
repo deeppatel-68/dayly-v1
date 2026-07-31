@@ -106,9 +106,10 @@ describe("buildCompletionChartData", () => {
     expect(points[0].value).toBe(100);
   });
 
-  it("reports 0 when there are no active habits that day", () => {
+  it("marks days without active habits as unavailable", () => {
     const points = buildCompletionChartData([], "day", reference);
     expect(points[0].value).toBe(0);
+    expect(points[0].applicable).toBe(false);
   });
 
   it("builds the required point count and labels per period", () => {
@@ -126,7 +127,6 @@ describe("generateInsights", () => {
     totalHabitsCompleted: 0,
     averageCompletion: 0,
     totalStudyMinutes: 0,
-    averageStudyMinutes: 0,
     averageSessionMinutes: 0,
     sessionCount: 0,
     bestDay: null,
